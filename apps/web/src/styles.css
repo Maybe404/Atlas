@@ -172,11 +172,20 @@ html { transition: background 0.3s var(--ease-soft); }
   transition: grid-template-columns var(--dur) var(--ease-soft);
 }
 .app.no-sidebar { grid-template-columns: 0 1fr; gap: 12px 0; }
+.app.public-shell {
+  grid-template-columns: 1fr;
+  grid-template-rows: 1fr;
+  padding: 0;
+  gap: 0;
+  background: var(--canvas);
+}
 .app.sidebar-collapsed { grid-template-columns: 56px 1fr; }
 .topbar { grid-column: 1 / -1; }
 .sidebar { grid-column: 1; grid-row: 2; overflow: hidden; }
 .app.no-sidebar .sidebar { display: none; }
 .main { grid-column: 2; grid-row: 2; overflow: hidden; position: relative; }
+.app.public-shell .main { grid-column: 1; grid-row: 1; }
+.app.public-shell .main-card { border-radius: 0; box-shadow: none; }
 
 /* ─────────────────────────────────────────────────────────────────────────
    TOPBAR — glass
@@ -576,6 +585,23 @@ html { transition: background 0.3s var(--ease-soft); }
 .btn.danger { color: #ff3b30; }
 .btn.danger:hover { background: rgba(255,59,48,0.08); }
 .btn[disabled] { opacity: 0.4; pointer-events: none; }
+
+.app-state-banner {
+  position: absolute;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 60;
+  padding: 7px 12px;
+  border: 1px solid var(--hairline-2);
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, var(--canvas) 86%, transparent);
+  color: var(--ink-3);
+  box-shadow: var(--shadow-sm);
+  backdrop-filter: blur(18px);
+  font-size: 12.5px;
+  letter-spacing: -0.012em;
+}
 
 .segmented {
   display: inline-flex;

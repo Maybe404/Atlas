@@ -1,12 +1,13 @@
 // @ts-nocheck — migrated verbatim from JSX prototype; incrementally type later.
 // Atlas main app — warm default, collapsible sidebar, magnifying dock
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useLocation, useNavigate as useRouterNavigate } from 'react-router';
 import { Topbar, Sidebar } from './chrome';
-import { ReaderView, AdminDocsView } from './views';
+import { ReaderView, PublicDocumentView, AdminDocsView } from './views';
 import { AdminUploadView, AdminSettingsView } from './views-admin';
 import { CmdK, ShareDialog, ToastWrap, SpaceManagerDialog } from './dialogs';
 import { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakToggle } from './tweaks-panel';
-import { ATLAS_DATA } from '@atlas/shared/fixtures';
+import { useAtlasData, useAtlasMutations } from './data-hooks';
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "theme": "warm",
@@ -17,21 +18,42 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 // Views that have a sidebar (only reader per spec — admin pages are full-width)
 const SIDEBAR_VIEWS = new Set(['reader']);
 
+function stateFromLocation(location) {
+  const params = new URLSearchParams(location.search);
+  const path = location.pathname;
+  if (path.startsWith('/admin/upload')) return { view: 'admin-upload', spaceId: params.get('space') || 's1', docId: params.get('doc') || 'd1' };
+  if (path.startsWith('/admin/settings')) return { view: 'admin-settings', spaceId: params.get('space') || 's1', docId: params.get('doc') || 'd1' };
+  if (path.startsWith('/admin/docs')) return { view: 'admin-docs', spaceId: params.get('space') || 's1', docId: params.get('doc') || 'd1' };
+  const publicMatch = path.match(/^\/share\/([^/]+)/);
+  if (publicMatch) return { view: 'public', token: publicMatch[1], spaceId: 'public', docId: publicMatch[1] };
+  const docMatch = path.match(/^\/spaces\/([^/]+)\/docs\/([^/]+)/);
+  if (docMatch) return { view: 'reader', spaceId: docMatch[1], docId: docMatch[2] };
+  return { view: params.get('view') || 'reader', spaceId: params.get('space') || 's1', docId: params.get('doc') || 'd1' };
+}
+
+function urlForState(next) {
+  if (next.view === 'admin-docs') return '/admin/docs';
+  if (next.view === 'admin-upload') return '/admin/upload';
+  if (next.view === 'admin-settings') return '/admin/settings';
+  return `/spaces/${next.spaceId || 's1'}/docs/${next.docId || 'd1'}`;
+}
+
 function App() {
-  const [view, setView] = useState('reader');
-  const [spaceId, setSpaceId] = useState('s1');
-  const [docId, setDocId] = useState('d1');
+  const location = useLocation();
+  const routerNavigate = useRouterNavigate();
+  const routeState = stateFromLocation(location);
+  const view = routeState.view;
+  const spaceId = routeState.spaceId;
+  const docId = routeState.docId;
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [sharingDocId, setSharingDocId] = useState(null);
   const [spaceMgrOpen, setSpaceMgrOpen] = useState(false);
   const [spaceEditing, setSpaceEditing] = useState(null); // null | space object | 'new'
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [chromeVisible, setChromeVisible] = useState(true);
   const [toasts, setToasts] = useState([]);
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
-
-  // Spaces are mutable now (CRUD)
-  const [spaces, setSpaces] = useState(() => ATLAS_DATA.tree);
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', tweaks.theme === 'light' ? '' : tweaks.theme);
@@ -44,10 +66,16 @@ function App() {
   }, []);
 
   const navigate = useCallback(({ view: v, spaceId: s, docId: d }) => {
-    if (v) setView(v);
-    if (s) setSpaceId(s);
-    if (d) setDocId(d);
-  }, []);
+    const next = {
+      view: v || view,
+      spaceId: s || spaceId,
+      docId: d || docId,
+    };
+    routerNavigate(urlForState(next));
+  }, [docId, routerNavigate, spaceId, view]);
+
+  const { spaces, members, permissions, currentUser, isLoading, error } = useAtlasData();
+  const mutations = useAtlasMutations(pushToast);
 
   const cycleTheme = useCallback((to) => {
     setTweak({ theme: to });
@@ -125,39 +153,29 @@ function App() {
 
   const ctx = { view, spaceId, docId };
   const hasSidebar = SIDEBAR_VIEWS.has(view);
+  const isPublicView = view === 'public';
 
-  // Space CRUD
-  const createSpace = (data) => {
-    const id = 'sx' + Math.random().toString(36).slice(2, 7);
-    const next = { id, name: data.name, mark: data.name.slice(0,1), accent: data.accent, count: 0, children: [] };
-    setSpaces(s => [...s, next]);
-    pushToast({ msg: '空间已创建', meta: data.name });
-  };
-  const updateSpace = (id, patch) => {
-    setSpaces(s => s.map(sp => sp.id === id ? { ...sp, ...patch, mark: (patch.name || sp.name).slice(0,1) } : sp));
-    pushToast({ msg: '空间已更新', meta: patch.name });
-  };
-  const deleteSpace = (id) => {
-    setSpaces(s => s.filter(sp => sp.id !== id));
-    pushToast({ msg: '空间已删除' });
-  };
-
-  // patch data globally so dependent views (which still read the fixture) see updates
-  useEffect(() => {
-    (ATLAS_DATA as { tree: unknown }).tree = spaces;
-  }, [spaces]);
+  const activeDoc = spaces.flatMap(s => s.children || []).find(d => d.id === docId);
+  const shareDocId = sharingDocId || activeDoc?.id || docId;
+  const openShare = useCallback((targetDocId) => {
+    setSharingDocId(targetDocId || activeDoc?.id || docId);
+    setShareOpen(true);
+  }, [activeDoc?.id, docId]);
 
   return (
-    <div className={"app " + (!hasSidebar ? 'no-sidebar ' : '') + (sidebarCollapsed ? 'sidebar-collapsed ' : '') + (chromeVisible ? '' : 'chrome-hidden ')}>
-      <Topbar
-        ctx={ctx}
-        visible={chromeVisible}
-        onSearch={() => setCmdkOpen(true)}
-        onTheme={cycleTheme}
-        theme={tweaks.theme}
-        onNavigate={navigate}
-        onShare={() => setShareOpen(true)}
-      />
+    <div className={"app " + (!hasSidebar ? 'no-sidebar ' : '') + (isPublicView ? 'public-shell ' : '') + (sidebarCollapsed ? 'sidebar-collapsed ' : '') + (chromeVisible ? '' : 'chrome-hidden ')}>
+      {!isPublicView && (
+        <Topbar
+          ctx={ctx}
+          visible={chromeVisible}
+          onSearch={() => setCmdkOpen(true)}
+          onTheme={cycleTheme}
+          theme={tweaks.theme}
+          onNavigate={navigate}
+          onShare={() => openShare()}
+          spaces={spaces}
+        />
+      )}
       {hasSidebar && (
         <Sidebar
           ctx={ctx}
@@ -184,25 +202,29 @@ function App() {
         view === 'reader' ? '01 Reader · Doc (iframe)'
         : view === 'admin-docs' ? '02 Admin · Documents'
         : view === 'admin-upload' ? '03 Admin · Upload'
+        : view === 'public' ? 'Public · Document'
         : '04 Admin · Settings'
       }>
-        {view === 'reader' && <ReaderView ctx={ctx} framedDoc={tweaks.framedDoc} chromeVisible={chromeVisible} onNavigate={navigate} onShare={() => setShareOpen(true)}/>}
-        {view === 'admin-docs' && <AdminDocsView ctx={ctx} onNavigate={navigate} onShare={() => setShareOpen(true)} pushToast={pushToast}/>}
-        {view === 'admin-upload' && <AdminUploadView ctx={ctx} onNavigate={navigate} pushToast={pushToast}/>}
-        {view === 'admin-settings' && <AdminSettingsView ctx={ctx} onNavigate={navigate} pushToast={pushToast} spaces={spaces} onCreateSpace={createSpace} onUpdateSpace={updateSpace} onDeleteSpace={deleteSpace} onEditSpace={(sp) => { setSpaceEditing(sp); setSpaceMgrOpen(true); }} onNewSpace={() => { setSpaceEditing('new'); setSpaceMgrOpen(true); }}/>}
+        {error && <div className="app-state-banner">加载失败 · {error.message}</div>}
+        {isLoading && <div className="app-state-banner">正在同步工作区数据…</div>}
+        {view === 'reader' && <ReaderView ctx={ctx} spaces={spaces} members={members} framedDoc={tweaks.framedDoc} chromeVisible={chromeVisible} onNavigate={navigate} onShare={() => openShare()}/>}
+        {view === 'public' && <PublicDocumentView token={routeState.token}/>}
+        {view === 'admin-docs' && <AdminDocsView ctx={ctx} spaces={spaces} members={members} onNavigate={navigate} onShare={(id) => openShare(id)} pushToast={pushToast} mutations={mutations}/>}
+        {view === 'admin-upload' && <AdminUploadView ctx={ctx} spaces={spaces} onNavigate={navigate} pushToast={pushToast} mutations={mutations}/>}
+        {view === 'admin-settings' && <AdminSettingsView ctx={ctx} onNavigate={navigate} pushToast={pushToast} spaces={spaces} members={members} permissions={permissions} currentUser={currentUser} mutations={mutations} onEditSpace={(sp) => { setSpaceEditing(sp); setSpaceMgrOpen(true); }} onNewSpace={() => { setSpaceEditing('new'); setSpaceMgrOpen(true); }}/>}
 
-        <Dock view={view} onNavigate={navigate} visible={chromeVisible} magnify={tweaks.dockMagnify}/>
+        {!isPublicView && <Dock view={view} onNavigate={navigate} visible={chromeVisible} magnify={tweaks.dockMagnify}/>}
       </main>
 
-      <CmdK open={cmdkOpen} onClose={() => setCmdkOpen(false)} onNavigate={navigate} onToggleTheme={() => cycleTheme(tweaks.theme === 'dark' ? 'warm' : 'dark')}/>
-      <ShareDialog open={shareOpen} onClose={() => setShareOpen(false)} pushToast={pushToast}/>
+      {!isPublicView && <CmdK open={cmdkOpen} spaces={spaces} members={members} onClose={() => setCmdkOpen(false)} onNavigate={navigate} onToggleTheme={() => cycleTheme(tweaks.theme === 'dark' ? 'warm' : 'dark')}/>}
+      <ShareDialog open={shareOpen} documentId={shareDocId} members={members} currentUser={currentUser} onClose={() => { setShareOpen(false); setSharingDocId(null); }} pushToast={pushToast} mutations={mutations}/>
       <SpaceManagerDialog
         open={spaceMgrOpen}
         editing={spaceEditing}
         onClose={() => { setSpaceMgrOpen(false); setSpaceEditing(null); }}
-        onCreate={createSpace}
-        onUpdate={updateSpace}
-        onDelete={deleteSpace}
+        onCreate={mutations.createSpace}
+        onUpdate={mutations.updateSpace}
+        onDelete={mutations.deleteSpace}
       />
       <ToastWrap toasts={toasts}/>
 

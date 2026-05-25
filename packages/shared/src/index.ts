@@ -22,14 +22,20 @@ export type Member = z.infer<typeof MemberSchema>;
 
 export const DocumentSchema = z.object({
   id: z.string(),
+  spaceId: z.string().optional(),
+  spaceName: z.string().optional(),
+  spaceAccent: z.string().optional(),
   title: z.string(),
   desc: z.string().default(''),
   author: z.string(),
+  authorName: z.string().optional(),
   updated: z.string(),
   visibility: VisibilitySchema,
   dot: AccentSchema.or(z.string()),
   tags: z.array(z.string()).default([]),
   html: z.string().optional(),
+  skillVersion: z.string().optional(),
+  deletedAt: z.string().nullable().optional(),
 });
 export type Document = z.infer<typeof DocumentSchema>;
 
@@ -45,13 +51,17 @@ export const SpaceSchema = z.object({
 export type Space = z.infer<typeof SpaceSchema>;
 
 // Per-member, per-space role; null means "no access".
-export const SpaceRoleSchema = z.enum(['viewer', 'editor']).nullable();
+export const SpaceMemberRoleSchema = z.enum(['viewer', 'editor']);
+export type SpaceMemberRole = z.infer<typeof SpaceMemberRoleSchema>;
+
+export const SpaceRoleSchema = SpaceMemberRoleSchema.nullable();
 export type SpaceRole = z.infer<typeof SpaceRoleSchema>;
 
 // ── API request/response shapes ────────────────────────────────────────────
 export const CreateSpaceSchema = z.object({
   name: z.string().min(1).max(64),
   accent: AccentSchema,
+  personal: z.boolean().optional(),
 });
 
 export const UpdateSpaceSchema = CreateSpaceSchema.partial();
@@ -62,6 +72,41 @@ export const CreateDocumentSchema = z.object({
   desc: z.string().default(''),
   visibility: VisibilitySchema,
   html: z.string().default(''),
+  dot: AccentSchema.or(z.string()).default('slate'),
+  tags: z.array(z.string()).default([]),
+  skillVersion: z.string().optional(),
 });
 
 export const UpdateDocumentSchema = CreateDocumentSchema.partial();
+
+export const LoginSchema = z.object({
+  email: z.string().email(),
+});
+
+export const UpdateMemberSchema = z.object({
+  name: z.string().min(1).max(80).optional(),
+  role: RoleSchema.optional(),
+});
+
+export const SetSpaceMemberRoleSchema = z.object({
+  memberId: z.string(),
+  role: SpaceRoleSchema,
+});
+
+export const SetDocumentMemberRoleSchema = z.object({
+  memberId: z.string(),
+  role: SpaceRoleSchema,
+});
+
+export const UpdateDocumentShareSchema = z.object({
+  publicEnabled: z.boolean().optional(),
+  showAuthor: z.boolean().optional(),
+  allowIndexing: z.boolean().optional(),
+  expiresAt: z.string().nullable().optional(),
+  members: z.array(SetDocumentMemberRoleSchema).optional(),
+});
+
+export const CreateSkillVersionSchema = z.object({
+  version: z.string().min(1).max(32),
+  note: z.string().min(1).max(240),
+});

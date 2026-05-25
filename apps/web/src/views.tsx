@@ -1,10 +1,10 @@
 // @ts-nocheck — migrated verbatim from JSX prototype; incrementally type later.
 // Atlas reader views: Reader (full iframe), SpaceIndex (card grid)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { ATLAS_DATA } from '@atlas/shared/fixtures';
+import { useQuery } from '@tanstack/react-query';
 import { I, AnimatedScrollList } from './chrome';
+import { apiGet } from './api-client';
 
-const _D = ATLAS_DATA;
 const _I = I;
 
 // dot color mapping helper
@@ -20,13 +20,21 @@ function dotClass(d) {
 // ─────────────────────────────────────────────────────────────────────────
 // READER · single doc — full iframe of imported HTML
 // ─────────────────────────────────────────────────────────────────────────
-function ReaderView({ ctx, framedDoc, chromeVisible = true, onNavigate, onShare }) {
-  const space = _D.tree.find(s => s.id === ctx.spaceId) || _D.tree[0];
-  const doc = space.children.find(c => c.id === ctx.docId) || space.children[0];
-  const author = _D.members.find(m => m.id === doc.author);
+function ReaderView({ ctx, spaces = [], members = [], framedDoc, chromeVisible = true, onNavigate, onShare }) {
+  const space = spaces.find(s => s.id === ctx.spaceId) || spaces[0];
+  const doc = space?.children?.find(c => c.id === ctx.docId) || space?.children?.[0];
+  const author = members.find(m => m.id === doc?.author);
   const [copied, setCopied] = useState(false);
 
   const iframeRef = useRef(null);
+
+  if (!space || !doc) {
+    return (
+      <div className="main-card reader-card">
+        <div className="app-state-banner">暂无可阅读文档</div>
+      </div>
+    );
+  }
 
   return (
     <div className="main-card reader-card">
@@ -53,7 +61,7 @@ function ReaderView({ ctx, framedDoc, chromeVisible = true, onNavigate, onShare 
         <iframe
           ref={iframeRef}
           className="reader-iframe"
-          src="embedded-sample.html"
+          srcDoc={doc.html || '<!doctype html><html><body><p>暂无内容</p></body></html>'}
           title={doc.title}
           sandbox="allow-same-origin allow-scripts"
         />
@@ -63,15 +71,54 @@ function ReaderView({ ctx, framedDoc, chromeVisible = true, onNavigate, onShare 
 }
 export { ReaderView };
 
+function PublicDocumentView({ token }) {
+  const publicQuery = useQuery({
+    queryKey: ['public-document', token],
+    queryFn: () => apiGet(`/documents/public/${token}`),
+    enabled: Boolean(token),
+  });
+  const doc = publicQuery.data;
+
+  if (publicQuery.isLoading) {
+    return <div className="main-card reader-card"><div className="app-state-banner">正在打开公开文档…</div></div>;
+  }
+
+  if (!doc) {
+    return <div className="main-card reader-card"><div className="app-state-banner">公开链接不可用或已过期</div></div>;
+  }
+
+  return (
+    <div className="main-card reader-card">
+      <div className="reader-meta-bar">
+        <span className={"dot " + dotClass(doc.dot)}></span>
+        <span className="doc-title">{doc.title}</span>
+        <span className="sep">·</span>
+        <span className="author">{doc.authorName || '公开文档'}</span>
+        <span className="sep">·</span>
+        <span className="mono dim" style={{fontSize:11}}>{doc.updated}</span>
+      </div>
+      <div className="reader-iframe-wrap">
+        <iframe
+          className="reader-iframe"
+          srcDoc={doc.html || '<!doctype html><html><body><p>暂无内容</p></body></html>'}
+          title={doc.title}
+          sandbox="allow-same-origin allow-scripts"
+        />
+      </div>
+    </div>
+  );
+}
+export { PublicDocumentView };
+
 // ─────────────────────────────────────────────────────────────────────────
 // SPACE INDEX · card grid
 // ─────────────────────────────────────────────────────────────────────────
-function SpaceIndexView({ ctx, onNavigate }) {
-  const space = _D.tree.find(s => s.id === ctx.spaceId) || _D.tree[0];
+function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }) {
+  const space = spaces.find(s => s.id === ctx.spaceId) || spaces[0];
   const [filter, setFilter] = useState('all');
 
   const docs = useMemo(() => {
-    let r = [...space.children];
+    let r = [...(space?.children || [])];
     if (filter !== 'all') r = r.filter(d => d.visibility === filter);
     return r;
   }, [space, filter]);
@@ -81,7 +128,11 @@ function SpaceIndexView({ ctx, onNavigate }) {
     s2: '产品决策的素材库：用户访谈、可用性测试、优先级讨论与跨团队同步。',
     s3: '视觉系统、版式实验、文案规范——一切关于「Atlas 看起来是什么样」的来源。',
     s4: '个人草稿与笔记，默认仅自己可见。',
-  }[space.id];
+  }[space?.id];
+
+  if (!space) {
+    return <div className="main-card"><div className="app-state-banner">暂无空间</div></div>;
+  }
 
   return (
     <div className="main-card">
@@ -96,7 +147,7 @@ function SpaceIndexView({ ctx, onNavigate }) {
             <p className="lead">{desc}</p>
           </div>
           <div className="right">
-            <span className="mono dim" style={{fontSize:12}}>{docs.length} 篇 · {_D.members.length} 人</span>
+            <span className="mono dim" style={{fontSize:12}}>{docs.length} 篇 · {members.length} 人</span>
           </div>
         </div>
 
@@ -118,7 +169,7 @@ function SpaceIndexView({ ctx, onNavigate }) {
 
         <div className="doc-grid">
           {docs.map(doc => {
-            const author = _D.members.find(m => m.id === doc.author);
+            const author = members.find(m => m.id === doc.author);
             return (
               <div key={doc.id} className="doc-card" onClick={() => onNavigate({view:'reader', spaceId: space.id, docId: doc.id})}>
                 <div className="card-head">
@@ -189,32 +240,8 @@ function SpaceChipPicker({ doc, spaces, onPick }) {
 }
 export { SpaceChipPicker };
 
-function AdminDocsView({ ctx, onNavigate, onShare, pushToast }) {
-  const [docs, setDocs] = useState(() => {
-    const base = _D.tree.flatMap(s => s.children.map(c => ({...c, spaceId: s.id, spaceName: s.name, spaceAccent: s.accent})));
-    // Add extra dummy rows so the stagger animation is visible at scale
-    const extras = [
-      { id: 'dx1',  title: '生产环境监控指标手册',    desc: '关键指标的口径与正常阈值。',                author: 'u3', updated: '5月17日', visibility: 'invite',  dot: 'accent', tags: [], spaceId: 's1', spaceName: '工程', spaceAccent: 'accent' },
-      { id: 'dx2',  title: 'iframe sandbox 字段对照', desc: 'allow-*  属性逐项含义与默认值。',           author: 'u3', updated: '5月16日', visibility: 'public',  dot: 'moss',   tags: [], spaceId: 's1', spaceName: '工程', spaceAccent: 'accent' },
-      { id: 'dx3',  title: '事故复盘 · 4月22日',     desc: '一次目录同步异常的根因分析。',              author: 'u1', updated: '5月12日', visibility: 'invite',  dot: 'slate',  tags: [], spaceId: 's1', spaceName: '工程', spaceAccent: 'accent' },
-      { id: 'dx4',  title: '订阅与配额方案 v3',      desc: '面向团队版的计费与限额讨论稿。',            author: 'u2', updated: '5月10日', visibility: 'invite',  dot: 'accent', tags: ['draft'], spaceId: 's2', spaceName: '产品', spaceAccent: 'moss' },
-      { id: 'dx5',  title: '阅读端可访问性清单',     desc: 'WCAG 2.2 AA 的项目对照表。',               author: 'u4', updated: '5月09日', visibility: 'public',  dot: 'moss',   tags: [], spaceId: 's3', spaceName: '设计', spaceAccent: 'slate' },
-      { id: 'dx6',  title: '版式实验 · 长内容索引',  desc: '长文索引位置、宽度、固定与浮动的对比。',    author: 'u4', updated: '5月07日', visibility: 'invite',  dot: 'plum',   tags: [], spaceId: 's3', spaceName: '设计', spaceAccent: 'slate' },
-      { id: 'dx7',  title: '团队 onboarding 草案',   desc: '新成员第一周的阅读清单与上手任务。',        author: 'u2', updated: '5月06日', visibility: 'invite',  dot: 'accent', tags: ['draft'], spaceId: 's2', spaceName: '产品', spaceAccent: 'moss' },
-      { id: 'dx8',  title: '法务 · 第三方字体许可', desc: '当前使用的字体来源与许可摘要。',            author: 'u1', updated: '5月04日', visibility: 'private', dot: 'ink',    tags: [], spaceId: 's4', spaceName: '林知远 · 个人', spaceAccent: 'plum' },
-      { id: 'dx9',  title: '路线图 · Q3 推演',       desc: '功能优先级与人力配比的草案。',              author: 'u2', updated: '5月02日', visibility: 'invite',  dot: 'slate',  tags: ['draft'], spaceId: 's2', spaceName: '产品', spaceAccent: 'moss' },
-      { id: 'dx10', title: '深色模式视觉规范',       desc: '色板、对比度、状态层的统一约定。',          author: 'u4', updated: '4月29日', visibility: 'public',  dot: 'moss',   tags: [], spaceId: 's3', spaceName: '设计', spaceAccent: 'slate' },
-      { id: 'dx11', title: '内部 RFC · 缓存层',     desc: '把目录索引下移到 CDN 的可行性。',          author: 'u3', updated: '4月27日', visibility: 'invite',  dot: 'accent', tags: ['rfc', 'draft'], spaceId: 's1', spaceName: '工程', spaceAccent: 'accent' },
-      { id: 'dx12', title: '用户访谈记录 · 04月',    desc: '六位重度用户的关键引述。',                  author: 'u2', updated: '4月23日', visibility: 'invite',  dot: 'moss',   tags: [], spaceId: 's2', spaceName: '产品', spaceAccent: 'moss' },
-      { id: 'dx13', title: '错误页面文案表',         desc: '空状态、加载失败、权限不足的统一文案。',    author: 'u4', updated: '4月20日', visibility: 'invite',  dot: 'plum',   tags: [], spaceId: 's3', spaceName: '设计', spaceAccent: 'slate' },
-      { id: 'dx14', title: '我的本周阅读',           desc: '一份不太规整的私人笔记。',                  author: 'u1', updated: '4月18日', visibility: 'private', dot: 'ink',    tags: [], spaceId: 's4', spaceName: '林知远 · 个人', spaceAccent: 'plum' },
-      { id: 'dx15', title: 'API 鉴权迁移备忘',       desc: '从 cookie 到 bearer 的内部迁移说明。',     author: 'u3', updated: '4月15日', visibility: 'invite',  dot: 'accent', tags: [], spaceId: 's1', spaceName: '工程', spaceAccent: 'accent' },
-      { id: 'dx16', title: '上传流程优化提案',       desc: '减少 skill 启动延迟的几种思路。',           author: 'u2', updated: '4月13日', visibility: 'invite',  dot: 'slate',  tags: ['draft'], spaceId: 's2', spaceName: '产品', spaceAccent: 'moss' },
-      { id: 'dx17', title: '组件审计 · v2.3',       desc: '废弃组件清单与替代方案。',                  author: 'u4', updated: '4月10日', visibility: 'public',  dot: 'moss',   tags: [], spaceId: 's3', spaceName: '设计', spaceAccent: 'slate' },
-      { id: 'dx18', title: '海外节点接入笔记',       desc: '亚太与欧洲节点的接入清单。',                author: 'u3', updated: '4月07日', visibility: 'invite',  dot: 'accent', tags: [], spaceId: 's1', spaceName: '工程', spaceAccent: 'accent' },
-    ];
-    return [...base, ...extras];
-  });
+function AdminDocsView({ ctx, spaces = [], members = [], onNavigate, onShare, pushToast, mutations }) {
+  const docs = useMemo(() => spaces.flatMap(s => (s.children || []).map(c => ({...c, spaceId: s.id, spaceName: s.name, spaceAccent: s.accent}))), [spaces]);
   const [renaming, setRenaming] = useState(null);
   const [renameVal, setRenameVal] = useState('');
   const [menuOpenId, setMenuOpenId] = useState(null);
@@ -248,14 +275,12 @@ function AdminDocsView({ ctx, onNavigate, onShare, pushToast }) {
   const startRename = (doc) => { setRenaming(doc.id); setRenameVal(doc.title); };
   const commitRename = () => {
     if (!renaming) return;
-    setDocs(ds => ds.map(d => d.id === renaming ? { ...d, title: renameVal || d.title } : d));
-    pushToast({ msg: '已重命名', meta: renameVal });
+    mutations.updateDocument(renaming, { title: renameVal || docs.find(d => d.id === renaming)?.title });
     setRenaming(null);
   };
 
   const deleteDoc = (doc) => {
-    setDocs(ds => ds.filter(d => d.id !== doc.id));
-    pushToast({ msg: '已移至回收站', meta: doc.title });
+    mutations.deleteDocument(doc.id);
     setMenuOpenId(null);
   };
 
@@ -265,10 +290,9 @@ function AdminDocsView({ ctx, onNavigate, onShare, pushToast }) {
   };
 
   const createNew = () => {
-    const id = 'new' + Math.random().toString(36).slice(2, 7);
     const defaultSpace = spaceOptions.find(s => s.id === (spaceFilter !== 'all' ? spaceFilter : 's1')) || spaceOptions[0];
     setEditing({
-      id,
+      id: 'new',
       title: '未命名文章',
       desc: '',
       author: 'u1',
@@ -287,12 +311,17 @@ function AdminDocsView({ ctx, onNavigate, onShare, pushToast }) {
   const saveDoc = (html, patch = {}) => {
     if (!editing) return;
     if (editing.isNew) {
-      const { isNew, ...rest } = editing;
-      setDocs(ds => [{ ...rest, ...patch, html, updated: '刚刚' }, ...ds]);
-      pushToast({ msg: '文章已创建', meta: patch.title || editing.title });
+      mutations.createDocument({
+        spaceId: patch.spaceId || editing.spaceId,
+        title: patch.title || editing.title,
+        desc: patch.desc || editing.desc || '',
+        visibility: patch.visibility || editing.visibility || 'private',
+        html,
+        tags: editing.tags || ['draft'],
+        dot: editing.dot || 'slate',
+      });
     } else {
-      setDocs(ds => ds.map(d => d.id === editing.id ? { ...d, ...patch, html, updated: '刚刚' } : d));
-      pushToast({ msg: '已保存', meta: '内容已更新' });
+      mutations.updateDocument(editing.id, { ...patch, html });
     }
     setEditing(null);
   };
@@ -379,7 +408,7 @@ function AdminDocsView({ ctx, onNavigate, onShare, pushToast }) {
 
         <AnimatedScrollList className="doc-list-scroll">
           {filtered.map(doc => {
-            const author = _D.members.find(m => m.id === doc.author);
+            const author = members.find(m => m.id === doc.author);
             return (
               <div key={doc.id} className="doc-row" onClick={(e) => {
                 if (renaming === doc.id) return;
@@ -409,10 +438,9 @@ function AdminDocsView({ ctx, onNavigate, onShare, pushToast }) {
                 </div>
                 <SpaceChipPicker
                   doc={doc}
-                  spaces={_D.tree}
+                  spaces={spaces}
                   onPick={(s) => {
-                    setDocs(ds => ds.map(d => d.id === doc.id ? { ...d, spaceId: s.id, spaceName: s.name, spaceAccent: s.accent } : d));
-                    pushToast({ msg: '已移动到 ' + s.name, meta: doc.title });
+                    mutations.updateDocument(doc.id, { spaceId: s.id });
                   }}
                 />
                 <div className="author">
@@ -446,7 +474,7 @@ function AdminDocsView({ ctx, onNavigate, onShare, pushToast }) {
                         <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="M2 12h10M3.5 8.5h2l5-5-2-2-5 5z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>
                         <span>重命名</span>
                       </button>
-                      <button className="row-menu-item" onClick={()=>{onShare(); setMenuOpenId(null);}}>
+                      <button className="row-menu-item" onClick={()=>{onShare(doc.id); setMenuOpenId(null);}}>
                         <_I.share/><span>分享</span>
                       </button>
                       <button className="row-menu-item" onClick={()=>{
@@ -471,6 +499,7 @@ function AdminDocsView({ ctx, onNavigate, onShare, pushToast }) {
       {editing && (
         <HTMLEditorDialog
           doc={editing}
+          spaces={spaces}
           onClose={() => setEditing(null)}
           onSave={(html, patch) => saveDoc(html, patch)}
         />
@@ -483,7 +512,7 @@ export { AdminDocsView };
 // ─────────────────────────────────────────────────────────────────────────
 // HTML EDITOR DIALOG — edit doc content, save
 // ─────────────────────────────────────────────────────────────────────────
-function HTMLEditorDialog({ doc, onClose, onSave }) {
+function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
   const defaultHTML = doc.html || (doc.isNew
     ? `<!doctype html>
 <html lang="zh-CN">
@@ -543,7 +572,7 @@ function HTMLEditorDialog({ doc, onClose, onSave }) {
     return () => document.removeEventListener('mousedown', onDoc);
   }, [showSpacePicker]);
 
-  const selectedSpace = _D.tree.find(s => s.id === spaceId);
+  const selectedSpace = spaces.find(s => s.id === spaceId);
 
   const save = () => {
     if (!spaceId) {
@@ -620,7 +649,7 @@ function HTMLEditorDialog({ doc, onClose, onSave }) {
                 )}
                 {showSpacePicker && (
                   <div className="space-picker-pop" style={{top: 'calc(100% + 4px)', left: 0}}>
-                    {_D.tree.map(s => {
+                    {spaces.map(s => {
                       const active = s.id === spaceId;
                       return (
                         <div

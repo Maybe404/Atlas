@@ -1,15 +1,44 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { ZodError } from 'zod';
+import { authMiddleware, type AppEnv } from './lib/auth';
+import { HttpError } from './lib/http-error';
+import { authRouter } from './routes/auth';
 import { documentsRouter } from './routes/documents';
+import { membersRouter } from './routes/members';
+import { skillsRouter } from './routes/skills';
 import { spacesRouter } from './routes/spaces';
 
-const app = new Hono()
+const app = new Hono<AppEnv>()
   .use('*', logger())
   .use('*', cors({ origin: ['http://localhost:5173'], credentials: true }))
+  .use('*', authMiddleware)
   .get('/health', (c) => c.json({ ok: true }))
+  .route('/auth', authRouter)
   .route('/spaces', spacesRouter)
-  .route('/documents', documentsRouter);
+  .route('/documents', documentsRouter)
+  .route('/members', membersRouter)
+  .route('/skills', skillsRouter);
+
+app.onError((err, c) => {
+  if (err instanceof ZodError) {
+    return c.json(
+      { code: 'validation_error', message: 'Request validation failed.', issues: err.issues },
+      400,
+    );
+  }
+
+  if (err instanceof HttpError) {
+    return c.json(
+      { code: err.code, message: err.message },
+      err.status as 400 | 401 | 403 | 404 | 500,
+    );
+  }
+
+  console.error(err);
+  return c.json({ code: 'internal_error', message: 'Unexpected server error.' }, 500);
+});
 
 // End-to-end type for the web app's Hono RPC client.
 export type AppRouter = typeof app;

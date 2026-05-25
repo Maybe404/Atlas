@@ -1,10 +1,11 @@
 // @ts-nocheck — migrated verbatim from JSX prototype; incrementally type later.
 // Atlas admin views: Upload flow + Settings
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { ATLAS_DATA } from '@atlas/shared/fixtures';
+import { useQuery } from '@tanstack/react-query';
 import { I, AnimatedScrollList } from './chrome';
+import { apiGet } from './api-client';
+import { atlasKeys } from './data-hooks';
 
-const _D2 = ATLAS_DATA;
 const _I2 = I;
 
 function dotClass2(d) {
@@ -19,9 +20,10 @@ function dotClass2(d) {
 // ─────────────────────────────────────────────────────────────────────────
 // ADMIN · upload
 // ─────────────────────────────────────────────────────────────────────────
-function AdminUploadView({ ctx, onNavigate, pushToast }) {
+function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations }) {
   const [step, setStep] = useState(0);
   const [files, setFiles] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
   const [over, setOver] = useState(false);
   const [meta, setMeta] = useState({
     title: 'Lumen 系列 · 产品介绍',
@@ -31,12 +33,17 @@ function AdminUploadView({ ctx, onNavigate, pushToast }) {
     skill: 'sanitize-html@1.2.4',
   });
 
-  const fakeUpload = useCallback(() => {
-    const ns = [
-      { name: 'lumen-intro.html', size: '84 KB', progress: 0 },
-      { name: 'assets/hero.png',  size: '212 KB', progress: 0 },
-      { name: 'assets/styles.css',size: '12 KB',  progress: 0 },
-    ];
+  useEffect(() => {
+    if (!spaces.length) return;
+    setMeta(m => ({ ...m, spaceId: spaces.some(s => s.id === m.spaceId) ? m.spaceId : spaces[0].id }));
+  }, [spaces]);
+
+  const acceptFiles = useCallback((incoming) => {
+    const file = Array.from(incoming || []).find(f => /\.html?$/i.test(f.name)) || incoming?.[0];
+    if (!file) return;
+    setSelectedFile(file);
+    setMeta(m => ({ ...m, title: m.title || file.name.replace(/\.html?$/i, '') }));
+    const ns = [{ name: file.name, size: `${Math.max(1, Math.round(file.size / 1024))} KB`, progress: 0 }];
     setFiles(ns);
     ns.forEach((f, i) => {
       let p = 0;
@@ -76,12 +83,19 @@ function AdminUploadView({ ctx, onNavigate, pushToast }) {
                   className={"dropzone " + (over ? 'over' : '')}
                   onDragOver={e => { e.preventDefault(); setOver(true); }}
                   onDragLeave={() => setOver(false)}
-                  onDrop={e => { e.preventDefault(); setOver(false); fakeUpload(); }}
-                  onClick={fakeUpload}
+                  onDrop={e => { e.preventDefault(); setOver(false); acceptFiles(e.dataTransfer.files); }}
                 >
+                  <input
+                    type="file"
+                    accept=".html,.htm,text/html"
+                    style={{display:'none'}}
+                    id="atlas-upload-file"
+                    onChange={(e) => acceptFiles(e.target.files)}
+                  />
                   <div className="big">把 HTML 拖到这里</div>
                   <div className="small">支持单个 .html 文件，或 .html + assets/ 的目录压缩包</div>
                   <div className="meta">最多 8 MB · 自动清洗内联脚本</div>
+                  <label className="btn secondary" htmlFor="atlas-upload-file" style={{marginTop: 14}}>选择文件</label>
                 </div>
 
                 {files.length > 0 && (
@@ -118,7 +132,7 @@ function AdminUploadView({ ctx, onNavigate, pushToast }) {
                   <div className="field">
                     <label className="field-label">归属空间</label>
                     <select className="input" value={meta.spaceId} onChange={e => setMeta(m => ({...m, spaceId: e.target.value}))}>
-                      {_D2.tree.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      {spaces.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </div>
                   <div className="field">
@@ -182,7 +196,7 @@ function AdminUploadView({ ctx, onNavigate, pushToast }) {
                     <div style={{fontSize: 11, color: 'var(--ink-4)', textTransform:'uppercase', letterSpacing:'0.04em', marginBottom: 4, fontWeight: 500}}>分享设置</div>
                     <div style={{fontSize: 13.5, display:'flex', alignItems:'center', gap: 8}}>
                       <span className={"vis-chip " + meta.visibility}>{meta.visibility==='public'?'Public':meta.visibility==='invite'?'Invite':'Private'}</span>
-                      <span className="mono" style={{fontSize: 11, color:'var(--ink-3)'}}>{_D2.tree.find(s=>s.id===meta.spaceId)?.name}</span>
+                      <span className="mono" style={{fontSize: 11, color:'var(--ink-3)'}}>{spaces.find(s=>s.id===meta.spaceId)?.name}</span>
                     </div>
                   </div>
                 </div>
@@ -191,10 +205,19 @@ function AdminUploadView({ ctx, onNavigate, pushToast }) {
                   <button className="btn ghost" onClick={() => setStep(1)}>上一步</button>
                   <div style={{display:'flex', gap: 8}}>
                     <button className="btn secondary">存为草稿</button>
-                    <button className="btn primary" onClick={() => {
-                      setStep(3);
-                      pushToast({ msg: '已发布', meta: meta.title });
-                      setTimeout(() => onNavigate({view:'admin-docs'}), 1400);
+                    <button className="btn primary" disabled={!selectedFile} onClick={() => {
+                      const formData = new FormData();
+                      formData.set('file', selectedFile);
+                      formData.set('title', meta.title);
+                      formData.set('desc', meta.desc);
+                      formData.set('spaceId', meta.spaceId);
+                      formData.set('visibility', meta.visibility);
+                      mutations.uploadDocument(formData, {
+                        onSuccess: () => {
+                          setStep(3);
+                          setTimeout(() => onNavigate({view:'admin-docs'}), 900);
+                        },
+                      });
                     }}>
                       <_I2.check/><span>发布</span>
                     </button>
@@ -230,30 +253,24 @@ export { AdminUploadView };
 // ─────────────────────────────────────────────────────────────────────────
 // ADMIN · settings
 // ─────────────────────────────────────────────────────────────────────────
-function AdminSettingsView({ ctx, onNavigate, pushToast, spaces, onCreateSpace, onUpdateSpace, onDeleteSpace, onEditSpace, onNewSpace }) {
+function AdminSettingsView({ ctx, onNavigate, pushToast, spaces = [], members = [], permissions = [], currentUser, mutations, onEditSpace, onNewSpace }) {
   const [pane, setPane] = useState('spaces');
 
-  // Member × Space permissions matrix. Stored in component state so changes survive nav.
-  const initialPerms = useMemo(() => {
+  const perms = useMemo(() => {
     const p = {};
-    _D2.members.forEach((m, i) => {
+    members.forEach((m) => {
       p[m.id] = {};
-      // give each member a deterministic but varied set of space accesses
-      _D2.tree.forEach((s, sIdx) => {
-        const hit = (i + sIdx) % 3;
-        if (hit === 0)      p[m.id][s.id] = 'editor';
-        else if (hit === 1) p[m.id][s.id] = 'viewer';
-        else                p[m.id][s.id] = null;
-      });
+      spaces.forEach((s) => { p[m.id][s.id] = null; });
     });
-    // Ensure林知远 has editor access to everything
-    _D2.tree.forEach(s => { p['u1'][s.id] = 'editor'; });
+    permissions.forEach((perm) => {
+      p[perm.memberId] = p[perm.memberId] || {};
+      p[perm.memberId][perm.spaceId] = perm.role;
+    });
     return p;
-  }, []);
-  const [perms, setPerms] = useState(initialPerms);
+  }, [members, permissions, spaces]);
 
   const setMemberSpaceRole = (memberId, spaceId, role) => {
-    setPerms(p => ({ ...p, [memberId]: { ...p[memberId], [spaceId]: role } }));
+    mutations.setSpaceRole(spaceId, memberId, role);
   };
 
   return (
@@ -290,13 +307,13 @@ function AdminSettingsView({ ctx, onNavigate, pushToast, spaces, onCreateSpace, 
               perms={perms}
               onEditSpace={onEditSpace}
               onNewSpace={onNewSpace}
-              onDeleteSpace={(id) => { if (confirm('确认删除该空间？其下文档将被移至「私人草稿」。')) { onDeleteSpace(id); } }}
+              onDeleteSpace={(id) => { if (confirm('确认删除该空间？其下文档会一起删除。')) { mutations.deleteSpace(id); } }}
             />
           )}
-          {pane === 'members' && <MembersPane spaces={spaces} perms={perms} setMemberSpaceRole={setMemberSpaceRole} pushToast={pushToast}/>}
-          {pane === 'permissions' && <PermissionsPane spaces={spaces} perms={perms} setMemberSpaceRole={setMemberSpaceRole} pushToast={pushToast}/>}
-          {pane === 'trash' && <TrashPane pushToast={pushToast}/>}
-          {pane === 'skills' && <SkillsPane pushToast={pushToast}/>}
+          {pane === 'members' && <MembersPane spaces={spaces} members={members} perms={perms} setMemberSpaceRole={setMemberSpaceRole} pushToast={pushToast} mutations={mutations}/>}
+          {pane === 'permissions' && <PermissionsPane spaces={spaces} members={members} perms={perms} setMemberSpaceRole={setMemberSpaceRole} pushToast={pushToast}/>}
+          {pane === 'trash' && <TrashPane pushToast={pushToast} mutations={mutations}/>}
+          {pane === 'skills' && <SkillsPane pushToast={pushToast} mutations={mutations}/>}
         </div>
       </div>
     </div>
@@ -397,9 +414,7 @@ function SpacesPane({ spaces, perms, onEditSpace, onNewSpace, onDeleteSpace }) {
   );
 }
 
-function MembersPane({ spaces, perms, setMemberSpaceRole, pushToast }) {
-  const baseMembers = _D2.members;
-  const [members, setMembers] = useState(baseMembers);
+function MembersPane({ spaces, members = [], perms, setMemberSpaceRole, pushToast, mutations }) {
   const [editingMember, setEditingMember] = useState(null); // member id whose space-access menu is open
   const avatarColors = ['var(--blue)', '#ff9500', '#34c759', '#af52de', '#ff2d55', '#5856d6', '#ff6482', '#30b0c7'];
 
@@ -445,8 +460,7 @@ function MembersPane({ spaces, perms, setMemberSpaceRole, pushToast }) {
                     className="input"
                     value={m.role}
                     onChange={e => {
-                      setMembers(ms => ms.map(x => x.id === m.id ? { ...x, role: e.target.value } : x));
-                      pushToast({ msg: '工作区角色已更新', meta: m.name });
+                      mutations.updateMember(m.id, { role: e.target.value });
                     }}
                     style={{padding:'6px 32px 6px 10px', fontSize:13}}>
                     <option value="admin">管理员</option>
@@ -514,12 +528,11 @@ function MembersPane({ spaces, perms, setMemberSpaceRole, pushToast }) {
   );
 }
 
-function PermissionsPane({ spaces, perms, setMemberSpaceRole, pushToast }) {
+function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, pushToast }) {
   const [activeSpace, setActiveSpace] = useState(spaces[0]?.id || 's1');
   const space = spaces.find(s => s.id === activeSpace) || spaces[0];
   if (!space) return <div className="pane-head"><h1>空间权限</h1><p className="pane-sub">尚未创建任何空间。</p></div>;
 
-  const members = _D2.members;
   const spaceColor = SPACE_COLOR_MAP[space.accent] || SPACE_COLOR_MAP.accent;
 
   const setAll = (role) => {
@@ -602,21 +615,12 @@ function PermRow({ label, desc, def }) {
   );
 }
 
-function TrashPane({ pushToast }) {
-  const [items, setItems] = useState([
-    { id:'t1',  title:'旧版部署手册 v1.x',     space:'工程', by:'林知远', at:'5月09日', expires:'21 天后', warn: false },
-    { id:'t2',  title:'失效的设计调研草稿',     space:'设计', by:'苏渡',   at:'5月05日', expires:'25 天后', warn: false },
-    { id:'t3',  title:'测试用上传文档',         space:'工程', by:'陈夏',   at:'5月03日', expires:'27 天后', warn: false },
-    { id:'t4',  title:'误操作的会议笔记',       space:'产品', by:'柳明',   at:'4月28日', expires:'已过期',   warn: true  },
-    { id:'t5',  title:'三月版本说明（重复）',   space:'工程', by:'林知远', at:'4月25日', expires:'1 天后',   warn: true  },
-    { id:'t6',  title:'实验性的色板对比稿',     space:'设计', by:'苏渡',   at:'4月23日', expires:'3 天后',   warn: false },
-    { id:'t7',  title:'已合并的 RFC 老草稿',    space:'工程', by:'林知远', at:'4月20日', expires:'6 天后',   warn: false },
-    { id:'t8',  title:'用户访谈 · 张姓访谈者',  space:'产品', by:'陈夏',   at:'4月18日', expires:'8 天后',   warn: false },
-    { id:'t9',  title:'弃用的图标导出文件',     space:'设计', by:'苏渡',   at:'4月15日', expires:'11 天后',  warn: false },
-    { id:'t10', title:'临时上传 · 截图整理',    space:'工程', by:'柳明',   at:'4月12日', expires:'14 天后',  warn: false },
-    { id:'t11', title:'未发出的产品周报草稿',   space:'产品', by:'陈夏',   at:'4月09日', expires:'17 天后',  warn: false },
-    { id:'t12', title:'被替换的旧版排版规范',   space:'设计', by:'苏渡',   at:'4月06日', expires:'20 天后',  warn: false },
-  ]);
+function TrashPane({ pushToast, mutations }) {
+  const trashQuery = useQuery({
+    queryKey: atlasKeys.trash,
+    queryFn: () => apiGet('/documents/trash'),
+  });
+  const items = trashQuery.data || [];
   return (
     <>
       <div className="pane-head">
@@ -639,14 +643,13 @@ function TrashPane({ pushToast }) {
               <div key={it.id} className="trash-row">
                 <div>
                   <div className="doc-name">{it.title}</div>
-                  <div className="location">原位置 · {it.space}</div>
+                  <div className="location">原位置 · {it.spaceName}</div>
                 </div>
-                <div className="by">删除者 · {it.by}</div>
-                <div className="when">{it.at}</div>
-                <div className={"expires " + (it.warn ? 'warn' : '')}>{it.expires}</div>
+                <div className="by">作者 · {it.authorName}</div>
+                <div className="when">{it.updated}</div>
+                <div className="expires">30 天内</div>
                 <button className="icon-btn" title="恢复" onClick={() => {
-                  setItems(xs => xs.filter(x => x.id !== it.id));
-                  pushToast({msg:'已恢复', meta: it.title});
+                  mutations.restoreDocument(it.id);
                 }}><_I2.refresh/></button>
               </div>
             ))}
@@ -657,22 +660,12 @@ function TrashPane({ pushToast }) {
   );
 }
 
-function SkillsPane({ pushToast }) {
-  const [active, setActive] = useState('1.2.4');
-  const versions = [
-    { v:'1.2.4', by:'林知远', at:'5月14日', note:'修复 SVG <use> 处理；表格保留行高样式' },
-    { v:'1.2.3', by:'林知远', at:'5月02日', note:'代理 google-fonts；外链 CSS 内联化' },
-    { v:'1.2.2', by:'陈夏',   at:'4月19日', note:'放宽 data-* 属性白名单' },
-    { v:'1.2.1', by:'林知远', at:'4月04日', note:'初次稳定版本' },
-    { v:'1.2.0', by:'林知远', at:'3月28日', note:'新增 <math>、<svg> 命名空间支持' },
-    { v:'1.1.9', by:'陈夏',   at:'3月21日', note:'修复 base64 大图导致的解析超时' },
-    { v:'1.1.8', by:'柳明',   at:'3月12日', note:'更严格的 form 表单脱敏' },
-    { v:'1.1.7', by:'林知远', at:'3月05日', note:'外链字体加上 font-display: swap' },
-    { v:'1.1.6', by:'陈夏',   at:'2月25日', note:'修复 srcset 解析顺序导致的图片错位' },
-    { v:'1.1.5', by:'柳明',   at:'2月18日', note:'放宽 iframe srcdoc 白名单边界' },
-    { v:'1.1.4', by:'林知远', at:'2月10日', note:'重写脚本剥离器，性能提升 3 倍' },
-    { v:'1.1.3', by:'林知远', at:'2月02日', note:'去除 noscript 中残留的脚本' },
-  ];
+function SkillsPane({ pushToast, mutations }) {
+  const skillsQuery = useQuery({
+    queryKey: atlasKeys.skills,
+    queryFn: () => apiGet('/skills'),
+  });
+  const versions = skillsQuery.data || [];
   return (
     <>
       <div className="pane-head">
@@ -692,22 +685,22 @@ function SkillsPane({ pushToast }) {
         <div className="card-body card-body-scroll">
           <AnimatedScrollList className="rows-scroll">
             {versions.map(v => {
-              const isActive = v.v === active;
+              const isActive = v.active;
               return (
-                <div key={v.v} className="skill-row">
+                <div key={v.version} className="skill-row">
                   <div>
-                    <div className={"ver " + (isActive ? 'current' : '')}>v{v.v}</div>
+                    <div className={"ver " + (isActive ? 'current' : '')}>v{v.version}</div>
                     <div className="note">{v.note}</div>
                   </div>
                   <div className="status">{isActive ? '使用中' : '可回滚'}</div>
                   <div>
-                    <div className="when">{v.at}</div>
-                    <div className="note" style={{fontSize: 11.5}}>{v.by}</div>
+                    <div className="when">{new Date(v.createdAt).toLocaleDateString('zh-CN')}</div>
+                    <div className="note" style={{fontSize: 11.5}}>{v.name}</div>
                   </div>
                   <div>
                     {!isActive && (
                       <button className="btn secondary" style={{padding:'5px 12px', fontSize: 12.5}}
-                        onClick={() => { setActive(v.v); pushToast({msg:'已切换 skill 版本', meta:'v'+v.v}); }}>
+                        onClick={() => mutations.activateSkill(v.version)}>
                         切换至此
                       </button>
                     )}

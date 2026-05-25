@@ -1,41 +1,138 @@
-import { CreateSpaceSchema, UpdateSpaceSchema } from '@atlas/shared';
-import { eq } from 'drizzle-orm';
+import { CreateSpaceSchema, SetSpaceMemberRoleSchema, UpdateSpaceSchema } from '@atlas/shared';
+import { and, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
-import { documents, spaces } from '../db/schema';
+import { documents, members, spaceMembers, spaces } from '../db/schema';
+import type { AppEnv } from '../lib/auth';
+import { displayDate } from '../lib/dates';
+import { forbidden, notFound } from '../lib/http-error';
+import { makeId } from '../lib/id';
+import { isAdmin, listReadableSpaces, requireSpaceAccess, requireSpaceEditor } from '../lib/permissions';
 
-export const spacesRouter = new Hono()
+function toDoc(doc: typeof documents.$inferSelect, author?: typeof members.$inferSelect | null) {
+  return {
+    id: doc.id,
+    spaceId: doc.spaceId,
+    title: doc.title,
+    desc: doc.desc,
+    author: doc.authorId,
+    authorName: author?.name,
+    updated: displayDate(doc.updated),
+    visibility: doc.visibility,
+    dot: doc.dot,
+    tags: doc.tags,
+    html: doc.html,
+    skillVersion: doc.skillVersion,
+    deletedAt: doc.deletedAt,
+  };
+}
+
+async function childrenForSpace(spaceId: string) {
+  const rows = await db
+    .select({ doc: documents, author: members })
+    .from(documents)
+    .innerJoin(members, eq(documents.authorId, members.id))
+    .where(and(eq(documents.spaceId, spaceId), isNull(documents.deletedAt)));
+  return rows.map((row) => toDoc(row.doc, row.author));
+}
+
+export const spacesRouter = new Hono<AppEnv>()
   .get('/', async (c) => {
-    const rows = await db.select().from(spaces);
-    return c.json(rows);
+    const user = c.get('user');
+    const readableSpaces = await listReadableSpaces(user);
+    const result = await Promise.all(
+      readableSpaces.map(async (sp) => {
+        const children = await childrenForSpace(sp.id);
+        return {
+          ...sp,
+          count: children.length,
+          children,
+          role: await requireSpaceAccess(user, sp.id),
+        };
+      }),
+    );
+    return c.json(result);
   })
   .get('/:id', async (c) => {
+    const user = c.get('user');
     const id = c.req.param('id');
+    await requireSpaceAccess(user, id);
     const [sp] = await db.select().from(spaces).where(eq(spaces.id, id));
-    if (!sp) return c.json({ error: 'not_found' }, 404);
-    const docs = await db.select().from(documents).where(eq(documents.spaceId, id));
-    return c.json({ ...sp, children: docs });
+    if (!sp) throw notFound();
+    const children = await childrenForSpace(id);
+    return c.json({ ...sp, count: children.length, children });
   })
   .post('/', async (c) => {
+    const user = c.get('user');
+    if (!isAdmin(user)) throw forbidden('Only workspace admins can create spaces.');
+
     const body = CreateSpaceSchema.parse(await c.req.json());
-    const id = `s${Math.random().toString(36).slice(2, 8)}`;
+    const id = makeId('s');
     await db.insert(spaces).values({
       id,
       name: body.name,
       mark: body.name.slice(0, 1),
       accent: body.accent,
+      personal: Boolean(body.personal),
     });
-    return c.json({ id });
+    await db.insert(spaceMembers).values({ spaceId: id, memberId: user.id, role: 'editor' });
+    return c.json({ id }, 201);
   })
   .patch('/:id', async (c) => {
+    const user = c.get('user');
     const id = c.req.param('id');
+    await requireSpaceEditor(user, id);
+
     const body = UpdateSpaceSchema.parse(await c.req.json());
-    const patch: Record<string, unknown> = { ...body };
+    const patch: Partial<typeof spaces.$inferInsert> = { ...body };
     if (body.name) patch.mark = body.name.slice(0, 1);
     await db.update(spaces).set(patch).where(eq(spaces.id, id));
     return c.json({ ok: true });
   })
   .delete('/:id', async (c) => {
-    await db.delete(spaces).where(eq(spaces.id, c.req.param('id')));
+    const user = c.get('user');
+    const id = c.req.param('id');
+    if (!isAdmin(user)) throw forbidden('Only workspace admins can delete spaces.');
+    await requireSpaceAccess(user, id);
+    await db.delete(spaces).where(eq(spaces.id, id));
+    return c.json({ ok: true });
+  })
+  .get('/:id/members', async (c) => {
+    const user = c.get('user');
+    const spaceId = c.req.param('id');
+    await requireSpaceAccess(user, spaceId);
+
+    const rows = await db
+      .select({ member: members, membership: spaceMembers })
+      .from(members)
+      .leftJoin(
+        spaceMembers,
+        and(eq(spaceMembers.memberId, members.id), eq(spaceMembers.spaceId, spaceId)),
+      );
+
+    return c.json(
+      rows.map((row) => ({
+        ...row.member,
+        spaceRole: row.membership?.role ?? null,
+      })),
+    );
+  })
+  .put('/:id/members/:memberId', async (c) => {
+    const user = c.get('user');
+    if (!isAdmin(user)) throw forbidden('Only workspace admins can change space permissions.');
+
+    const spaceId = c.req.param('id');
+    const memberId = c.req.param('memberId');
+    await requireSpaceAccess(user, spaceId);
+    const body = SetSpaceMemberRoleSchema.parse({ ...(await c.req.json()), memberId });
+
+    await db
+      .delete(spaceMembers)
+      .where(and(eq(spaceMembers.spaceId, spaceId), eq(spaceMembers.memberId, body.memberId)));
+
+    if (body.role) {
+      await db.insert(spaceMembers).values({ spaceId, memberId: body.memberId, role: body.role });
+    }
+
     return c.json({ ok: true });
   });

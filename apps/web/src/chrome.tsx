@@ -1,9 +1,6 @@
 // @ts-nocheck — migrated verbatim from JSX prototype; incrementally type later.
 // Atlas chrome — coral warm-default, folder theme switch, animated tree
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { ATLAS_DATA } from '@atlas/shared/fixtures';
-
-const DATA = ATLAS_DATA;
 
 // Icons (SF-style: hairlines, rounded caps)
 const I = {
@@ -41,9 +38,10 @@ function BrandGlyph() {
   );
 }
 
-function Topbar({ ctx, visible = true, onSearch, onTheme, theme, onNavigate, onShare }) {
+function Topbar({ ctx, spaces = [], visible = true, onSearch, onTheme, theme, onNavigate, onShare }) {
   const isReader = ctx.view === 'reader';
-  const space = DATA.tree.find(s => s.id === ctx.spaceId) || DATA.tree[0];
+  const space = spaces.find(s => s.id === ctx.spaceId) || spaces[0] || { name: '空间' };
+  const doc = spaces.flatMap(s => s.children || []).find(d => d.id === ctx.docId);
   return (
     <header className="topbar">
       <div className="brand">
@@ -56,7 +54,7 @@ function Topbar({ ctx, visible = true, onSearch, onTheme, theme, onNavigate, onS
           <>
             <span className="crumb" onClick={() => onNavigate({view:'admin-docs'})}>{space.name}</span>
             <span className="sep">/</span>
-            <span className="current">Lumen 系列 · 产品介绍</span>
+            <span className="current">{doc?.title || '文档'}</span>
           </>
         )}
         {ctx.view === 'admin-docs' && (<><span className="crumb">团队后台</span><span className="sep">/</span><span className="current">文档</span></>)}

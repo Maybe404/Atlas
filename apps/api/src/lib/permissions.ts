@@ -1,0 +1,148 @@
+import type { SpaceMemberRole } from '@atlas/shared';
+import { and, eq, isNull } from 'drizzle-orm';
+import { db } from '../db/client';
+import { documentMembers, documents, members, shareLinks, spaceMembers, spaces } from '../db/schema';
+import { forbidden, notFound } from './http-error';
+
+type User = typeof members.$inferSelect;
+type SpaceRow = typeof spaces.$inferSelect;
+type DocumentRow = typeof documents.$inferSelect;
+
+export function isAdmin(user: User) {
+  return user.role === 'admin';
+}
+
+export async function getSpaceRole(user: User, spaceId: string) {
+  if (isAdmin(user)) return 'editor' as const;
+  const [membership] = await db
+    .select()
+    .from(spaceMembers)
+    .where(and(eq(spaceMembers.spaceId, spaceId), eq(spaceMembers.memberId, user.id)));
+  return membership?.role ?? null;
+}
+
+export async function requireSpaceAccess(user: User, spaceId: string) {
+  const role = await getSpaceRole(user, spaceId);
+  if (!role) throw notFound();
+  return role;
+}
+
+export async function requireSpaceEditor(user: User, spaceId: string) {
+  const role = await requireSpaceAccess(user, spaceId);
+  if (role !== 'editor') throw forbidden('Editor access is required for this space.');
+  return role;
+}
+
+export async function canReadDocument(user: User, doc: DocumentRow) {
+  if (doc.deletedAt) return false;
+  if (isAdmin(user) || doc.authorId === user.id) return true;
+  const spaceRole = await getSpaceRole(user, doc.spaceId);
+  if (spaceRole) return true;
+  const [direct] = await db
+    .select()
+    .from(documentMembers)
+    .where(and(eq(documentMembers.documentId, doc.id), eq(documentMembers.memberId, user.id)));
+  return Boolean(direct);
+}
+
+export async function requireDocumentRead(user: User, docId: string) {
+  const [doc] = await db
+    .select()
+    .from(documents)
+    .where(and(eq(documents.id, docId), isNull(documents.deletedAt)));
+  if (!doc || !(await canReadDocument(user, doc))) throw notFound();
+  return doc;
+}
+
+export async function canEditDocument(user: User, doc: DocumentRow) {
+  if (doc.deletedAt) return false;
+  if (isAdmin(user) || doc.authorId === user.id) return true;
+  const spaceRole = await getSpaceRole(user, doc.spaceId);
+  if (spaceRole === 'editor') return true;
+  const [direct] = await db
+    .select()
+    .from(documentMembers)
+    .where(and(eq(documentMembers.documentId, doc.id), eq(documentMembers.memberId, user.id)));
+  return direct?.role === 'editor';
+}
+
+export async function requireDocumentEditor(user: User, docId: string) {
+  const doc = await requireDocumentRead(user, docId);
+  if (!(await canEditDocument(user, doc))) throw forbidden('Editor access is required for this document.');
+  return doc;
+}
+
+export async function listReadableSpaces(user: User) {
+  if (isAdmin(user)) {
+    return db.select().from(spaces);
+  }
+
+  const rows = await db
+    .select({ space: spaces })
+    .from(spaces)
+    .innerJoin(spaceMembers, eq(spaceMembers.spaceId, spaces.id))
+    .where(eq(spaceMembers.memberId, user.id));
+
+  return rows.map((row) => row.space);
+}
+
+export async function listReadableDocuments(user: User, space?: SpaceRow) {
+  if (isAdmin(user)) {
+    if (space) {
+      return db
+        .select()
+        .from(documents)
+        .where(and(eq(documents.spaceId, space.id), isNull(documents.deletedAt)));
+    }
+    return db.select().from(documents).where(isNull(documents.deletedAt));
+  }
+
+  const rows = await db
+    .select({ doc: documents })
+    .from(documents)
+    .innerJoin(spaceMembers, eq(spaceMembers.spaceId, documents.spaceId))
+    .where(
+      and(
+        eq(spaceMembers.memberId, user.id),
+        isNull(documents.deletedAt),
+        ...(space ? [eq(documents.spaceId, space.id)] : []),
+      ),
+    );
+
+  const directRows = await db
+    .select({ doc: documents })
+    .from(documents)
+    .innerJoin(documentMembers, eq(documentMembers.documentId, documents.id))
+    .where(
+      and(
+        eq(documentMembers.memberId, user.id),
+        isNull(documents.deletedAt),
+        ...(space ? [eq(documents.spaceId, space.id)] : []),
+      ),
+    );
+
+  const seen = new Set<string>();
+  return [...rows, ...directRows].flatMap((row) => {
+    if (seen.has(row.doc.id)) return [];
+    seen.add(row.doc.id);
+    return [row.doc];
+  });
+}
+
+export async function publicDocumentByToken(token: string) {
+  const [row] = await db
+    .select({ link: shareLinks, doc: documents, space: spaces, author: members })
+    .from(shareLinks)
+    .innerJoin(documents, eq(shareLinks.documentId, documents.id))
+    .innerJoin(spaces, eq(documents.spaceId, spaces.id))
+    .innerJoin(members, eq(documents.authorId, members.id))
+    .where(and(eq(shareLinks.token, token), eq(shareLinks.enabled, true), isNull(documents.deletedAt)));
+
+  if (!row) throw notFound();
+  if (row.link.expiresAt && new Date(row.link.expiresAt).getTime() < Date.now()) throw notFound();
+  return row;
+}
+
+export function roleCanEdit(role: SpaceMemberRole | null) {
+  return role === 'editor';
+}
