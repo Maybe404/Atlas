@@ -41,11 +41,11 @@
 # 1. 装依赖
 bun install
 
-# 2. 初始化数据库
+# 2. 初始化数据库并灌入示例数据
 bun run --filter @atlas/api db:migrate
 bun run --filter @atlas/api db:seed
 
-# 3. 起开发服
+# 3. 起开发服（会先自动应用已提交迁移）
 bun dev
 
 # 或分别启动
@@ -81,9 +81,9 @@ atlas-demo-password
 
 | 命令 | 作用 |
 |---|---|
-| `bun dev` | 同时启动 web 和 api |
+| `bun dev` | 应用已提交迁移，然后同时启动 web 和 api |
 | `bun dev:web` | 只启动 Vite 前端 |
-| `bun dev:api` | 只启动 Hono API |
+| `bun dev:api` | 应用已提交迁移，然后只启动 Hono API |
 | `bun run build` | 构建所有 workspace |
 | `bun run typecheck` | 跑所有 TypeScript 类型检查 |
 | `bun test apps/api/src` | 跑 API 测试 |

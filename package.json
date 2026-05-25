@@ -8,9 +8,9 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --filter '*' dev",
+    "dev": "bun run --filter @atlas/api db:migrate && bun run --filter '*' dev",
     "dev:web": "bun run --filter @atlas/web dev",
-    "dev:api": "bun run --filter @atlas/api dev",
+    "dev:api": "bun run --filter @atlas/api db:migrate && bun run --filter @atlas/api dev",
     "build": "bun run --filter '*' build",
     "typecheck": "bun run --filter '*' typecheck",
     "test": "bun run --filter '*' test",
