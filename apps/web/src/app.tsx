@@ -8,6 +8,7 @@ import { AdminUploadView, AdminSettingsView } from './views-admin';
 import { CmdK, ShareDialog, ToastWrap, SpaceManagerDialog } from './dialogs';
 import { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakToggle } from './tweaks-panel';
 import { useAtlasData, useAtlasMutations } from './data-hooks';
+import { firstPublicDoc, LoginView, useAuth } from './auth';
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
   "theme": "warm",
@@ -24,6 +25,7 @@ function stateFromLocation(location) {
   if (path.startsWith('/admin/upload')) return { view: 'admin-upload', spaceId: params.get('space') || 's1', docId: params.get('doc') || 'd1' };
   if (path.startsWith('/admin/settings')) return { view: 'admin-settings', spaceId: params.get('space') || 's1', docId: params.get('doc') || 'd1' };
   if (path.startsWith('/admin/docs')) return { view: 'admin-docs', spaceId: params.get('space') || 's1', docId: params.get('doc') || 'd1' };
+  if (path.startsWith('/login')) return { view: 'login', spaceId: params.get('space') || 's1', docId: params.get('doc') || 'd1' };
   const publicMatch = path.match(/^\/share\/([^/]+)/);
   if (publicMatch) return { view: 'public', token: publicMatch[1], spaceId: 'public', docId: publicMatch[1] };
   const docMatch = path.match(/^\/spaces\/([^/]+)\/docs\/([^/]+)/);
@@ -48,6 +50,7 @@ function App() {
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [sharingDocId, setSharingDocId] = useState(null);
+  const [returnTo, setReturnTo] = useState(null);
   const [spaceMgrOpen, setSpaceMgrOpen] = useState(false);
   const [spaceEditing, setSpaceEditing] = useState(null); // null | space object | 'new'
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -65,17 +68,61 @@ function App() {
     setTimeout(() => setToasts(ts => ts.filter(t => t.id !== id)), 2200);
   }, []);
 
+  const { spaces, members, permissions, currentUser, session, isLoading, error } = useAtlasData();
+  const auth = useAuth({ currentUser, session });
+  const { user, login, logout, switchTo } = auth;
+  const isGuest = !user;
+
   const navigate = useCallback(({ view: v, spaceId: s, docId: d }) => {
+    if (!user && ['admin-docs', 'admin-upload', 'admin-settings'].includes(v)) {
+      setReturnTo({ view, spaceId, docId });
+      routerNavigate('/login');
+      return;
+    }
     const next = {
       view: v || view,
       spaceId: s || spaceId,
       docId: d || docId,
     };
     routerNavigate(urlForState(next));
+  }, [docId, routerNavigate, spaceId, user, view]);
+  const mutations = useAtlasMutations(pushToast);
+
+  const openLogin = useCallback(() => {
+    setReturnTo({ view, spaceId, docId });
+    routerNavigate('/login');
   }, [docId, routerNavigate, spaceId, view]);
 
-  const { spaces, members, permissions, currentUser, isLoading, error } = useAtlasData();
-  const mutations = useAtlasMutations(pushToast);
+  const continueAsGuest = useCallback(() => {
+    const returnDoc = spaces
+      .flatMap((space) => space.children || [])
+      .find((candidate) => candidate.id === returnTo?.docId);
+    const canReturnAsGuest =
+      returnTo &&
+      returnTo.view !== 'login' &&
+      !['admin-docs', 'admin-upload', 'admin-settings'].includes(returnTo.view) &&
+      (returnTo.view === 'public' || returnDoc?.visibility === 'public');
+    const target = canReturnAsGuest ? returnTo : firstPublicDoc(spaces);
+    setReturnTo(null);
+    navigate(target);
+  }, [navigate, returnTo, spaces]);
+
+  const handleLogin = useCallback(async (email, password) => {
+    const result = await login(email, password);
+    if (result.ok) {
+      const target = returnTo && returnTo.view !== 'login' ? returnTo : stateFromLocation(location);
+      setReturnTo(null);
+      routerNavigate(urlForState(target));
+    }
+    return result;
+  }, [location, login, returnTo, routerNavigate]);
+
+  const handleLogout = useCallback(async () => {
+    await logout();
+    if (!['reader', 'public'].includes(view)) {
+      routerNavigate(urlForState(firstPublicDoc(spaces)));
+    }
+  }, [logout, routerNavigate, spaces, view]);
 
   const cycleTheme = useCallback((to) => {
     setTweak({ theme: to });
@@ -152,7 +199,9 @@ function App() {
   }, [view]);
 
   const ctx = { view, spaceId, docId };
-  const hasSidebar = SIDEBAR_VIEWS.has(view);
+  const isLogin = view === 'login';
+  const isAdminView = ['admin-docs', 'admin-upload', 'admin-settings'].includes(view);
+  const hasSidebar = SIDEBAR_VIEWS.has(view) && !isLogin;
   const isPublicView = view === 'public';
 
   const activeDoc = spaces.flatMap(s => s.children || []).find(d => d.id === docId);
@@ -161,6 +210,25 @@ function App() {
     setSharingDocId(targetDocId || activeDoc?.id || docId);
     setShareOpen(true);
   }, [activeDoc?.id, docId]);
+
+  useEffect(() => {
+    if (!isLoading && isGuest && isAdminView) {
+      setReturnTo({ view, spaceId, docId });
+      routerNavigate('/login');
+    }
+  }, [docId, isAdminView, isGuest, isLoading, routerNavigate, spaceId, view]);
+
+  if (isLogin) {
+    return (
+      <div className="app no-sidebar login-shell">
+        <LoginView
+          onLogin={handleLogin}
+          onContinueAsGuest={continueAsGuest}
+          returnTo={returnTo}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className={"app " + (!hasSidebar ? 'no-sidebar ' : '') + (isPublicView ? 'public-shell ' : '') + (sidebarCollapsed ? 'sidebar-collapsed ' : '') + (chromeVisible ? '' : 'chrome-hidden ')}>
@@ -174,12 +242,17 @@ function App() {
           onNavigate={navigate}
           onShare={() => openShare()}
           spaces={spaces}
+          user={user}
+          onLogin={openLogin}
+          onLogout={handleLogout}
+          onSwitchUser={switchTo}
         />
       )}
       {hasSidebar && (
         <Sidebar
           ctx={ctx}
           spaces={spaces}
+          user={user}
           collapsed={sidebarCollapsed}
           onToggleCollapse={() => setSidebarCollapsed(v => !v)}
           onNavigate={navigate}
@@ -207,13 +280,13 @@ function App() {
       }>
         {error && <div className="app-state-banner">加载失败 · {error.message}</div>}
         {isLoading && <div className="app-state-banner">正在同步工作区数据…</div>}
-        {view === 'reader' && <ReaderView ctx={ctx} spaces={spaces} members={members} framedDoc={tweaks.framedDoc} chromeVisible={chromeVisible} onNavigate={navigate} onShare={() => openShare()}/>}
+        {view === 'reader' && <ReaderView ctx={ctx} spaces={spaces} members={members} user={user} framedDoc={tweaks.framedDoc} chromeVisible={chromeVisible} onNavigate={navigate} onShare={() => openShare()} onLogin={openLogin}/>}
         {view === 'public' && <PublicDocumentView token={routeState.token}/>}
         {view === 'admin-docs' && <AdminDocsView ctx={ctx} spaces={spaces} members={members} onNavigate={navigate} onShare={(id) => openShare(id)} pushToast={pushToast} mutations={mutations}/>}
         {view === 'admin-upload' && <AdminUploadView ctx={ctx} spaces={spaces} onNavigate={navigate} pushToast={pushToast} mutations={mutations}/>}
         {view === 'admin-settings' && <AdminSettingsView ctx={ctx} onNavigate={navigate} pushToast={pushToast} spaces={spaces} members={members} permissions={permissions} currentUser={currentUser} mutations={mutations} onEditSpace={(sp) => { setSpaceEditing(sp); setSpaceMgrOpen(true); }} onNewSpace={() => { setSpaceEditing('new'); setSpaceMgrOpen(true); }}/>}
 
-        {!isPublicView && <Dock view={view} onNavigate={navigate} visible={chromeVisible} magnify={tweaks.dockMagnify}/>}
+        {!isPublicView && <Dock view={view} onNavigate={navigate} visible={chromeVisible} magnify={tweaks.dockMagnify} isGuest={isGuest}/>}
       </main>
 
       {!isPublicView && <CmdK open={cmdkOpen} spaces={spaces} members={members} onClose={() => setCmdkOpen(false)} onNavigate={navigate} onToggleTheme={() => cycleTheme(tweaks.theme === 'dark' ? 'warm' : 'dark')}/>}
@@ -273,13 +346,14 @@ function App() {
 // ─────────────────────────────────────────────────────────────────────────
 // DOCK — macOS-style magnification, replaces view-switcher
 // ─────────────────────────────────────────────────────────────────────────
-function Dock({ view, onNavigate, visible, magnify }) {
-  const items = [
-    { id: 'reader',         label: '阅读',     icon: 'book',     go: { view: 'reader', spaceId: 's1', docId: 'd1' } },
+function Dock({ view, onNavigate, visible, magnify, isGuest }) {
+  const allItems = [
+    { id: 'reader',         label: '阅读',     icon: 'book',     go: { view: 'reader', spaceId: 's1', docId: 'd1' }, guest: true },
     { id: 'admin-docs',     label: '管理',     icon: 'admin',    go: { view: 'admin-docs' } },
     { id: 'admin-upload',   label: '上传',     icon: 'upload',   go: { view: 'admin-upload' } },
     { id: 'admin-settings', label: '设置',     icon: 'settings', go: { view: 'admin-settings' } },
   ];
+  const items = isGuest ? allItems.filter(item => item.guest) : allItems;
 
   const BASE = 34;
   const MAG = 48;

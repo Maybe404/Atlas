@@ -1,6 +1,7 @@
 // @ts-nocheck — migrated verbatim from JSX prototype; incrementally type later.
 // Atlas chrome — coral warm-default, folder theme switch, animated tree
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { canRead, UserMenu } from './auth';
 
 // Icons (SF-style: hairlines, rounded caps)
 const I = {
@@ -38,7 +39,7 @@ function BrandGlyph() {
   );
 }
 
-function Topbar({ ctx, spaces = [], visible = true, onSearch, onTheme, theme, onNavigate, onShare }) {
+function Topbar({ ctx, spaces = [], visible = true, onSearch, onTheme, theme, onNavigate, onShare, user, onLogin, onLogout, onSwitchUser }) {
   const isReader = ctx.view === 'reader';
   const space = spaces.find(s => s.id === ctx.spaceId) || spaces[0] || { name: '空间' };
   const doc = spaces.flatMap(s => s.children || []).find(d => d.id === ctx.docId);
@@ -68,7 +69,7 @@ function Topbar({ ctx, spaces = [], visible = true, onSearch, onTheme, theme, on
         <span className="kbd">⌘ K</span>
       </button>
 
-      {isReader && (
+      {isReader && user && (
         <button className="btn primary" onClick={onShare}>
           <I.share/><span>分享</span>
         </button>
@@ -77,7 +78,12 @@ function Topbar({ ctx, spaces = [], visible = true, onSearch, onTheme, theme, on
       <button className="icon-btn theme-trigger-btn" title="切换主题" aria-label="切换主题" style={{padding:0, width: 36, height: 36}}>
         <ThemePicker theme={theme} onTheme={onTheme}/>
       </button>
-      <div className="avatar" title="林知远">LZ</div>
+      <UserMenu
+        user={user}
+        onLogin={onLogin}
+        onLogout={onLogout}
+        onSwitch={onSwitchUser}
+      />
     </header>
   );
 }
@@ -158,7 +164,7 @@ function ThemePicker({ theme, onTheme }) {
   );
 }
 
-function Sidebar({ ctx, spaces, collapsed, onToggleCollapse, onNavigate }) {
+function Sidebar({ ctx, spaces, user, collapsed, onToggleCollapse, onNavigate }) {
   // Open every space by default so the directory reads as a single list
   const initialExpanded = useMemo(() => {
     const m = {};
@@ -194,6 +200,7 @@ function Sidebar({ ctx, spaces, collapsed, onToggleCollapse, onNavigate }) {
           expanded={expanded}
           toggle={toggle}
           collapsed={false}
+          user={user}
           onNavigate={onNavigate}
         />
       </div>
@@ -289,7 +296,7 @@ export { TocList, READER_TOC };
 // ANIMATED TREE LIST — items fade+scale in on scroll into view, with
 // fading top/bottom gradient masks (inspired by React Bits AnimatedList)
 // ─────────────────────────────────────────────────────────────────────────
-function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, onNavigate }) {
+function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNavigate }) {
   const listRef = useRef(null);
   const [topOpacity, setTopOpacity] = useState(0);
   const [botOpacity, setBotOpacity] = useState(1);
@@ -337,16 +344,24 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, onNavigate
               </AnimatedItem>
               {open && !collapsed && (
                 <div className="tree-children">
-                  {space.children.map((doc, dIdx) => (
-                    <AnimatedItem key={doc.id} index={sIdx + dIdx + 1}>
-                      <div
-                        className={"tree-node " + (ctx.docId === doc.id ? "active" : "")}
-                        onClick={(e) => { e.stopPropagation(); onNavigate({view:'reader', spaceId: space.id, docId: doc.id}); }}
-                      >
-                        <span className="name">{doc.title}</span>
-                      </div>
-                    </AnimatedItem>
-                  ))}
+                  {space.children.map((doc, dIdx) => {
+                    const locked = !canRead(doc, user);
+                    return (
+                      <AnimatedItem key={doc.id} index={sIdx + dIdx + 1}>
+                        <div
+                          className={"tree-node " + (ctx.docId === doc.id ? "active " : "") + (locked ? "locked" : "")}
+                          onClick={(e) => { e.stopPropagation(); onNavigate({view:'reader', spaceId: space.id, docId: doc.id}); }}
+                        >
+                          <span className="name doc-title-text">{doc.title}</span>
+                          {locked && (
+                            <span className="tree-lock" title="登录后可读">
+                              <I.lock/>
+                            </span>
+                          )}
+                        </div>
+                      </AnimatedItem>
+                    );
+                  })}
                 </div>
               )}
             </div>

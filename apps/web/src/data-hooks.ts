@@ -36,8 +36,10 @@ export function useAtlasData() {
     members: membersQuery.data || [],
     permissions: permissionsQuery.data || [],
     currentUser: meQuery.data?.user,
-    isLoading: spacesQuery.isLoading || membersQuery.isLoading || permissionsQuery.isLoading,
-    error: spacesQuery.error || membersQuery.error || permissionsQuery.error,
+    session: meQuery.data?.session,
+    isLoading:
+      spacesQuery.isLoading || membersQuery.isLoading || permissionsQuery.isLoading || meQuery.isLoading,
+    error: spacesQuery.error || membersQuery.error || permissionsQuery.error || meQuery.error,
   };
 }
 
