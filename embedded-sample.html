@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<title>Lumen · 一份外部生成的产品介绍</title>
+<style>
+  :root {
+    --ink: #1d1d1f;
+    --muted: #6e6e73;
+    --blue: #0066cc;
+    --canvas: #ffffff;
+    --parchment: #f5f5f7;
+    --tile-dark: #1d1d1f;
+    --on-dark: #ffffff;
+    --rounded-lg: 18px;
+    --rounded-md: 11px;
+    --rounded-sm: 8px;
+    --rounded-pill: 9999px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--canvas); color: var(--ink); -webkit-font-smoothing: antialiased; }
+  body { font-family: "SF Pro Text", system-ui, -apple-system, "Noto Sans SC", sans-serif; font-size: 17px; line-height: 1.47; letter-spacing: -0.01em; }
+  h1, h2, h3 { font-family: "SF Pro Display", "SF Pro Text", system-ui, -apple-system, "Noto Sans SC", sans-serif; font-weight: 600; margin: 0; }
+
+  .hero {
+    background: var(--parchment);
+    padding: 96px 24px 80px;
+    text-align: center;
+  }
+  .hero .eyebrow { color: var(--blue); font-size: 17px; font-weight: 500; margin-bottom: 14px; }
+  .hero h1 { font-size: 56px; line-height: 1.07; letter-spacing: -0.02em; margin-bottom: 14px; max-width: 880px; margin-left: auto; margin-right: auto; }
+  .hero .lead { font-size: 24px; font-weight: 300; color: var(--ink); max-width: 720px; margin: 0 auto 32px; line-height: 1.3; }
+  .ctas { display: inline-flex; gap: 16px; }
+  .btn { display: inline-flex; align-items: center; gap: 6px; padding: 11px 22px; border-radius: var(--rounded-pill); border: 0; font-size: 17px; cursor: pointer; transition: transform 0.18s; font: inherit; }
+  .btn.primary { background: var(--blue); color: white; }
+  .btn.secondary { background: transparent; color: var(--blue); border: 1px solid var(--blue); }
+  .btn:active { transform: scale(0.96); }
+
+  .product-canvas {
+    margin: 48px auto 0;
+    max-width: 980px;
+    height: 320px;
+    background: linear-gradient(180deg, #f8f8fa, #ececf0);
+    border-radius: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #b0b0b8;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    box-shadow: rgba(0, 0, 0, 0.10) 3px 8px 36px 0;
+    position: relative;
+    overflow: hidden;
+  }
+  .product-canvas::before {
+    content: "";
+    position: absolute; inset: 24%;
+    background: linear-gradient(135deg, #2997ff 0%, #5b3aff 60%, #c93ad0 100%);
+    border-radius: 50%;
+    filter: blur(40px);
+    opacity: 0.35;
+  }
+  .product-canvas > span { position: relative; }
+
+  .tile {
+    padding: 96px 24px;
+    text-align: center;
+  }
+  .tile.dark { background: var(--tile-dark); color: var(--on-dark); }
+  .tile h2 { font-size: 40px; line-height: 1.1; letter-spacing: -0.01em; max-width: 760px; margin: 0 auto 16px; }
+  .tile p { font-size: 21px; line-height: 1.4; color: var(--muted); max-width: 640px; margin: 0 auto 32px; }
+  .tile.dark p { color: #cccccc; }
+
+  .feature-grid {
+    max-width: 1080px;
+    margin: 0 auto;
+    padding: 80px 24px;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+  }
+  .feature {
+    background: var(--parchment);
+    border-radius: var(--rounded-lg);
+    padding: 36px 28px;
+    text-align: left;
+  }
+  .feature .num { color: var(--blue); font-size: 14px; letter-spacing: 0.04em; margin-bottom: 12px; font-weight: 500; }
+  .feature h3 { font-size: 22px; letter-spacing: -0.01em; margin-bottom: 8px; }
+  .feature p { font-size: 15px; color: var(--muted); margin: 0; line-height: 1.5; }
+
+  .quote {
+    background: var(--parchment);
+    padding: 120px 24px;
+    text-align: center;
+  }
+  .quote blockquote {
+    font-family: "SF Pro Display", "Noto Serif SC", system-ui;
+    font-size: 36px;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    max-width: 820px;
+    margin: 0 auto 24px;
+    font-weight: 400;
+  }
+  .quote cite { color: var(--muted); font-style: normal; font-size: 15px; letter-spacing: 0.02em; }
+
+  .footer-mini {
+    padding: 32px 24px;
+    text-align: center;
+    color: #86868b;
+    font-size: 12px;
+    border-top: 1px solid #e0e0e0;
+  }
+</style>
+</head>
+<body>
+  <section class="hero">
+    <div class="eyebrow">Lumen 系列 · 全新发布</div>
+    <h1>把光放进口袋里。</h1>
+    <p class="lead">一台兼具便携、亮度、续航与色准的随身投影。从露营到客厅，让任何一面墙变成 120 英寸的画布。</p>
+    <div class="ctas">
+      <button class="btn primary">立即购买</button>
+      <button class="btn secondary">了解更多 ›</button>
+    </div>
+    <div class="product-canvas"><span>PRODUCT RENDER</span></div>
+  </section>
+
+  <section class="tile dark">
+    <h2>1500 流明，可在白昼下投影。</h2>
+    <p>第三代激光光源，让 4K 画面在客厅的午后依然清晰可见。</p>
+    <button class="btn primary">查看亮度对比 ›</button>
+  </section>
+
+  <section class="feature-grid">
+    <div class="feature"><div class="num">01</div><h3>极致色准</h3><p>ΔE&lt;1 的影院级校色，让蓝调电影里的深蓝不再发紫。</p></div>
+    <div class="feature"><div class="num">02</div><h3>自动梯形校正</h3><p>任意角度摆放，画面始终是规整的矩形。</p></div>
+    <div class="feature"><div class="num">03</div><h3>10 小时续航</h3><p>无线场景下也能连续放完一部电影。</p></div>
+  </section>
+
+  <section class="quote">
+    <blockquote>"我们不是在做一台投影仪。我们是在做一个把任何空间变成剧场的装置。"</blockquote>
+    <cite>—— Lumen 设计团队</cite>
+  </section>
+
+  <footer class="footer-mini">
+    本页为外部生成的 HTML 文档示例 · 在 Atlas 中以 iframe 沙箱形式呈现
+  </footer>
+</body>
+</html>
