@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { ZodError } from 'zod';
-import { authMiddleware, type AppEnv } from './lib/auth';
+import { type AppEnv, authMiddleware, csrfMiddleware } from './lib/auth';
 import { HttpError } from './lib/http-error';
 import { authRouter } from './routes/auth';
 import { documentsRouter } from './routes/documents';
@@ -12,8 +12,17 @@ import { spacesRouter } from './routes/spaces';
 
 const app = new Hono<AppEnv>()
   .use('*', logger())
-  .use('*', cors({ origin: ['http://localhost:5173'], credentials: true }))
+  .use(
+    '*',
+    cors({
+      origin: ['http://localhost:5173'],
+      credentials: true,
+      allowHeaders: ['Content-Type', 'Authorization', 'X-Atlas-CSRF'],
+      allowMethods: ['GET', 'HEAD', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+    }),
+  )
   .use('*', authMiddleware)
+  .use('*', csrfMiddleware)
   .get('/health', (c) => c.json({ ok: true }))
   .route('/auth', authRouter)
   .route('/spaces', spacesRouter)
@@ -32,7 +41,7 @@ app.onError((err, c) => {
   if (err instanceof HttpError) {
     return c.json(
       { code: err.code, message: err.message },
-      err.status as 400 | 401 | 403 | 404 | 500,
+      err.status as 400 | 401 | 403 | 404 | 409 | 500,
     );
   }
 

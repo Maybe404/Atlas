@@ -4,13 +4,14 @@ import {
   UpdateDocumentSchema,
   UpdateDocumentShareSchema,
 } from '@atlas/shared';
-import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
 import { documentMembers, documents, members, shareLinks, spaces } from '../db/schema';
+import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
-import { displayDate, nowIso } from '../lib/dates';
-import { badRequest, forbidden, notFound } from '../lib/http-error';
+import { addDaysToIso, displayDate, nowIso } from '../lib/dates';
+import { badRequest, conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId, makeToken } from '../lib/id';
 import {
   canEditDocument,
@@ -22,6 +23,7 @@ import {
   requireSpaceEditor,
 } from '../lib/permissions';
 import { sanitizeHtml } from '../lib/sanitize';
+import { toPublicMember } from '../lib/serializers';
 
 function toDoc(row: {
   doc: typeof documents.$inferSelect;
@@ -44,6 +46,7 @@ function toDoc(row: {
     html: row.doc.html,
     skillVersion: row.doc.skillVersion,
     deletedAt: row.doc.deletedAt,
+    purgeAfter: row.doc.purgeAfter,
   };
 }
 
@@ -82,6 +85,8 @@ export const documentsRouter = new Hono<AppEnv>()
         token: row.link.token,
         allowIndexing: row.link.allowIndexing,
         expiresAt: row.link.expiresAt,
+        lastAccessedAt: row.link.lastAccessedAt,
+        accessCount: row.link.accessCount,
       },
     });
   })
@@ -110,6 +115,13 @@ export const documentsRouter = new Hono<AppEnv>()
       skillVersion: body.skillVersion ?? '1.2.4',
       updated: nowIso(),
     });
+    await writeAudit({
+      actorId: user.id,
+      action: 'document.create',
+      targetType: 'document',
+      targetId: id,
+      details: { spaceId: body.spaceId, title: body.title, removed: sanitized.removed },
+    });
     return c.json({ id, sanitized: { removed: sanitized.removed } }, 201);
   })
   .post('/upload', async (c) => {
@@ -122,6 +134,9 @@ export const documentsRouter = new Hono<AppEnv>()
     const visibility = String(form.get('visibility') || 'private');
 
     if (!(file instanceof File)) throw badRequest('Upload requires a file field.');
+    if (!/^text\/html\b/i.test(file.type || '') && !/\.html?$/i.test(file.name)) {
+      throw badRequest('Only .html files can be uploaded.');
+    }
     const body = CreateDocumentSchema.parse({
       title: title || file.name.replace(/\.html?$/i, ''),
       desc: descText,
@@ -147,6 +162,13 @@ export const documentsRouter = new Hono<AppEnv>()
       tags: body.tags,
       skillVersion: body.skillVersion ?? '1.2.4',
       updated: nowIso(),
+    });
+    await writeAudit({
+      actorId: user.id,
+      action: 'document.upload',
+      targetType: 'document',
+      targetId: id,
+      details: { spaceId: body.spaceId, filename: file.name, removed: sanitized.removed },
     });
 
     return c.json({ id, filename: file.name, sanitized: { removed: sanitized.removed } }, 201);
@@ -175,34 +197,95 @@ export const documentsRouter = new Hono<AppEnv>()
     }
 
     await db.update(documents).set(patch).where(eq(documents.id, doc.id));
+    await writeAudit({
+      actorId: user.id,
+      action: 'document.update',
+      targetType: 'document',
+      targetId: doc.id,
+      details: { fields: Object.keys(body) },
+    });
     return c.json({ ok: true });
   })
   .delete('/:id', async (c) => {
     const user = c.get('user');
     const doc = await requireDocumentEditor(user, c.req.param('id'));
+    const deletedAt = nowIso();
     await db
       .update(documents)
-      .set({ deletedAt: nowIso(), deletedBy: user.id, updated: nowIso() })
+      .set({
+        deletedAt,
+        deletedBy: user.id,
+        purgeAfter: addDaysToIso(deletedAt, 30),
+        updated: deletedAt,
+      })
       .where(eq(documents.id, doc.id));
+    await writeAudit({
+      actorId: user.id,
+      action: 'document.delete',
+      targetType: 'document',
+      targetId: doc.id,
+      details: { purgeAfter: addDaysToIso(deletedAt, 30) },
+    });
     return c.json({ ok: true });
   })
   .post('/:id/restore', async (c) => {
     const user = c.get('user');
     if (!isAdmin(user)) throw forbidden('Only workspace admins can restore deleted documents.');
 
-    const [doc] = await db.select().from(documents).where(eq(documents.id, c.req.param('id')));
+    const [doc] = await db
+      .select()
+      .from(documents)
+      .where(eq(documents.id, c.req.param('id')));
     if (!doc) throw notFound();
+    const [space] = await db.select().from(spaces).where(eq(spaces.id, doc.spaceId));
+    if (!space) throw conflict('The original space no longer exists.');
     await db
       .update(documents)
-      .set({ deletedAt: null, deletedBy: null, updated: nowIso() })
+      .set({ deletedAt: null, deletedBy: null, purgeAfter: null, updated: nowIso() })
       .where(eq(documents.id, doc.id));
+    await writeAudit({
+      actorId: user.id,
+      action: 'document.restore',
+      targetType: 'document',
+      targetId: doc.id,
+    });
     return c.json({ ok: true });
   })
   .delete('/:id/permanent', async (c) => {
     const user = c.get('user');
     if (!isAdmin(user)) throw forbidden('Only workspace admins can permanently delete documents.');
-    await db.delete(documents).where(eq(documents.id, c.req.param('id')));
+    const id = c.req.param('id');
+    await db.delete(documents).where(eq(documents.id, id));
+    await writeAudit({
+      actorId: user.id,
+      action: 'document.permanent_delete',
+      targetType: 'document',
+      targetId: id,
+    });
     return c.json({ ok: true });
+  })
+  .post('/trash/purge-expired', async (c) => {
+    const user = c.get('user');
+    if (!isAdmin(user)) throw forbidden('Only workspace admins can purge deleted documents.');
+    const now = nowIso();
+    const expired = await db
+      .select()
+      .from(documents)
+      .where(and(isNotNull(documents.deletedAt), isNotNull(documents.purgeAfter)));
+    const toPurge = expired.filter(
+      (doc) => doc.purgeAfter && new Date(doc.purgeAfter).getTime() <= new Date(now).getTime(),
+    );
+    for (const doc of toPurge) {
+      await db.delete(documents).where(eq(documents.id, doc.id));
+    }
+    await writeAudit({
+      actorId: user.id,
+      action: 'trash.purge_expired',
+      targetType: 'trash',
+      targetId: 'expired',
+      details: { count: toPurge.length },
+    });
+    return c.json({ purged: toPurge.length });
   })
   .get('/:id/share', async (c) => {
     const user = c.get('user');
@@ -225,6 +308,9 @@ export const documentsRouter = new Hono<AppEnv>()
             showAuthor: link.showAuthor,
             allowIndexing: link.allowIndexing,
             expiresAt: link.expiresAt,
+            revokedAt: link.revokedAt,
+            lastAccessedAt: link.lastAccessedAt,
+            accessCount: link.accessCount,
           }
         : {
             enabled: false,
@@ -233,9 +319,12 @@ export const documentsRouter = new Hono<AppEnv>()
             showAuthor: true,
             allowIndexing: false,
             expiresAt: null,
+            revokedAt: null,
+            lastAccessedAt: null,
+            accessCount: 0,
           },
       members: roster.map((row) => ({
-        ...row.member,
+        ...toPublicMember(row.member),
         role: row.membership.role,
       })),
     });
@@ -257,10 +346,19 @@ export const documentsRouter = new Hono<AppEnv>()
         showAuthor: body.showAuthor ?? existing?.showAuthor ?? true,
         allowIndexing: body.allowIndexing ?? existing?.allowIndexing ?? false,
         expiresAt: body.expiresAt === undefined ? (existing?.expiresAt ?? null) : body.expiresAt,
+        revokedAt:
+          body.publicEnabled === false
+            ? nowIso()
+            : body.publicEnabled === true
+              ? null
+              : (existing?.revokedAt ?? null),
         updatedAt: nowIso(),
       };
       if (existing) {
-        await db.update(shareLinks).set(values).where(eq(shareLinks.id, existing.id));
+        await db
+          .update(shareLinks)
+          .set({ ...values, token: body.rotateToken ? makeToken() : existing.token })
+          .where(eq(shareLinks.id, existing.id));
       } else {
         await db.insert(shareLinks).values({
           id: makeId('link'),
@@ -270,6 +368,19 @@ export const documentsRouter = new Hono<AppEnv>()
           ...values,
         });
       }
+      await writeAudit({
+        actorId: user.id,
+        action: 'share.public_update',
+        targetType: 'document',
+        targetId: doc.id,
+        details: {
+          publicEnabled: body.publicEnabled,
+          showAuthor: body.showAuthor,
+          allowIndexing: body.allowIndexing,
+          expiresAt: body.expiresAt,
+          rotateToken: body.rotateToken,
+        },
+      });
     }
 
     if (body.members) {
@@ -290,6 +401,13 @@ export const documentsRouter = new Hono<AppEnv>()
             role: parsed.role,
           });
         }
+        await writeAudit({
+          actorId: user.id,
+          action: 'share.member_update',
+          targetType: 'document',
+          targetId: doc.id,
+          details: { memberId: parsed.memberId, role: parsed.role },
+        });
       }
     }
 
@@ -303,7 +421,9 @@ export const documentsRouter = new Hono<AppEnv>()
 
     await db
       .delete(documentMembers)
-      .where(and(eq(documentMembers.documentId, doc.id), eq(documentMembers.memberId, body.memberId)));
+      .where(
+        and(eq(documentMembers.documentId, doc.id), eq(documentMembers.memberId, body.memberId)),
+      );
     if (body.role) {
       await db.insert(documentMembers).values({
         documentId: doc.id,
@@ -311,5 +431,12 @@ export const documentsRouter = new Hono<AppEnv>()
         role: body.role,
       });
     }
+    await writeAudit({
+      actorId: user.id,
+      action: 'document.member_update',
+      targetType: 'document',
+      targetId: doc.id,
+      details: { memberId: body.memberId, role: body.role },
+    });
     return c.json({ ok: true });
   });

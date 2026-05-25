@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
 import { skillVersions } from '../db/schema';
+import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { forbidden } from '../lib/http-error';
 import { makeId } from '../lib/id';
@@ -24,6 +25,13 @@ export const skillsRouter = new Hono<AppEnv>()
       active: false,
       createdBy: user.id,
     });
+    await writeAudit({
+      actorId: user.id,
+      action: 'skill.create',
+      targetType: 'skill',
+      targetId: body.version,
+      details: { note: body.note },
+    });
     return c.json({ ok: true }, 201);
   })
   .post('/:version/activate', async (c) => {
@@ -32,5 +40,11 @@ export const skillsRouter = new Hono<AppEnv>()
     const version = c.req.param('version');
     await db.update(skillVersions).set({ active: false });
     await db.update(skillVersions).set({ active: true }).where(eq(skillVersions.version, version));
+    await writeAudit({
+      actorId: user.id,
+      action: 'skill.activate',
+      targetType: 'skill',
+      targetId: version,
+    });
     return c.json({ ok: true });
   });

@@ -13,6 +13,10 @@ export function badRequest(message: string, code = 'bad_request') {
   return new HttpError(400, code, message);
 }
 
+export function conflict(message = 'Resource conflict.') {
+  return new HttpError(409, 'conflict', message);
+}
+
 export function unauthorized(message = 'Please sign in first.') {
   return new HttpError(401, 'unauthorized', message);
 }

@@ -3,11 +3,18 @@ import { and, eq, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
 import { documents, members, spaceMembers, spaces } from '../db/schema';
+import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { displayDate } from '../lib/dates';
 import { forbidden, notFound } from '../lib/http-error';
 import { makeId } from '../lib/id';
-import { isAdmin, listReadableSpaces, requireSpaceAccess, requireSpaceEditor } from '../lib/permissions';
+import {
+  isAdmin,
+  listReadableSpaces,
+  requireSpaceAccess,
+  requireSpaceEditor,
+} from '../lib/permissions';
+import { toPublicMember } from '../lib/serializers';
 
 function toDoc(doc: typeof documents.$inferSelect, author?: typeof members.$inferSelect | null) {
   return {
@@ -76,6 +83,13 @@ export const spacesRouter = new Hono<AppEnv>()
       personal: Boolean(body.personal),
     });
     await db.insert(spaceMembers).values({ spaceId: id, memberId: user.id, role: 'editor' });
+    await writeAudit({
+      actorId: user.id,
+      action: 'space.create',
+      targetType: 'space',
+      targetId: id,
+      details: { name: body.name, accent: body.accent },
+    });
     return c.json({ id }, 201);
   })
   .patch('/:id', async (c) => {
@@ -87,6 +101,13 @@ export const spacesRouter = new Hono<AppEnv>()
     const patch: Partial<typeof spaces.$inferInsert> = { ...body };
     if (body.name) patch.mark = body.name.slice(0, 1);
     await db.update(spaces).set(patch).where(eq(spaces.id, id));
+    await writeAudit({
+      actorId: user.id,
+      action: 'space.update',
+      targetType: 'space',
+      targetId: id,
+      details: body,
+    });
     return c.json({ ok: true });
   })
   .delete('/:id', async (c) => {
@@ -95,6 +116,12 @@ export const spacesRouter = new Hono<AppEnv>()
     if (!isAdmin(user)) throw forbidden('Only workspace admins can delete spaces.');
     await requireSpaceAccess(user, id);
     await db.delete(spaces).where(eq(spaces.id, id));
+    await writeAudit({
+      actorId: user.id,
+      action: 'space.delete',
+      targetType: 'space',
+      targetId: id,
+    });
     return c.json({ ok: true });
   })
   .get('/:id/members', async (c) => {
@@ -112,7 +139,7 @@ export const spacesRouter = new Hono<AppEnv>()
 
     return c.json(
       rows.map((row) => ({
-        ...row.member,
+        ...toPublicMember(row.member),
         spaceRole: row.membership?.role ?? null,
       })),
     );
@@ -133,6 +160,13 @@ export const spacesRouter = new Hono<AppEnv>()
     if (body.role) {
       await db.insert(spaceMembers).values({ spaceId, memberId: body.memberId, role: body.role });
     }
+    await writeAudit({
+      actorId: user.id,
+      action: 'space.member_update',
+      targetType: 'space',
+      targetId: spaceId,
+      details: { memberId: body.memberId, role: body.role },
+    });
 
     return c.json({ ok: true });
   });

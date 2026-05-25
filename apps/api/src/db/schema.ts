@@ -6,6 +6,7 @@ export const members = sqliteTable('members', {
   name: text('name').notNull(),
   initials: text('initials').notNull(),
   email: text('email').notNull().unique(),
+  passwordHash: text('password_hash'),
   role: text('role', { enum: ['admin', 'editor', 'viewer'] }).notNull(),
   joined: text('joined').notNull(),
 });
@@ -15,6 +16,7 @@ export const sessions = sqliteTable('sessions', {
   memberId: text('member_id')
     .notNull()
     .references(() => members.id, { onDelete: 'cascade' }),
+  csrfToken: text('csrf_token').notNull(),
   createdAt: text('created_at').notNull().default(sql`(current_timestamp)`),
   expiresAt: text('expires_at').notNull(),
 });
@@ -46,6 +48,7 @@ export const documents = sqliteTable('documents', {
   updated: text('updated').notNull().default(sql`(current_timestamp)`),
   deletedAt: text('deleted_at'),
   deletedBy: text('deleted_by').references(() => members.id),
+  purgeAfter: text('purge_after'),
 });
 
 // Per-member, per-space role. Absence of a row means "no access".
@@ -91,6 +94,9 @@ export const shareLinks = sqliteTable('share_links', {
   showAuthor: integer('show_author', { mode: 'boolean' }).notNull().default(true),
   allowIndexing: integer('allow_indexing', { mode: 'boolean' }).notNull().default(false),
   expiresAt: text('expires_at'),
+  revokedAt: text('revoked_at'),
+  lastAccessedAt: text('last_accessed_at'),
+  accessCount: integer('access_count').notNull().default(0),
   createdBy: text('created_by')
     .notNull()
     .references(() => members.id),
@@ -107,5 +113,15 @@ export const skillVersions = sqliteTable('skill_versions', {
   createdBy: text('created_by')
     .notNull()
     .references(() => members.id),
+  createdAt: text('created_at').notNull().default(sql`(current_timestamp)`),
+});
+
+export const auditLogs = sqliteTable('audit_logs', {
+  id: text('id').primaryKey(),
+  actorId: text('actor_id').references(() => members.id, { onDelete: 'set null' }),
+  action: text('action').notNull(),
+  targetType: text('target_type').notNull(),
+  targetId: text('target_id').notNull(),
+  details: text('details', { mode: 'json' }).$type<Record<string, unknown>>().notNull().default({}),
   createdAt: text('created_at').notNull().default(sql`(current_timestamp)`),
 });

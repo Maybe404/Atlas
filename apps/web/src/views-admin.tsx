@@ -635,7 +635,9 @@ function TrashPane({ pushToast, mutations }) {
             <h3>已删除 · {items.length}</h3>
             <div className="sub">按删除时间倒序</div>
           </div>
-          <button className="btn ghost danger">清空回收站</button>
+          <button className="btn ghost danger" onClick={() => mutations.purgeExpiredTrash?.()}>
+            清理过期项目
+          </button>
         </div>
         <div className="card-body card-body-scroll">
           <AnimatedScrollList className="rows-scroll">
@@ -647,7 +649,7 @@ function TrashPane({ pushToast, mutations }) {
                 </div>
                 <div className="by">作者 · {it.authorName}</div>
                 <div className="when">{it.updated}</div>
-                <div className="expires">30 天内</div>
+                <div className="expires">{it.purgeAfter ? `${new Date(it.purgeAfter).toLocaleDateString('zh-CN')} 清理` : '30 天内'}</div>
                 <button className="icon-btn" title="恢复" onClick={() => {
                   mutations.restoreDocument(it.id);
                 }}><_I2.refresh/></button>

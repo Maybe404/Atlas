@@ -228,7 +228,6 @@ html { transition: background 0.3s var(--ease-soft); }
 .brand-tag {
   font-family: var(--font-mono);
   font-size: 10.5px;
-  color: var(--ink-4);
   background: var(--blue-tint);
   color: var(--blue);
   padding: 2px 7px;

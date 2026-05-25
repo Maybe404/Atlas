@@ -108,6 +108,14 @@ export function useAtlasMutations(pushToast) {
     },
   });
 
+  const purgeExpiredTrash = useMutation({
+    mutationFn: () => apiJson('/documents/trash/purge-expired', 'POST'),
+    onSuccess: async (data) => {
+      await invalidateCore();
+      pushToast?.({ msg: '已清理过期项目', meta: `${data?.purged ?? 0} 篇` });
+    },
+  });
+
   const uploadDocument = useMutation({
     mutationFn: (formData) => apiForm('/documents/upload', formData),
     onSuccess: async (_data, variables) => {
@@ -134,7 +142,8 @@ export function useAtlasMutations(pushToast) {
   });
 
   const updateShare = useMutation({
-    mutationFn: ({ documentId, patch }) => apiJson(`/documents/${documentId}/share`, 'PATCH', patch),
+    mutationFn: ({ documentId, patch }) =>
+      apiJson(`/documents/${documentId}/share`, 'PATCH', patch),
     onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({ queryKey: atlasKeys.share(variables.documentId) });
       pushToast?.({ msg: '分享设置已更新' });
@@ -157,6 +166,7 @@ export function useAtlasMutations(pushToast) {
     updateDocument: (id, patch, options) => updateDocument.mutate({ id, patch }, options),
     deleteDocument: (id) => deleteDocument.mutate(id),
     restoreDocument: (id) => restoreDocument.mutate(id),
+    purgeExpiredTrash: () => purgeExpiredTrash.mutate(),
     uploadDocument: (formData, options) => uploadDocument.mutate(formData, options),
     setSpaceRole: (spaceId, memberId, role) => setSpaceRole.mutate({ spaceId, memberId, role }),
     updateMember: (id, patch) => updateMember.mutate({ id, patch }),

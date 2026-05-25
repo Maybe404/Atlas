@@ -1,15 +1,18 @@
-import type { Member } from '@atlas/shared';
 import { and, eq, gt } from 'drizzle-orm';
 import type { Context, Next } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { db } from '../db/client';
 import { members, sessions } from '../db/schema';
 import { addDaysIso, nowIso } from './dates';
+import { forbidden } from './http-error';
 import { makeToken } from './id';
 
+export type CurrentUser = typeof members.$inferSelect;
+
 export type AuthVariables = {
-  user: Member;
+  user: CurrentUser;
   sessionId: string;
+  csrfToken: string;
 };
 
 export type AppEnv = {
@@ -17,16 +20,20 @@ export type AppEnv = {
 };
 
 const SESSION_COOKIE = 'atlas_session';
+const CSRF_HEADER = 'x-atlas-csrf';
+const CSRF_COOKIE = 'atlas_csrf';
 const DEMO_USER_ID = 'u1';
 
 export async function createSession(memberId: string) {
   const id = makeToken();
+  const csrfToken = makeToken();
   await db.insert(sessions).values({
     id,
     memberId,
+    csrfToken,
     expiresAt: addDaysIso(30),
   });
-  return id;
+  return { id, csrfToken };
 }
 
 export async function authMiddleware(c: Context<AppEnv>, next: Next) {
@@ -44,6 +51,7 @@ export async function authMiddleware(c: Context<AppEnv>, next: Next) {
 
     if (row) {
       c.set('sessionId', row.session.id);
+      c.set('csrfToken', row.session.csrfToken);
       c.set('user', row.member);
       await next();
       return;
@@ -53,10 +61,35 @@ export async function authMiddleware(c: Context<AppEnv>, next: Next) {
   const [demoUser] = await db.select().from(members).where(eq(members.id, DEMO_USER_ID));
   if (demoUser) {
     c.set('sessionId', 'demo');
+    c.set('csrfToken', 'demo');
     c.set('user', demoUser);
   }
 
   await next();
 }
 
-export { SESSION_COOKIE };
+export async function csrfMiddleware(c: Context<AppEnv>, next: Next) {
+  if (['GET', 'HEAD', 'OPTIONS'].includes(c.req.method)) {
+    await next();
+    return;
+  }
+
+  if (c.req.path === '/auth/login') {
+    await next();
+    return;
+  }
+
+  if (c.get('sessionId') === 'demo') {
+    await next();
+    return;
+  }
+
+  const header = c.req.header(CSRF_HEADER);
+  if (!header || header !== c.get('csrfToken')) {
+    throw forbidden('CSRF token is missing or invalid.');
+  }
+
+  await next();
+}
+
+export { CSRF_COOKIE, CSRF_HEADER, SESSION_COOKIE };

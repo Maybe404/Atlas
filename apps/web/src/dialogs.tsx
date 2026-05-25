@@ -321,6 +321,22 @@ function ShareDialog({ open, documentId, members: workspaceMembers = [], current
                     mutations.updateShare(documentId, { expiresAt });
                   }}
                 />
+                <div style={{display:'flex', gap: 8, marginTop: 4}}>
+                  <button
+                    className="btn secondary"
+                    disabled={!publicOn}
+                    onClick={() => mutations.updateShare(documentId, { rotateToken: true, publicEnabled: true })}
+                  >
+                    <_I3.refresh/><span>重置链接</span>
+                  </button>
+                  <button
+                    className="btn ghost danger"
+                    disabled={!publicOn}
+                    onClick={() => mutations.updateShare(documentId, { publicEnabled: false })}
+                  >
+                    <_I3.trash/><span>撤销公开链接</span>
+                  </button>
+                </div>
               </div>
             </>
           )}

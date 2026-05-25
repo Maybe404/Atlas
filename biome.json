@@ -1,8 +1,22 @@
 {
-  "$schema": "https://biomejs.dev/schemas/2.0.0/schema.json",
+  "$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
   "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
   "files": {
-    "ignore": ["node_modules", "dist", "build", ".turbo", "src/v4/**/*.jsx", "src/data.js", "tweaks-panel.jsx", "*.html"]
+    "includes": [
+      "**",
+      "!node_modules",
+      "!dist",
+      "!build",
+      "!.turbo",
+      "!src/v4/**/*.jsx",
+      "!src/data.js",
+      "!tweaks-panel.jsx",
+      "!**/*.html",
+      "!apps/web/src/**/*.tsx",
+      "!apps/web/src/styles.css",
+      "!apps/api/src/db/migrations/meta",
+      "!packages/shared/src/fixtures.ts"
+    ]
   },
   "formatter": {
     "enabled": true,

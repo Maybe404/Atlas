@@ -3,5 +3,7 @@ export function makeId(prefix: string) {
 }
 
 export function makeToken() {
-  return crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '').slice(0, 16);
+  return (
+    crypto.randomUUID().replaceAll('-', '') + crypto.randomUUID().replaceAll('-', '').slice(0, 16)
+  );
 }

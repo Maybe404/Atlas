@@ -11,6 +11,8 @@ import {
   spaces,
 } from './schema';
 
+const DEMO_PASSWORD_HASH = '$2b$04$RhYUNqiT505iO9sAwUaXGO/9c55aKJYZtRSazB2H0mHtPbH.m5eF.';
+
 await db.delete(sessions);
 await db.delete(documentMembers);
 await db.delete(shareLinks);
@@ -23,6 +25,7 @@ await db.delete(members);
 await db.insert(members).values(
   ATLAS_DATA.members.map((member) => ({
     ...member,
+    passwordHash: DEMO_PASSWORD_HASH,
     role: member.role as 'admin' | 'editor' | 'viewer',
   })),
 );
@@ -134,10 +137,38 @@ await db.insert(shareLinks).values({
 });
 
 await db.insert(skillVersions).values([
-  { id: 'skill_124', version: '1.2.4', note: '修复 SVG <use> 处理；表格保留行高样式', active: true, createdBy: 'u1', createdAt: '2025-05-14T10:00:00.000Z' },
-  { id: 'skill_123', version: '1.2.3', note: '代理 google-fonts；外链 CSS 内联化', active: false, createdBy: 'u1', createdAt: '2025-05-02T10:00:00.000Z' },
-  { id: 'skill_122', version: '1.2.2', note: '放宽 data-* 属性白名单', active: false, createdBy: 'u2', createdAt: '2025-04-19T10:00:00.000Z' },
-  { id: 'skill_121', version: '1.2.1', note: '初次稳定版本', active: false, createdBy: 'u1', createdAt: '2025-04-04T10:00:00.000Z' },
+  {
+    id: 'skill_124',
+    version: '1.2.4',
+    note: '修复 SVG <use> 处理；表格保留行高样式',
+    active: true,
+    createdBy: 'u1',
+    createdAt: '2025-05-14T10:00:00.000Z',
+  },
+  {
+    id: 'skill_123',
+    version: '1.2.3',
+    note: '代理 google-fonts；外链 CSS 内联化',
+    active: false,
+    createdBy: 'u1',
+    createdAt: '2025-05-02T10:00:00.000Z',
+  },
+  {
+    id: 'skill_122',
+    version: '1.2.2',
+    note: '放宽 data-* 属性白名单',
+    active: false,
+    createdBy: 'u2',
+    createdAt: '2025-04-19T10:00:00.000Z',
+  },
+  {
+    id: 'skill_121',
+    version: '1.2.1',
+    note: '初次稳定版本',
+    active: false,
+    createdBy: 'u1',
+    createdAt: '2025-04-04T10:00:00.000Z',
+  },
 ]);
 
 console.log(

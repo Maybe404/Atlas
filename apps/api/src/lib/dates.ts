@@ -8,6 +8,12 @@ export function addDaysIso(days: number) {
   return date.toISOString();
 }
 
+export function addDaysToIso(input: string | Date, days: number) {
+  const date = new Date(input);
+  date.setDate(date.getDate() + days);
+  return date.toISOString();
+}
+
 export function displayDate(input?: string | null) {
   if (!input) return '';
   const date = new Date(input);

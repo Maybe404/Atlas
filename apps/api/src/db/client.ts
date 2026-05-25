@@ -1,10 +1,11 @@
 import { Database } from 'bun:sqlite';
-import { drizzle } from 'drizzle-orm/bun-sqlite';
 import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { dirname, join } from 'node:path';
+import { drizzle } from 'drizzle-orm/bun-sqlite';
 import * as schema from './schema';
 
-const url = process.env.DATABASE_URL ?? './data/atlas.sqlite';
+const root = join(import.meta.dir, '../..');
+const url = process.env.DATABASE_URL ?? join(root, 'data/atlas.sqlite');
 mkdirSync(dirname(url), { recursive: true });
 
 const sqlite = new Database(url, { create: true });

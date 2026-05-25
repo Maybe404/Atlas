@@ -81,6 +81,7 @@ export const UpdateDocumentSchema = CreateDocumentSchema.partial();
 
 export const LoginSchema = z.object({
   email: z.string().email(),
+  password: z.string().min(8).max(128).optional(),
 });
 
 export const UpdateMemberSchema = z.object({
@@ -103,6 +104,7 @@ export const UpdateDocumentShareSchema = z.object({
   showAuthor: z.boolean().optional(),
   allowIndexing: z.boolean().optional(),
   expiresAt: z.string().nullable().optional(),
+  rotateToken: z.boolean().optional(),
   members: z.array(SetDocumentMemberRoleSchema).optional(),
 });
 

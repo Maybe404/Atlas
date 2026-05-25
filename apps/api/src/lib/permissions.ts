@@ -1,7 +1,15 @@
 import type { SpaceMemberRole } from '@atlas/shared';
 import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '../db/client';
-import { documentMembers, documents, members, shareLinks, spaceMembers, spaces } from '../db/schema';
+import {
+  documentMembers,
+  documents,
+  members,
+  shareLinks,
+  spaceMembers,
+  spaces,
+} from '../db/schema';
+import { nowIso } from './dates';
 import { forbidden, notFound } from './http-error';
 
 type User = typeof members.$inferSelect;
@@ -68,7 +76,8 @@ export async function canEditDocument(user: User, doc: DocumentRow) {
 
 export async function requireDocumentEditor(user: User, docId: string) {
   const doc = await requireDocumentRead(user, docId);
-  if (!(await canEditDocument(user, doc))) throw forbidden('Editor access is required for this document.');
+  if (!(await canEditDocument(user, doc)))
+    throw forbidden('Editor access is required for this document.');
   return doc;
 }
 
@@ -136,10 +145,24 @@ export async function publicDocumentByToken(token: string) {
     .innerJoin(documents, eq(shareLinks.documentId, documents.id))
     .innerJoin(spaces, eq(documents.spaceId, spaces.id))
     .innerJoin(members, eq(documents.authorId, members.id))
-    .where(and(eq(shareLinks.token, token), eq(shareLinks.enabled, true), isNull(documents.deletedAt)));
+    .where(
+      and(
+        eq(shareLinks.token, token),
+        eq(shareLinks.enabled, true),
+        isNull(shareLinks.revokedAt),
+        isNull(documents.deletedAt),
+      ),
+    );
 
   if (!row) throw notFound();
   if (row.link.expiresAt && new Date(row.link.expiresAt).getTime() < Date.now()) throw notFound();
+  await db
+    .update(shareLinks)
+    .set({
+      lastAccessedAt: nowIso(),
+      accessCount: row.link.accessCount + 1,
+    })
+    .where(eq(shareLinks.id, row.link.id));
   return row;
 }
 
