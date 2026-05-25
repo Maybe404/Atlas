@@ -1,0 +1,4 @@
+# Bun monorepo config.
+# Hoist workspace deps; use the new isolated linker (akin to pnpm's symlink tree).
+[install]
+linker = "isolated"

@@ -11,3 +11,18 @@
 
 # Logs / temp
 *.log
+
+# Build & dependencies
+node_modules
+dist
+build
+.turbo
+.vite
+.bun
+bun.lock
+bun.lockb
+
+# Local data
+apps/api/data/
+apps/api/*.sqlite
+apps/api/*.sqlite-*
