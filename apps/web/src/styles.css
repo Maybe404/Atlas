@@ -292,6 +292,12 @@ html { transition: background 0.3s var(--ease-soft); }
 .icon-btn:hover { background: rgba(0,0,0,0.06); color: var(--ink); }
 [data-theme="dark"] .icon-btn:hover { background: rgba(255,255,255,0.10); }
 .icon-btn:active { transform: scale(0.92); }
+.theme-trigger-btn:hover {
+  background: transparent;
+}
+.theme-trigger-btn:active {
+  transform: none;
+}
 
 .avatar {
   width: 30px; height: 30px;
@@ -504,6 +510,13 @@ html { transition: background 0.3s var(--ease-soft); }
 }
 [data-theme="dark"] .reader-meta-bar .pill-btn.ghost { background: rgba(255,255,255,0.10); color: var(--ink-2); }
 .reader-meta-bar .pill-btn.ghost:hover { background: rgba(0,0,0,0.10); color: var(--ink); }
+.reader-meta-bar .reader-lock-chip {
+  margin-left: auto;
+  border-radius: var(--r-pill);
+  padding: 5px 10px;
+  line-height: 1;
+  white-space: nowrap;
+}
 
 /* iframe border toggle (Tweak) */
 .reader-iframe-wrap.framed {
@@ -1653,14 +1666,14 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 .theme-picker-trigger:hover {
   background: rgba(0,0,0,0.06);
   color: var(--ink);
-  transform: translateY(-2px);
+  transform: none;
 }
 [data-theme="dark"] .theme-picker-trigger:hover { background: rgba(255,255,255,0.10); }
 .theme-picker-trigger:active { transform: scale(0.92); }
 .theme-picker-wrap.open .theme-picker-trigger {
   background: var(--blue-tint);
   color: var(--blue);
-  transform: translateY(-3px);
+  transform: none;
 }
 
 /* fanning papers (same .tf-paper animation as the old folder) */
@@ -2567,7 +2580,7 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 .editor-foot-meta .sep { color: var(--ink-5); }
 
 /* ───────────────────────────────────────────────────────────────────
-   V4 ADDITIONS — sidebar-only directory, space access UI, doc-row
+   Additions — sidebar-only directory, space access UI, doc-row
    space chip editor, settings panes (spaces / permissions matrix)
    ─────────────────────────────────────────────────────────────────── */
 

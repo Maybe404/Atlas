@@ -1,4 +1,4 @@
-// @ts-nocheck — v4 auth UI migrated from the JSX prototype and wired to the API.
+// @ts-nocheck — auth UI migrated from the JSX prototype and wired to the API.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { apiJson } from './api-client';
@@ -431,7 +431,7 @@ export function LoginView({ onLogin, onContinueAsGuest, returnTo }) {
 
           <div className="login-brand-foot">
             <span className="login-foot-line" />
-            <span className="mono dim" style={{ fontSize: 11, letterSpacing: '0.08em' }}>ATLAS · V4</span>
+            <span className="mono dim" style={{ fontSize: 11, letterSpacing: '0.08em' }}>ATLAS</span>
           </div>
         </div>
 
@@ -506,9 +506,6 @@ export function LoginView({ onLogin, onContinueAsGuest, returnTo }) {
                   <span className={"um-role role-" + account.role}>{ROLE_LABEL[account.role]}</span>
                 </button>
               ))}
-              <div className="login-demo-hint mono">
-                所有 DEMO 账号密码均为 <code>{DEMO_PASSWORD}</code>
-              </div>
               {returnTo && <div className="login-return-hint">登录后回到刚才的页面</div>}
             </div>
           </div>

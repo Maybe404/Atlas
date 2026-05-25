@@ -61,7 +61,7 @@ function ReaderView({ ctx, spaces = [], members = [], user, framedDoc, chromeVis
             </button>
           </>
         ) : (
-          <span className={"vis-chip " + doc.visibility} style={{marginLeft:'auto'}}>
+          <span className={"vis-chip reader-lock-chip " + doc.visibility}>
             {doc.visibility === 'invite' ? '需登录 · 邀请制' : '需登录 · 私密'}
           </span>
         )}

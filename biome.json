@@ -8,7 +8,6 @@
       "!dist",
       "!build",
       "!.turbo",
-      "!src/v4/**/*.jsx",
       "!src/data.js",
       "!tweaks-panel.jsx",
       "!**/*.html",

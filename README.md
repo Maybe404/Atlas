@@ -63,17 +63,22 @@ bun dev:api
 - `http://localhost:5173/admin/settings`：空间、成员、权限、回收站、Skill 设置
 - `http://localhost:5173/share/demo-d1-public-link`：公开分享链接示例
 
-Seed 后所有示例成员的密码都是：
+Seed 后示例账号如下，所有账号使用同一个演示密码：
 
-```text
-atlas-demo-password
-```
-
-默认管理员账号：
-
-```json
-{ "email": "lin@atlas.team", "password": "atlas-demo-password" }
-```
+| 姓名 | 邮箱 | 角色 | 密码 |
+|---|---|---|---|
+| 林知远 | `lin@atlas.team` | `admin` | `atlas-demo-password` |
+| 陈夏 | `chen@atlas.team` | `editor` | `atlas-demo-password` |
+| 柳明 | `liu@atlas.team` | `editor` | `atlas-demo-password` |
+| 苏渡 | `su@atlas.team` | `editor` | `atlas-demo-password` |
+| 何远 | `he@atlas.team` | `viewer` | `atlas-demo-password` |
+| 周珩 | `zhou@atlas.team` | `editor` | `atlas-demo-password` |
+| 黎安 | `li@atlas.team` | `editor` | `atlas-demo-password` |
+| 吴秋 | `wu@atlas.team` | `viewer` | `atlas-demo-password` |
+| 郑书 | `zheng@atlas.team` | `editor` | `atlas-demo-password` |
+| 韩奕 | `han@atlas.team` | `viewer` | `atlas-demo-password` |
+| 叶清 | `ye@atlas.team` | `editor` | `atlas-demo-password` |
+| 冯之 | `feng@atlas.team` | `viewer` | `atlas-demo-password` |
 
 未带 session cookie 时，API 会在本地数据存在 `u1` 的情况下自动使用 demo 用户，这让首次打开页面不需要先做登录页。通过 `/auth/login` 登录后会设置真实 `atlas_session` cookie 和 `atlas_csrf` cookie。
 
