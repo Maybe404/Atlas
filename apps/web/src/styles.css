@@ -2235,13 +2235,17 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 .rows-scroll .trash-row,
 .rows-scroll .skill-row,
 .rows-scroll .share-row,
-.rows-scroll .perm-row { width: 100%; }
+.rows-scroll .perm-row,
+.rows-scroll .perm-matrix-row,
+.rows-scroll .perm-unassigned,
+.rows-scroll .perm-empty { width: 100%; }
 .rows-scroll .tree-anim-item + .tree-anim-item .member-row,
 .rows-scroll .tree-anim-item + .tree-anim-item .member-row-wrap,
 .rows-scroll .tree-anim-item + .tree-anim-item .trash-row,
 .rows-scroll .tree-anim-item + .tree-anim-item .skill-row,
 .rows-scroll .tree-anim-item + .tree-anim-item .share-row,
-.rows-scroll .tree-anim-item + .tree-anim-item .perm-row { border-top: 1px solid var(--hairline-2); }
+.rows-scroll .tree-anim-item + .tree-anim-item .perm-row,
+.rows-scroll .tree-anim-item + .tree-anim-item .perm-matrix-row { border-top: 1px solid var(--hairline-2); }
 
 /* Original "+" border-top selectors no longer match (rows are wrapped now) so
    re-suppress them where they would now produce double-lines */
@@ -2863,6 +2867,20 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   align-items: center;
   padding: 12px 18px;
   border-bottom: 1px solid var(--hairline-2);
+  background: var(--canvas);
+  transition: background var(--dur-fast), transform var(--dur-fast), box-shadow var(--dur) var(--ease-soft);
+}
+.perm-matrix-row:hover {
+  background: var(--pearl);
+  transform: translateX(2px);
+  box-shadow: var(--shadow-card);
+}
+.perm-matrix-row.muted {
+  background: transparent;
+  color: var(--ink-3);
+}
+.perm-matrix-row.muted:hover {
+  background: var(--pearl);
 }
 .perm-matrix-row:last-child { border-bottom: 0; }
 .perm-matrix-row .avatar.small {
@@ -2878,6 +2896,48 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 .perm-matrix-meta .email {
   font-size: 11.5px;
   color: var(--ink-4);
+}
+.perm-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 128px;
+  padding: 28px 18px;
+  color: var(--ink-4);
+  font-size: 13px;
+  letter-spacing: -0.01em;
+  text-align: center;
+}
+.perm-unassigned {
+  border-top: 1px solid var(--hairline-2);
+  background: var(--pearl);
+}
+.perm-unassigned-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 11px 18px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background var(--dur-fast), color var(--dur-fast);
+}
+.perm-unassigned-trigger:hover {
+  background: var(--canvas);
+  color: var(--ink);
+}
+.perm-unassigned-trigger .mono {
+  color: var(--ink-4);
+  font-size: 11px;
+}
+.permission-member-list .scroll-list {
+  background: var(--canvas);
 }
 
 /* Doc-row: space chip becomes a clickable selector */

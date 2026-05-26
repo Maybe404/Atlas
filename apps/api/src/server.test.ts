@@ -176,6 +176,17 @@ describe('Atlas API', () => {
     expect(deleted).toBeUndefined();
   });
 
+  test('lists only members assigned to a space', async () => {
+    const res = await request('/spaces/s1/members');
+    expect(res.status).toBe(200);
+    const roster = (await res.json()) as { id: string; spaceRole: string }[];
+    expect(roster.length).toBeGreaterThan(0);
+    expect(roster.every((member) => member.spaceRole === 'viewer' || member.spaceRole === 'editor')).toBe(
+      true,
+    );
+    expect(roster.map((member) => member.id)).not.toContain('u3');
+  });
+
   test('enforces document read and edit permission boundaries', async () => {
     const viewerSession = await request('/auth/login', {
       method: 'POST',

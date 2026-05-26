@@ -8,6 +8,7 @@ export const atlasKeys = {
   documents: ['documents'],
   members: ['members'],
   permissions: ['permissions'],
+  spaceMembers: (spaceId) => ['space-members', spaceId],
   trash: ['trash'],
   skills: ['skills'],
   share: (documentId) => ['share', documentId],
@@ -60,6 +61,7 @@ export function useAtlasMutations(pushToast) {
       queryClient.invalidateQueries({ queryKey: atlasKeys.spaces }),
       queryClient.invalidateQueries({ queryKey: atlasKeys.documents }),
       queryClient.invalidateQueries({ queryKey: atlasKeys.permissions }),
+      queryClient.invalidateQueries({ queryKey: ['space-members'] }),
       queryClient.invalidateQueries({ queryKey: atlasKeys.trash }),
     ]);
   };
@@ -139,9 +141,11 @@ export function useAtlasMutations(pushToast) {
   const setSpaceRole = useMutation({
     mutationFn: ({ spaceId, memberId, role }) =>
       apiJson(`/spaces/${spaceId}/members/${memberId}`, 'PUT', { role }),
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       await invalidateCore();
-      pushToast?.({ msg: '空间权限已更新' });
+      if (!variables?.silent) {
+        pushToast?.({ msg: '空间权限已更新' });
+      }
     },
   });
 
@@ -203,7 +207,10 @@ export function useAtlasMutations(pushToast) {
     restoreDocument: (id) => restoreDocument.mutate(id),
     purgeExpiredTrash: () => purgeExpiredTrash.mutate(),
     uploadDocument: (formData, options) => uploadDocument.mutate(formData, options),
-    setSpaceRole: (spaceId, memberId, role) => setSpaceRole.mutate({ spaceId, memberId, role }),
+    setSpaceRole: (spaceId, memberId, role, options = {}) => {
+      const { silent, ...mutationOptions } = options || {};
+      setSpaceRole.mutate({ spaceId, memberId, role, silent }, mutationOptions);
+    },
     createMember: (data, options) => createMember.mutate(data, options),
     updateMember: (id, patch, options) => updateMember.mutate({ id, patch }, options),
     deleteMember: (id, options) => deleteMember.mutate(id, options),

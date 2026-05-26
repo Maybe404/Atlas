@@ -131,16 +131,14 @@ export const spacesRouter = new Hono<AppEnv>()
 
     const rows = await db
       .select({ member: members, membership: spaceMembers })
-      .from(members)
-      .leftJoin(
-        spaceMembers,
-        and(eq(spaceMembers.memberId, members.id), eq(spaceMembers.spaceId, spaceId)),
-      );
+      .from(spaceMembers)
+      .innerJoin(members, eq(spaceMembers.memberId, members.id))
+      .where(eq(spaceMembers.spaceId, spaceId));
 
     return c.json(
       rows.map((row) => ({
         ...toPublicMember(row.member),
-        spaceRole: row.membership?.role ?? null,
+        spaceRole: row.membership.role,
       })),
     );
   })

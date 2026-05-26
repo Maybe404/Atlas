@@ -269,8 +269,8 @@ function AdminSettingsView({ ctx, onNavigate, pushToast, spaces = [], members = 
     return p;
   }, [members, permissions, spaces]);
 
-  const setMemberSpaceRole = (memberId, spaceId, role) => {
-    mutations.setSpaceRole(spaceId, memberId, role);
+  const setMemberSpaceRole = (memberId, spaceId, role, options) => {
+    mutations.setSpaceRole(spaceId, memberId, role, options);
   };
 
   return (
@@ -708,15 +708,50 @@ function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceR
 }
 
 function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, pushToast }) {
-  const [activeSpace, setActiveSpace] = useState(spaces[0]?.id || 's1');
+  const [activeSpace, setActiveSpace] = useState(spaces[0]?.id || '');
+  const [showUnassigned, setShowUnassigned] = useState(false);
+  useEffect(() => {
+    if (!spaces.length) return;
+    if (!spaces.some((s) => s.id === activeSpace)) {
+      setActiveSpace(spaces[0].id);
+    }
+  }, [activeSpace, spaces]);
+
   const space = spaces.find(s => s.id === activeSpace) || spaces[0];
+  const spaceMembersQuery = useQuery({
+    queryKey: space?.id ? atlasKeys.spaceMembers(space.id) : ['space-members', 'empty'],
+    queryFn: () => apiGet(`/spaces/${space.id}/members`),
+    enabled: Boolean(space?.id),
+  });
+
+  const assignedMembers = spaceMembersQuery.data || [];
+  const assignedIds = useMemo(() => new Set(assignedMembers.map((m) => m.id)), [assignedMembers]);
+  const unassignedMembers = useMemo(
+    () => members.filter((member) => !assignedIds.has(member.id)),
+    [assignedIds, members],
+  );
+  const activeCount = assignedMembers.length;
+
   if (!space) return <div className="pane-head"><h1>空间权限</h1><p className="pane-sub">尚未创建任何空间。</p></div>;
 
   const spaceColor = SPACE_COLOR_MAP[space.accent] || SPACE_COLOR_MAP.accent;
 
   const setAll = (role) => {
-    members.forEach(m => setMemberSpaceRole(m.id, space.id, role));
-    pushToast({ msg: '已批量更新', meta: space.name });
+    const targets = assignedMembers;
+    if (!targets.length) {
+      pushToast?.({ msg: role ? '没有可更新的成员' : '当前空间已清空', meta: space.name });
+      return;
+    }
+    targets.forEach(m => setMemberSpaceRole(m.id, space.id, role, { silent: true }));
+    pushToast?.({
+      msg: role ? '已批量更新空间权限' : '已清空空间权限',
+      meta: `${space.name} · ${targets.length} 位成员`,
+    });
+  };
+
+  const setSpaceWithMotion = (spaceId) => {
+    setActiveSpace(spaceId);
+    setShowUnassigned(false);
   };
 
   return (
@@ -732,7 +767,7 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
           <button
             key={s.id}
             className={"space-tab " + (activeSpace === s.id ? 'active' : '')}
-            onClick={()=>setActiveSpace(s.id)}
+            onClick={()=>setSpaceWithMotion(s.id)}
           >
             <span className="dot" style={{background: SPACE_COLOR_MAP[s.accent]}}></span>
             <span>{s.name}</span>
@@ -745,39 +780,82 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
         <div className="card-head">
           <div>
             <h3 style={{display:'flex', alignItems:'center', gap: 8}}>
-              <span className="sm-mark" style={{background: spaceColor, width: 22, height: 22, borderRadius: 6, fontSize: 11}}>{space.mark || space.name.slice(0,1)}</span>
+              <span className="sm-mark" style={{background: spaceColor, width: 22, height: 22, borderRadius: 6, fontSize: 11, flex: '0 0 auto'}}>{space.mark || space.name.slice(0,1)}</span>
               <span>{space.name} · 成员访问</span>
             </h3>
-            <div className="sub">为该空间内的所有成员指定角色。修改立即生效。</div>
+            <div className="sub">
+              {spaceMembersQuery.isLoading
+                ? '正在读取当前空间成员。'
+                : `${activeCount} 位成员拥有该空间访问权限，修改立即生效。`}
+            </div>
           </div>
           <div style={{display:'flex', gap: 6}}>
-            <button className="btn ghost" onClick={()=>setAll(null)}>清空</button>
+            <button className="btn ghost" disabled={activeCount === 0} onClick={()=>setAll(null)}>清空</button>
             <button className="btn secondary" onClick={()=>setAll('viewer')}>全部设为仅读</button>
           </div>
         </div>
         <div className="card-body card-body-scroll">
-          <AnimatedScrollList className="rows-scroll">
-            {members.map(m => {
-              const role = perms[m.id]?.[space.id] || null;
+          <AnimatedScrollList key={space.id} className="rows-scroll permission-member-list">
+            {spaceMembersQuery.isLoading && (
+              <div className="perm-empty">正在同步 {space.name} 的成员权限…</div>
+            )}
+            {!spaceMembersQuery.isLoading && assignedMembers.length === 0 && (
+              <div className="perm-empty">当前空间还没有成员访问权限。</div>
+            )}
+            {!spaceMembersQuery.isLoading && assignedMembers.map(m => {
+              const role = m.spaceRole || perms[m.id]?.[space.id] || null;
               return (
-                <div key={m.id} className="perm-matrix-row">
-                  <span className="avatar small">{m.initials}</span>
-                  <div className="perm-matrix-meta">
-                    <div className="name">{m.name}</div>
-                    <div className="email mono">{m.email}</div>
-                  </div>
-                  <div className="segmented access-seg">
-                    <button className={role===null?'active':''} onClick={() => setMemberSpaceRole(m.id, space.id, null)}>无访问</button>
-                    <button className={role==='viewer'?'active':''} onClick={() => setMemberSpaceRole(m.id, space.id, 'viewer')}>仅读</button>
-                    <button className={role==='editor'?'active':''} onClick={() => setMemberSpaceRole(m.id, space.id, 'editor')}>编辑</button>
-                  </div>
-                </div>
+                <PermissionMemberRow
+                  key={m.id}
+                  member={m}
+                  role={role}
+                  spaceId={space.id}
+                  setMemberSpaceRole={setMemberSpaceRole}
+                />
               );
             })}
+            {!spaceMembersQuery.isLoading && unassignedMembers.length > 0 && (
+              <div className="perm-unassigned">
+                <button
+                  className="perm-unassigned-trigger"
+                  onClick={() => setShowUnassigned(v => !v)}
+                >
+                  <span>{showUnassigned ? '收起未分配成员' : '添加未分配成员'}</span>
+                  <span className="mono">{unassignedMembers.length}</span>
+                </button>
+                {showUnassigned && unassignedMembers.map(m => (
+                  <PermissionMemberRow
+                    key={m.id}
+                    member={m}
+                    role={null}
+                    spaceId={space.id}
+                    muted
+                    setMemberSpaceRole={setMemberSpaceRole}
+                  />
+                ))}
+              </div>
+            )}
           </AnimatedScrollList>
         </div>
       </div>
     </>
+  );
+}
+
+function PermissionMemberRow({ member, role, spaceId, muted = false, setMemberSpaceRole }) {
+  return (
+    <div className={"perm-matrix-row " + (muted ? 'muted' : '')}>
+      <span className="avatar small">{member.initials}</span>
+      <div className="perm-matrix-meta">
+        <div className="name">{member.name}</div>
+        <div className="email mono">{member.email}</div>
+      </div>
+      <div className="segmented access-seg">
+        <button className={role===null?'active':''} onClick={() => setMemberSpaceRole(member.id, spaceId, null)}>无访问</button>
+        <button className={role==='viewer'?'active':''} onClick={() => setMemberSpaceRole(member.id, spaceId, 'viewer')}>仅读</button>
+        <button className={role==='editor'?'active':''} onClick={() => setMemberSpaceRole(member.id, spaceId, 'editor')}>编辑</button>
+      </div>
+    </div>
   );
 }
 
