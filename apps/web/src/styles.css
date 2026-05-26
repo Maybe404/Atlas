@@ -315,6 +315,15 @@ html { transition: background 0.3s var(--ease-soft); }
 .avatar:hover { transform: scale(1.06); }
 .avatar:active { transform: scale(0.94); }
 
+.sm-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  line-height: 1;
+  text-align: center;
+}
+
 /* ─────────────────────────────────────────────────────────────────────────
    SIDEBAR — card stack
    ───────────────────────────────────────────────────────────────────────── */
@@ -2074,7 +2083,7 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 /* Floating FAB to reopen sidebar — top-left of main area */
 .sidebar-fab {
   position: fixed;
-  top: 80px;
+  top: 92px;
   left: 24px;
   z-index: 50;
   display: inline-flex;
