@@ -5,7 +5,7 @@ import {
   UpdateDocumentSchema,
   UpdateDocumentShareSchema,
 } from '@atlas/shared';
-import { and, desc, eq, isNotNull } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
 import { documentMembers, documents, members, shareLinks, spaces } from '../db/schema';
@@ -17,6 +17,7 @@ import { badRequest, conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId, makeToken } from '../lib/id';
 import {
   canEditDocument,
+  canManageDocumentShare,
   isAdmin,
   listReadableDocuments,
   publicDocumentByToken,
@@ -65,6 +66,27 @@ async function hydrateDocForUser(
   return {
     ...(await hydrateDoc(doc)),
     canEdit: await canEditDocument(user, doc),
+  };
+}
+
+function emptyShareState(documentId: string) {
+  return {
+    documentId,
+    canEdit: false,
+    canManage: false,
+    public: {
+      enabled: false,
+      token: null,
+      url: null,
+      showAuthor: true,
+      allowIndexing: false,
+      expiresAt: null,
+      revokedAt: null,
+      lastAccessedAt: null,
+      accessCount: 0,
+    },
+    members: [],
+    availableMembers: [],
   };
 }
 
@@ -307,17 +329,26 @@ export const documentsRouter = new Hono<AppEnv>()
   })
   .get('/:id/share', async (c) => {
     const user = c.get('user');
-    const doc = await requireDocumentRead(user, c.req.param('id'));
+    const [doc] = await db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.id, c.req.param('id')), isNull(documents.deletedAt)));
+    if (!doc) throw notFound();
+    const canManage = canManageDocumentShare(user, doc);
+    if (!canManage) return c.json(emptyShareState(doc.id));
+
     const [link] = await db.select().from(shareLinks).where(eq(shareLinks.documentId, doc.id));
     const roster = await db
       .select({ membership: documentMembers, member: members })
       .from(documentMembers)
       .innerJoin(members, eq(documentMembers.memberId, members.id))
       .where(eq(documentMembers.documentId, doc.id));
+    const memberRows = await db.select().from(members);
 
     return c.json({
       documentId: doc.id,
-      canEdit: await canEditDocument(user, doc),
+      canEdit: canManage,
+      canManage,
       public: link
         ? {
             enabled: link.enabled,
@@ -345,11 +376,15 @@ export const documentsRouter = new Hono<AppEnv>()
         ...toPublicMember(row.member),
         role: row.membership.role,
       })),
+      availableMembers: memberRows.map(toPublicMember),
     });
   })
   .patch('/:id/share', async (c) => {
     const user = requireUser(c.get('user'));
-    const doc = await requireDocumentEditor(user, c.req.param('id'));
+    const doc = await requireDocumentRead(user, c.req.param('id'));
+    if (!canManageDocumentShare(user, doc)) {
+      throw forbidden('Only workspace admins and the document author can manage sharing.');
+    }
     const body = UpdateDocumentShareSchema.parse(await c.req.json());
     const [existing] = await db.select().from(shareLinks).where(eq(shareLinks.documentId, doc.id));
 

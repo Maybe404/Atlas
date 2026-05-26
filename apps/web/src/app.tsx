@@ -281,7 +281,7 @@ function App() {
       }>
         {error && <div className="app-state-banner">加载失败 · {error.message}</div>}
         {isLoading && <div className="app-state-banner">正在同步工作区数据…</div>}
-        {view === 'reader' && <ReaderView ctx={ctx} spaces={spaces} members={members} user={user} framedDoc={tweaks.framedDoc} chromeVisible={chromeVisible} onNavigate={navigate} onShare={() => openShare()} onLogin={openLogin}/>}
+        {view === 'reader' && <ReaderView ctx={ctx} spaces={spaces} members={members} user={user} framedDoc={tweaks.framedDoc} chromeVisible={chromeVisible} onNavigate={navigate} onShare={(id) => openShare(id)} onLogin={openLogin}/>}
         {view === 'public' && <PublicDocumentView token={routeState.token}/>}
         {lacksAdminAccess && <AdminAccessDenied user={user} onNavigate={navigate}/>}
         {!lacksAdminAccess && view === 'admin-docs' && <AdminDocsView ctx={ctx} spaces={spaces} members={members} onNavigate={navigate} onShare={(id) => openShare(id)} pushToast={pushToast} mutations={mutations}/>}

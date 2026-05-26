@@ -10,9 +10,11 @@ import { displayDate } from '../lib/dates';
 import { forbidden, notFound } from '../lib/http-error';
 import { makeId } from '../lib/id';
 import {
+  canReadDocument,
   canEditDocument,
   getSpaceRole,
   isAdmin,
+  listDirectoryDocuments,
   listReadableDocuments,
   listReadableSpaces,
   requireSpaceAccess,
@@ -20,7 +22,11 @@ import {
 } from '../lib/permissions';
 import { toPublicMember } from '../lib/serializers';
 
-function toDoc(doc: typeof documents.$inferSelect, author?: typeof members.$inferSelect | null) {
+function toDoc(
+  doc: typeof documents.$inferSelect,
+  author?: typeof members.$inferSelect | null,
+  options: { includeHtml?: boolean; canRead?: boolean } = {},
+) {
   return {
     id: doc.id,
     spaceId: doc.spaceId,
@@ -32,9 +38,10 @@ function toDoc(doc: typeof documents.$inferSelect, author?: typeof members.$infe
     visibility: doc.visibility,
     dot: doc.dot,
     tags: doc.tags,
-    html: doc.html,
+    ...(options.includeHtml ? { html: doc.html } : {}),
     skillVersion: doc.skillVersion,
     deletedAt: doc.deletedAt,
+    canRead: options.canRead ?? false,
   };
 }
 
@@ -42,12 +49,13 @@ async function childrenForSpace(
   user: typeof members.$inferSelect | undefined,
   space: typeof spaces.$inferSelect,
 ) {
-  const docs = await listReadableDocuments(user, space);
+  const docs = await listDirectoryDocuments(user, space);
   return Promise.all(
     docs.map(async (doc) => {
       const [author] = await db.select().from(members).where(eq(members.id, doc.authorId));
+      const canRead = await canReadDocument(user, doc);
       return {
-        ...toDoc(doc, author),
+        ...toDoc(doc, author, { includeHtml: canRead, canRead }),
         canEdit: await canEditDocument(user, doc),
       };
     }),
@@ -58,7 +66,7 @@ export const spacesRouter = new Hono<AppEnv>()
   .get('/', async (c) => {
     const user = c.get('user');
     const membershipSpaces = await listReadableSpaces(user);
-    const readableDocs = await listReadableDocuments(user);
+    const readableDocs = await listDirectoryDocuments(user);
     const readableSpaceIds = new Set([
       ...membershipSpaces.map((sp) => sp.id),
       ...readableDocs.map((doc) => doc.spaceId),

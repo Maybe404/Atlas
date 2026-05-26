@@ -55,13 +55,19 @@ async function loginAs(email = 'lin@atlas.team') {
 }
 
 describe('Atlas API', () => {
-  test('anonymous visitors only see public documents in the space tree', async () => {
+  test('anonymous visitors see directory entries but only public document HTML', async () => {
     const res = await request('/spaces');
     expect(res.status).toBe(200);
     const spaces = (await res.json()) as ApiSpace[];
-    const docs = spaces.flatMap((space) => space.children as { visibility: string }[]);
+    const docs = spaces.flatMap(
+      (space) => space.children as { visibility: string; canRead: boolean; html?: string }[],
+    );
     expect(docs.length).toBeGreaterThan(0);
-    expect(docs.every((doc) => doc.visibility === 'public')).toBe(true);
+    expect(docs.some((doc) => doc.visibility !== 'public')).toBe(true);
+    expect(docs.every((doc) => doc.visibility === 'public' || !doc.html)).toBe(true);
+    expect(docs.filter((doc) => doc.visibility === 'public').every((doc) => doc.canRead)).toBe(
+      true,
+    );
   });
 
   test('uploads raw HTML and infers document metadata', async () => {
@@ -334,6 +340,48 @@ describe('Atlas API', () => {
     const shareBody = (await share.json()) as { public: { token: string } };
     expect(shareBody.public.token).not.toBe('demo-d1-public-link');
     expect((await request(`/documents/public/${shareBody.public.token}`)).status).toBe(200);
+  });
+
+  test('only admins and document authors can manage share settings', async () => {
+    const viewer = await loginAs('he@atlas.team');
+    const readonlyShare = await request('/documents/d3/share', { headers: { cookie: viewer.cookie } });
+    expect(readonlyShare.status).toBe(200);
+    const readonlyBody = (await readonlyShare.json()) as {
+      canManage: boolean;
+      public: { token: string | null };
+      availableMembers: unknown[];
+    };
+    expect(readonlyBody.canManage).toBe(false);
+    expect(readonlyBody.public.token).toBeNull();
+    expect(readonlyBody.availableMembers).toEqual([]);
+
+    const cannotPatch = await request('/documents/d3/share', {
+      method: 'PATCH',
+      body: JSON.stringify({ publicEnabled: true }),
+      headers: { 'content-type': 'application/json', ...viewer.headers },
+    });
+    expect(cannotPatch.status).toBe(403);
+
+    const guestShare = await request('/documents/d3/share');
+    expect(guestShare.status).toBe(200);
+    expect(((await guestShare.json()) as { canManage: boolean }).canManage).toBe(false);
+
+    const author = await loginAs('chen@atlas.team');
+    const authorShare = await request('/documents/d4/share', { headers: { cookie: author.cookie } });
+    expect(authorShare.status).toBe(200);
+    const authorBody = (await authorShare.json()) as {
+      canManage: boolean;
+      availableMembers: unknown[];
+    };
+    expect(authorBody.canManage).toBe(true);
+    expect(authorBody.availableMembers.length).toBeGreaterThan(0);
+
+    const authorPatch = await request('/documents/d4/share', {
+      method: 'PATCH',
+      body: JSON.stringify({ publicEnabled: true }),
+      headers: { 'content-type': 'application/json', ...author.headers },
+    });
+    expect(authorPatch.status).toBe(200);
   });
 
   test('purges expired trash items', async () => {

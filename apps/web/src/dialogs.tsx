@@ -5,6 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import { I, AnimatedItem, AnimatedScrollList } from './chrome';
 import { apiGet } from './api-client';
 import { atlasKeys } from './data-hooks';
+import { publicShareUrl } from './url-utils';
 
 const _I3 = I;
 
@@ -177,22 +178,26 @@ function ShareDialog({ open, documentId, members: workspaceMembers = [], current
     queryKey: atlasKeys.share(documentId),
     queryFn: () => apiGet(`/documents/${documentId}/share`),
     enabled: open && Boolean(documentId),
+    retry: false,
   });
 
   if (!open) return null;
 
   const share = shareQuery.data;
   const roster = share?.members || [];
+  const availableMembers = share?.availableMembers?.length ? share.availableMembers : workspaceMembers;
   const directViewers = roster.filter(mem => mem.role === 'viewer');
   const directEditors = roster.filter(mem => mem.role === 'editor');
-  const canEditShare = share?.canEdit !== false;
+  const canEditShare = Boolean(share?.canManage ?? share?.canEdit);
+  const showPermissionNote = !shareQuery.isLoading && !canEditShare;
   const publicOn = Boolean(share?.public?.enabled);
-  const url = share?.public?.token ? `${window.location.origin}/share/${share.public.token}` : '';
+  const url = share?.public?.token ? publicShareUrl(share.public.token) : '';
   const docTitle = documentId ? `文档 ${documentId}` : '当前文档';
 
   const addMember = () => {
     if (!emailInput) return;
-    const m = workspaceMembers.find(x => x.email === emailInput || x.name === emailInput);
+    const input = emailInput.trim().toLowerCase();
+    const m = availableMembers.find(x => x.email?.toLowerCase() === input || x.name === emailInput.trim());
     if (m) {
       mutations.updateShare(documentId, { members: [{ memberId: m.id, role: 'viewer' }] });
       setEmailInput('');
@@ -217,6 +222,20 @@ function ShareDialog({ open, documentId, members: workspaceMembers = [], current
         </div>
 
         <div className="dialog-body">
+          {shareQuery.isLoading && (
+            <div className="share-permission-note muted">
+              正在读取分享权限与设置…
+            </div>
+          )}
+          {showPermissionNote && (
+            <div className="share-permission-note">
+              <strong>没有分享管理权限</strong>
+              <span>
+                只有管理员和文档作者可以邀请成员或修改公开链接。你仍然可以在阅读页复制当前文档地址。
+              </span>
+            </div>
+          )}
+
           {tab === 'invite' && (
             <>
               <div style={{display:'flex', gap: 8, marginBottom: 18}}>
@@ -231,7 +250,7 @@ function ShareDialog({ open, documentId, members: workspaceMembers = [], current
                   list="atlas-members"
                 />
                 <datalist id="atlas-members">
-                  {workspaceMembers.map(m => <option key={m.id} value={m.email}>{m.name}</option>)}
+                  {availableMembers.map(m => <option key={m.id} value={m.email}>{m.name}</option>)}
                 </datalist>
                 <button className="btn primary" disabled={!canEditShare} onClick={addMember}>邀请</button>
               </div>
@@ -266,7 +285,7 @@ function ShareDialog({ open, documentId, members: workspaceMembers = [], current
                         </div>
                         <select className="role-select" value={mem.role}
                                 disabled={!canEditShare}
-                                onChange={e => mutations.updateShare(documentId, { members: [{ memberId: mem.id, role: e.target.value }] })}>
+                                onChange={e => mutations.updateShare(documentId, { members: [{ memberId: mem.id, role: e.target.value || null }] })}>
                           <option value="editor">可编辑</option>
                           <option value="viewer">仅可读</option>
                           <option value="">移除</option>
@@ -275,14 +294,14 @@ function ShareDialog({ open, documentId, members: workspaceMembers = [], current
                     );
                   })}
                   <div className="share-row share-row-owner">
-                    <span className="avatar" style={{background:'var(--blue)'}}>{currentUser?.initials || 'ME'}</span>
+                    <span className="avatar" style={{background:'var(--blue)'}}>{currentUser?.initials || 'G'}</span>
                     <div>
-                      <div className="name">{currentUser?.name || '当前用户'}</div>
+                      <div className="name">{currentUser?.name || '访客'}</div>
                       <div className="email mono">{currentUser?.email || ''}</div>
                     </div>
-                    <span className="share-badge">管理员/作者</span>
+                    <span className="share-badge">{canEditShare ? '管理员/作者' : '无管理权限'}</span>
                   </div>
-                  {workspaceMembers.filter(mem => !roster.some(r => r.id === mem.id) && mem.id !== currentUser?.id).slice(0, 6).map(mem => (
+                  {availableMembers.filter(mem => !roster.some(r => r.id === mem.id) && mem.id !== currentUser?.id).slice(0, 6).map(mem => (
                     <div key={'sg-' + mem.id} className="share-row" style={{opacity: 0.78}}>
                       <span className="avatar" style={{background: 'var(--parchment)', color:'var(--ink-3)'}}>{mem.initials}</span>
                       <div>
@@ -316,7 +335,7 @@ function ShareDialog({ open, documentId, members: workspaceMembers = [], current
                 <span style={{color:'var(--ink-4)'}}><_I3.link/></span>
                 <span className="url">{publicOn ? url : '— 当前未启用'}</span>
                 <button className="btn secondary" style={{padding:'4px 12px', fontSize: 12}}
-                        disabled={!publicOn}
+                        disabled={!publicOn || !canEditShare}
                         onClick={() => { navigator.clipboard?.writeText(url); setCopied(true); pushToast({msg:'已复制', meta: url}); setTimeout(()=>setCopied(false), 1400); }}>
                   {copied ? <_I3.check/> : <_I3.link width="11" height="11"/>}
                   <span>{copied ? '已复制' : '复制'}</span>
@@ -370,7 +389,9 @@ function ShareDialog({ open, documentId, members: workspaceMembers = [], current
         </div>
 
         <div className="dialog-foot">
-          <span className="dim" style={{fontSize: 11.5, fontFamily:'var(--font-mono)'}}>由 {currentUser?.name || '当前用户'} 管理</span>
+          <span className="dim" style={{fontSize: 11.5, fontFamily:'var(--font-mono)'}}>
+            {canEditShare ? `由 ${currentUser?.name || '当前用户'} 管理` : '仅管理员/作者可管理'}
+          </span>
           <button className="btn primary" onClick={onClose}>完成</button>
         </div>
       </div>
@@ -383,7 +404,7 @@ function PublicToggle({ label, desc, value, disabled, onChange }) {
   const on = Boolean(value);
   return (
     <div style={{display:'flex', alignItems:'center', gap: 12}}>
-      <button className={"toggle " + (on ? 'on' : '')} onClick={() => !disabled && onChange?.(!on)}></button>
+      <button className={"toggle " + (on ? 'on' : '')} disabled={disabled} onClick={() => !disabled && onChange?.(!on)}></button>
       <div>
         <div style={{fontSize: 13.5, fontWeight: 500, letterSpacing:'-0.012em'}}>{label}</div>
         <div style={{fontSize: 12, color: 'var(--ink-3)'}}>{desc}</div>

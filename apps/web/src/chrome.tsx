@@ -69,7 +69,7 @@ function Topbar({ ctx, spaces = [], visible = true, onSearch, onTheme, theme, on
         <span className="kbd">⌘ K</span>
       </button>
 
-      {isReader && user && (
+      {isReader && (
         <button className="btn primary" onClick={onShare}>
           <I.share/><span>分享</span>
         </button>

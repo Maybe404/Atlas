@@ -7,6 +7,7 @@ import { I, AnimatedScrollList } from './chrome';
 import { apiGet } from './api-client';
 import { canRead, firstPublicDoc } from './auth';
 import { visibilityLabel } from './labels';
+import { documentReaderUrl } from './url-utils';
 
 const _I = I;
 
@@ -32,6 +33,12 @@ function ReaderView({ ctx, spaces = [], members = [], user, framedDoc, chromeVis
   const [copied, setCopied] = useState(false);
   const denied = Boolean(user && ctx.spaceId && ctx.docId && (!requestedSpace || !requestedDoc));
   const allowed = !denied && canRead(doc, user);
+  const readerLink = window.location.href;
+  const copyReaderLink = () => {
+    navigator.clipboard?.writeText(readerLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1400);
+  };
 
   const iframeRef = useRef(null);
 
@@ -53,6 +60,13 @@ function ReaderView({ ctx, spaces = [], members = [], user, framedDoc, chromeVis
               : '请先登录团队账号，登录后会回到刚才的页面。'}
           </p>
           <div className="reader-locked-actions">
+            <button className="reader-locked-secondary" onClick={copyReaderLink}>
+              {copied ? <_I.check/> : <_I.link/>}
+              <span>{copied ? '已复制' : '复制链接'}</span>
+            </button>
+            <button className="reader-locked-secondary" onClick={() => onShare(doc.id)}>
+              <_I.share/><span>分享</span>
+            </button>
             {user ? (
               <button className="reader-locked-secondary" onClick={() => onNavigate({ view: 'reader', ...firstPublicDoc(spaces) })}>
                 浏览可阅读文档
@@ -86,20 +100,18 @@ function ReaderView({ ctx, spaces = [], members = [], user, framedDoc, chromeVis
         <span className="author">{author?.name}</span>
         <span className="sep">·</span>
         <span className="mono dim" style={{fontSize:11}}>{doc.updated}</span>
-        {allowed && user && doc.canEdit ? (
+        {doc ? (
           <>
-            <button className="pill-btn ghost" onClick={() => {
-              navigator.clipboard?.writeText('atlas.team/d/' + doc.id);
-              setCopied(true); setTimeout(()=>setCopied(false), 1400);
-            }}>
+            <button className="pill-btn ghost" onClick={copyReaderLink}>
               {copied ? <_I.check/> : <_I.link/>}
               <span>{copied ? '已复制' : '链接'}</span>
             </button>
-            <button className="pill-btn" onClick={onShare}>
+            <button className="pill-btn" onClick={() => onShare(doc.id)}>
               <_I.share/><span>分享</span>
             </button>
           </>
-        ) : !allowed ? (
+        ) : null}
+        {!allowed ? (
           <span className={"vis-chip reader-lock-chip " + doc.visibility}>
             {doc.visibility === 'invite' ? '需登录 · 邀请制' : '需登录 · 私密'}
           </span>
@@ -133,6 +145,13 @@ function ReaderView({ ctx, spaces = [], members = [], user, framedDoc, chromeVis
                   : '这是一篇邀请制文档，加入「' + space.name + '」空间的成员可以阅读。登录后即可查看完整内容。'}
             </p>
             <div className="reader-locked-actions">
+              <button className="reader-locked-secondary" onClick={copyReaderLink}>
+                {copied ? <_I.check/> : <_I.link/>}
+                <span>{copied ? '已复制' : '复制链接'}</span>
+              </button>
+              <button className="reader-locked-secondary" onClick={() => onShare(doc.id)}>
+                <_I.share/><span>分享</span>
+              </button>
               {!user && (
                 <button className="reader-locked-primary" onClick={onLogin}>
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -566,7 +585,7 @@ function AdminDocsView({ ctx, spaces = [], members = [], onNavigate, onShare, pu
                         <_I.share/><span>分享</span>
                       </button>
                       <button className="row-menu-item" onClick={()=>{
-                        navigator.clipboard?.writeText('atlas.team/d/' + doc.id);
+                        navigator.clipboard?.writeText(documentReaderUrl(doc.spaceId, doc.id));
                         pushToast({msg:'链接已复制', meta: doc.title});
                         setMenuOpenId(null);
                       }}>

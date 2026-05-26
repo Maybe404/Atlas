@@ -80,6 +80,12 @@ export async function canEditDocument(user: User | undefined, doc: DocumentRow) 
   return direct?.role === 'editor';
 }
 
+export function canManageDocumentShare(user: User | undefined, doc: DocumentRow) {
+  if (doc.deletedAt) return false;
+  if (!user) return false;
+  return isAdmin(user) || doc.authorId === user.id;
+}
+
 export async function requireDocumentEditor(user: User, docId: string) {
   const doc = await requireDocumentRead(user, docId);
   if (!(await canEditDocument(user, doc)))
@@ -164,6 +170,18 @@ export async function listReadableDocuments(user: User | undefined, space?: Spac
     seen.add(row.doc.id);
     return [row.doc];
   });
+}
+
+export async function listDirectoryDocuments(user: User | undefined, space?: SpaceRow) {
+  if (!user) {
+    const spaceScope = space ? [eq(documents.spaceId, space.id)] : [];
+    return db
+      .select()
+      .from(documents)
+      .where(and(isNull(documents.deletedAt), ...spaceScope));
+  }
+
+  return listReadableDocuments(user, space);
 }
 
 export async function publicDocumentByToken(token: string) {
