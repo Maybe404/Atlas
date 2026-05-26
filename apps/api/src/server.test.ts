@@ -27,8 +27,8 @@ async function request(path: string, init?: RequestInit) {
 }
 
 type ApiSpace = { children: unknown[] };
-type ApiDoc = { id: string; html: string; publicLink: { token: string } };
-type CreatedDoc = { id: string; sanitized: { removed: number } };
+type ApiDoc = { id: string; title: string; desc: string; html: string; publicLink: { token: string } };
+type CreatedDoc = { id: string; stored: { size: number } };
 
 describe('Atlas API', () => {
   test('lists spaces with seeded documents for the demo user', async () => {
@@ -39,32 +39,28 @@ describe('Atlas API', () => {
     expect(spaces.at(0)?.children.length).toBeGreaterThan(0);
   });
 
-  test('uploads HTML through sanitizer', async () => {
+  test('uploads raw HTML and infers document metadata', async () => {
+    const rawHtml =
+      '<!doctype html><html><head><title>Smoke Title</title></head><body><h1>Fallback</h1><script>window.__smoke = 1</script><p onclick="x()">A useful generated summary for the uploaded HTML document.</p></body></html>';
     const form = new FormData();
     form.set(
       'file',
-      new File(
-        [
-          '<!doctype html><html><body><h1>Smoke</h1><script>alert(1)</script><p onclick="x()">ok</p></body></html>',
-        ],
-        'smoke.html',
-        { type: 'text/html' },
-      ),
+      new File([rawHtml], 'smoke.html', { type: 'text/html' }),
     );
-    form.set('title', 'Smoke Upload');
     form.set('spaceId', 's1');
     form.set('visibility', 'private');
 
     const upload = await request('/documents/upload', { method: 'POST', body: form });
     expect(upload.status).toBe(201);
     const created = (await upload.json()) as CreatedDoc;
-    expect(created.sanitized.removed).toBe(2);
+    expect(created.stored.size).toBeGreaterThan(0);
 
     const doc = await request(`/documents/${created.id}`);
     expect(doc.status).toBe(200);
     const body = (await doc.json()) as ApiDoc;
-    expect(body.html).not.toContain('<script>');
-    expect(body.html).not.toContain('onclick');
+    expect(body.title).toBe('Smoke Title');
+    expect(body.desc).toBe('A useful generated summary for the uploaded HTML document.');
+    expect(body.html).toBe(rawHtml);
   });
 
   test('rejects password logins without the correct password and issues csrf token on success', async () => {

@@ -2,6 +2,7 @@
 // Atlas admin views: Upload flow + Settings
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { extractHtmlMetadata } from '@atlas/shared';
 import { I, AnimatedScrollList } from './chrome';
 import { apiGet } from './api-client';
 import { atlasKeys } from './data-hooks';
@@ -24,13 +25,13 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
   const [step, setStep] = useState(0);
   const [files, setFiles] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedHtml, setSelectedHtml] = useState('');
   const [over, setOver] = useState(false);
   const [meta, setMeta] = useState({
-    title: 'Lumen 系列 · 产品介绍',
-    spaceId: 's2',
+    title: '',
+    spaceId: spaces[0]?.id || '',
     visibility: 'invite',
-    desc: '面向 Q3 路线图同步会的预读：投影仪市场观察、Lumen 系列定位、几位早期用户的反馈。',
-    skill: 'sanitize-html@1.2.4',
+    desc: '',
   });
 
   useEffect(() => {
@@ -42,7 +43,15 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
     const file = Array.from(incoming || []).find(f => /\.html?$/i.test(f.name)) || incoming?.[0];
     if (!file) return;
     setSelectedFile(file);
-    setMeta(m => ({ ...m, title: m.title || file.name.replace(/\.html?$/i, '') }));
+    file.text().then((html) => {
+      const metadata = extractHtmlMetadata(html, { fallbackTitle: file.name });
+      setSelectedHtml(html);
+      setMeta(m => ({
+        ...m,
+        title: metadata.title || file.name.replace(/\.html?$/i, ''),
+        desc: metadata.summary || '',
+      }));
+    });
     const ns = [{ name: file.name, size: `${Math.max(1, Math.round(file.size / 1024))} KB`, progress: 0 }];
     setFiles(ns);
     ns.forEach((f, i) => {
@@ -64,7 +73,7 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
           <div className="upload-head">
             <div style={{fontSize: 13, color: 'var(--blue)', fontWeight: 500, marginBottom: 8, letterSpacing:'-0.012em'}}>团队后台 · 上传</div>
             <h1>上传 HTML 文档</h1>
-            <p className="sub">Atlas 不编辑 HTML——它只负责安全地展示外部生成的文档。上传后会按 skill 版本进行一次清洗，原始文件会保留。</p>
+            <p className="sub">Atlas 不编辑 HTML——它只负责隔离展示外部生成的文档。上传后会保存原始文件，并自动识别标题与摘要。</p>
 
             <div className="steps">
               {['选择文件', '填写信息', '审阅与发布'].map((s, i) => (
@@ -93,8 +102,8 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
                     onChange={(e) => acceptFiles(e.target.files)}
                   />
                   <div className="big">把 HTML 拖到这里</div>
-                  <div className="small">支持单个 .html 文件，或 .html + assets/ 的目录压缩包</div>
-                  <div className="meta">最多 8 MB · 自动清洗内联脚本</div>
+                  <div className="small">支持单个 .html 文件</div>
+                  <div className="meta">最多 8 MB · sandbox 隔离展示</div>
                   <label className="btn secondary" htmlFor="atlas-upload-file" style={{marginTop: 14}}>选择文件</label>
                 </div>
 
@@ -149,16 +158,16 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
                   <textarea className="input textarea" value={meta.desc} onChange={e => setMeta(m => ({...m, desc: e.target.value}))}/>
                 </div>
                 <div className="field">
-                  <label className="field-label">清洗 skill</label>
+                  <label className="field-label">展示方式</label>
                   <div className="input" style={{display:'flex', alignItems:'center', gap: 10, fontFamily:'var(--font-mono)', fontSize: 12.5}}>
                     <span className="dot dot-green" style={{width:7, height:7, borderRadius:'50%'}}></span>
-                    <span>{meta.skill}</span>
-                    <span className="dim" style={{marginLeft:'auto', fontSize: 11, fontFamily:'var(--font)'}}>当前 · 由林知远发布</span>
+                    <span>iframe sandbox</span>
+                    <span className="dim" style={{marginLeft:'auto', fontSize: 11, fontFamily:'var(--font)'}}>原始 HTML</span>
                   </div>
                 </div>
                 <div className="flow-footer">
                   <button className="btn ghost" onClick={() => setStep(0)}>上一步</button>
-                  <button className="btn primary" onClick={() => setStep(2)}>
+                  <button className="btn primary" disabled={!meta.title.trim()} onClick={() => setStep(2)}>
                     <span>预览与发布</span><_I2.arrow/>
                   </button>
                 </div>
@@ -169,28 +178,26 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
               <>
                 <div style={{borderRadius:'var(--r-md)', overflow:'hidden', border:'1px solid var(--hairline-2)'}}>
                   <div style={{padding:'14px 18px', borderBottom:'1px solid var(--hairline-2)', display:'flex', justifyContent:'space-between', alignItems:'center', background:'var(--pearl)'}}>
-                    <span style={{fontSize: 13, fontWeight: 500, letterSpacing:'-0.012em'}}>预览（清洗后）</span>
-                    <span className="mono dim" style={{fontSize: 11}}>sandbox 已启用 · 高度自适应</span>
+                    <span style={{fontSize: 13, fontWeight: 500, letterSpacing:'-0.012em'}}>发布信息</span>
+                    <span className="mono dim" style={{fontSize: 11}}>sandbox iframe · 原文保存</span>
                   </div>
                   <div style={{padding:'28px 24px', background: 'var(--canvas)'}}>
                     <div style={{fontFamily:'var(--font-display)', fontSize: 24, fontWeight: 600, letterSpacing:'-0.022em', marginBottom: 8}}>{meta.title}</div>
                     <div style={{color: 'var(--ink-3)', fontSize: 14, marginBottom: 18, letterSpacing:'-0.012em'}}>{meta.desc}</div>
-                    <div style={{
-                      background: 'linear-gradient(180deg, #f8f8fa, #ececf0)',
-                      borderRadius: 'var(--r-md)',
-                      height: 100,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: '#b0b0b8',
-                      fontFamily: 'var(--font-mono)', fontSize: 11, letterSpacing: '0.06em',
-                    }}>HTML 内容预览</div>
+                    <iframe
+                      className="upload-html-preview"
+                      srcDoc={selectedHtml || '<!doctype html><html><body></body></html>'}
+                      title="HTML 预览"
+                      sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+                    />
                   </div>
                 </div>
 
                 <div style={{marginTop: 16, display:'grid', gridTemplateColumns:'1fr 1fr', gap: 12}}>
                   <div style={{background:'var(--pearl)', borderRadius:'var(--r-md)', padding:'14px 16px'}}>
-                    <div style={{fontSize: 11, color: 'var(--ink-4)', textTransform:'uppercase', letterSpacing:'0.04em', marginBottom: 4, fontWeight: 500}}>清洗结果</div>
-                    <div style={{fontSize: 13.5}}>移除 2 条内联脚本</div>
-                    <div style={{fontSize: 13.5, color: 'var(--ink-3)'}}>外链资源 3 项已代理</div>
+                    <div style={{fontSize: 11, color: 'var(--ink-4)', textTransform:'uppercase', letterSpacing:'0.04em', marginBottom: 4, fontWeight: 500}}>HTML 存储</div>
+                    <div style={{fontSize: 13.5}}>保留原始内容</div>
+                    <div style={{fontSize: 13.5, color: 'var(--ink-3)'}}>阅读页由 iframe sandbox 隔离</div>
                   </div>
                   <div style={{background:'var(--pearl)', borderRadius:'var(--r-md)', padding:'14px 16px'}}>
                     <div style={{fontSize: 11, color: 'var(--ink-4)', textTransform:'uppercase', letterSpacing:'0.04em', marginBottom: 4, fontWeight: 500}}>分享设置</div>
@@ -205,10 +212,10 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
                   <button className="btn ghost" onClick={() => setStep(1)}>上一步</button>
                   <div style={{display:'flex', gap: 8}}>
                     <button className="btn secondary">存为草稿</button>
-                    <button className="btn primary" disabled={!selectedFile} onClick={() => {
+                    <button className="btn primary" disabled={!selectedFile || !meta.title.trim()} onClick={() => {
                       const formData = new FormData();
                       formData.set('file', selectedFile);
-                      formData.set('title', meta.title);
+                      formData.set('title', meta.title.trim());
                       formData.set('desc', meta.desc);
                       formData.set('spaceId', meta.spaceId);
                       formData.set('visibility', meta.visibility);
@@ -936,8 +943,8 @@ function SkillsPane({ pushToast, mutations }) {
       <div className="setting-card">
         <div className="card-head">
           <div>
-            <h3>sanitize-html</h3>
-            <div className="sub" style={{maxWidth: 520}}>负责将外部 HTML 清洗为 Atlas 可安全嵌入的格式：处理内联脚本、外链资源、不安全属性。</div>
+            <h3>HTML sandbox</h3>
+            <div className="sub" style={{maxWidth: 520}}>负责将外部 HTML 隔离在阅读页 iframe 中，保留原文脚本与样式，避免上传内容触达 Atlas 应用外壳。</div>
           </div>
           <button className="btn secondary"><_I2.upload width="13" height="13"/><span>上传新版本</span></button>
         </div>

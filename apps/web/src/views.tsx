@@ -2,6 +2,7 @@
 // Atlas reader views: Reader (full iframe), SpaceIndex (card grid)
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { extractHtmlMetadata } from '@atlas/shared';
 import { I, AnimatedScrollList } from './chrome';
 import { apiGet } from './api-client';
 import { canRead, firstPublicDoc } from './auth';
@@ -111,7 +112,7 @@ function ReaderView({ ctx, spaces = [], members = [], user, framedDoc, chromeVis
             className="reader-iframe"
             srcDoc={doc.html || '<!doctype html><html><body><p>暂无内容</p></body></html>'}
             title={doc.title}
-            sandbox="allow-same-origin allow-scripts"
+            sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
           />
         ) : (
           <div className="reader-locked">
@@ -185,7 +186,7 @@ function PublicDocumentView({ token }) {
           className="reader-iframe"
           srcDoc={doc.html || '<!doctype html><html><body><p>暂无内容</p></body></html>'}
           title={doc.title}
-          sandbox="allow-same-origin allow-scripts"
+          sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
         />
       </div>
     </div>
@@ -376,7 +377,7 @@ function AdminDocsView({ ctx, spaces = [], members = [], onNavigate, onShare, pu
     const defaultSpace = spaceOptions.find(s => s.id === (spaceFilter !== 'all' ? spaceFilter : 's1')) || spaceOptions[0];
     setEditing({
       id: 'new',
-      title: '未命名文章',
+      title: '',
       desc: '',
       author: 'u1',
       updated: '刚刚',
@@ -393,18 +394,21 @@ function AdminDocsView({ ctx, spaces = [], members = [], onNavigate, onShare, pu
 
   const saveDoc = (html, patch = {}) => {
     if (!editing) return;
+    const metadata = extractHtmlMetadata(html, { fallbackTitle: patch.title || editing.title });
+    const nextTitle = patch.title || metadata.title || editing.title || '未命名文章';
+    const nextDesc = patch.desc || metadata.summary || editing.desc || '';
     if (editing.isNew) {
       mutations.createDocument({
         spaceId: patch.spaceId || editing.spaceId,
-        title: patch.title || editing.title,
-        desc: patch.desc || editing.desc || '',
+        title: nextTitle,
+        desc: nextDesc,
         visibility: patch.visibility || editing.visibility || 'private',
         html,
         tags: editing.tags || ['draft'],
         dot: editing.dot || 'slate',
       });
     } else {
-      mutations.updateDocument(editing.id, { ...patch, html });
+      mutations.updateDocument(editing.id, { desc: nextDesc, ...patch, title: nextTitle, html });
     }
     setEditing(null);
   };
@@ -601,7 +605,7 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8"/>
-<title>${doc.title}</title>
+<title></title>
 <style>
   body { font-family: -apple-system, "Noto Sans SC", sans-serif; max-width: 680px; margin: 60px auto; padding: 0 24px; color: #1d1d1f; line-height: 1.65; }
   h1 { font-size: 28px; letter-spacing: -0.02em; margin: 0 0 8px; }
@@ -611,8 +615,8 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
 </style>
 </head>
 <body>
-  <h1>${doc.title}</h1>
-  <p>在此处粘贴或编写 HTML。保存后 Atlas 会按当前 skill 版本进行清洗并存档。</p>
+  <h1></h1>
+  <p></p>
 </body>
 </html>`
     : `<!doctype html>
@@ -633,11 +637,14 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
   <div class="meta">${doc.spaceName} · 最后更新 ${doc.updated}</div>
   <p>${doc.desc || ''}</p>
   <h2>正文</h2>
-  <p>在此处编辑 HTML 内容。保存后，Atlas 会按当前 skill 版本进行清洗，并替换原文件。</p>
+  <p>在此处编辑 HTML 内容。保存后，Atlas 会保留原始 HTML，并替换原文件。</p>
 </body>
 </html>`);
-  const [html, setHTML] = useState(defaultHTML);
+  const [html, setHTML] = useState(doc.isNew ? '' : defaultHTML);
   const [title, setTitle] = useState(doc.title);
+  const [desc, setDesc] = useState(doc.desc || '');
+  const [titleTouched, setTitleTouched] = useState(Boolean(doc.title));
+  const [descTouched, setDescTouched] = useState(Boolean(doc.desc));
   const [spaceId, setSpaceId] = useState(doc.spaceId || (doc.isNew ? '' : 's1'));
   const [showSpacePicker, setShowSpacePicker] = useState(false);
   const [showSpaceRequired, setShowSpaceRequired] = useState(false);
@@ -657,6 +664,12 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
 
   const selectedSpace = spaces.find(s => s.id === spaceId);
 
+  const applyMetadata = (nextHtml) => {
+    const metadata = extractHtmlMetadata(nextHtml, { fallbackTitle: title || doc.title });
+    if (metadata.title && !titleTouched) setTitle(metadata.title);
+    if (metadata.summary && !descTouched) setDesc(metadata.summary);
+  };
+
   const save = () => {
     if (!spaceId) {
       setShowSpaceRequired(true);
@@ -664,7 +677,11 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
       return;
     }
     const patch = {};
-    if (title && title !== doc.title) patch.title = title;
+    const metadata = extractHtmlMetadata(html, { fallbackTitle: title || doc.title });
+    const finalTitle = title.trim() || metadata.title || doc.title || '未命名文章';
+    const finalDesc = desc.trim() || metadata.summary || doc.desc || '';
+    if (finalTitle !== doc.title) patch.title = finalTitle;
+    if (finalDesc !== (doc.desc || '')) patch.desc = finalDesc;
     if (spaceId !== doc.spaceId && selectedSpace) {
       patch.spaceId = selectedSpace.id;
       patch.spaceName = selectedSpace.name;
@@ -688,8 +705,18 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
   }, [html, title, onSave, onClose]);
 
   const handlePaste = (e) => {
-    // allow normal paste — just mark dirty
     setDirty(true);
+    const pasted = e.clipboardData?.getData('text/html') || e.clipboardData?.getData('text/plain');
+    if (pasted) {
+      const replacingBlankNewDoc = doc.isNew && !html.trim() && /<(html|!doctype)\b/i.test(pasted);
+      if (replacingBlankNewDoc) {
+        e.preventDefault();
+        setHTML(pasted);
+        applyMetadata(pasted);
+        return;
+      }
+      requestAnimationFrame(() => applyMetadata(taRef.current?.value || pasted));
+    }
   };
 
   return (
@@ -704,7 +731,7 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
                 <input
                   className="editor-title-input"
                   value={title}
-                  onChange={(e) => { setTitle(e.target.value); setDirty(true); }}
+                  onChange={(e) => { setTitle(e.target.value); setTitleTouched(true); setDirty(true); }}
                   placeholder="未命名文章"
                   spellCheck={false}
                 />
@@ -775,7 +802,7 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
                 ref={taRef}
                 className="editor-source"
                 value={html}
-                onChange={(e) => { setHTML(e.target.value); setDirty(true); }}
+                onChange={(e) => { setHTML(e.target.value); applyMetadata(e.target.value); setDirty(true); }}
                 onPaste={handlePaste}
                 placeholder={doc.isNew ? "粘贴 HTML 内容到这里…" : ""}
                 spellCheck={false}
@@ -786,7 +813,7 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
               className="editor-preview"
               srcDoc={html}
               title="预览"
-              sandbox="allow-same-origin"
+              sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
             />
           )}
         </div>
@@ -796,7 +823,7 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
             <span className="sep">·</span>
             <span>{html.split('\n').length} 行</span>
             <span className="sep">·</span>
-            <span>清洗 skill v1.2.4</span>
+            <span>{desc ? '摘要已识别' : '原文保存'}</span>
           </div>
           <div style={{display:'flex', gap: 8}}>
             <button className="btn ghost" onClick={onClose}>取消</button>

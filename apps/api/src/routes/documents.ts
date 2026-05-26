@@ -1,5 +1,6 @@
 import {
   CreateDocumentSchema,
+  extractHtmlMetadata,
   SetDocumentMemberRoleSchema,
   UpdateDocumentSchema,
   UpdateDocumentShareSchema,
@@ -22,7 +23,7 @@ import {
   requireDocumentRead,
   requireSpaceEditor,
 } from '../lib/permissions';
-import { sanitizeHtml } from '../lib/sanitize';
+import { validateHtmlForStorage } from '../lib/sanitize';
 import { toPublicMember } from '../lib/serializers';
 
 function toDoc(row: {
@@ -100,16 +101,17 @@ export const documentsRouter = new Hono<AppEnv>()
     const body = CreateDocumentSchema.parse(await c.req.json());
     await requireSpaceEditor(user, body.spaceId);
 
-    const sanitized = sanitizeHtml(body.html);
+    const checkedHtml = validateHtmlForStorage(body.html);
+    const metadata = extractHtmlMetadata(body.html, { fallbackTitle: body.title });
     const id = makeId('d');
     await db.insert(documents).values({
       id,
       spaceId: body.spaceId,
       authorId: user.id,
       title: body.title,
-      desc: body.desc,
+      desc: body.desc || metadata.summary,
       visibility: body.visibility,
-      html: sanitized.html,
+      html: checkedHtml.html,
       dot: body.dot,
       tags: body.tags,
       skillVersion: body.skillVersion ?? '1.2.4',
@@ -120,9 +122,9 @@ export const documentsRouter = new Hono<AppEnv>()
       action: 'document.create',
       targetType: 'document',
       targetId: id,
-      details: { spaceId: body.spaceId, title: body.title, removed: sanitized.removed },
+      details: { spaceId: body.spaceId, title: body.title },
     });
-    return c.json({ id, sanitized: { removed: sanitized.removed } }, 201);
+    return c.json({ id, stored: { size: checkedHtml.size } }, 201);
   })
   .post('/upload', async (c) => {
     const user = c.get('user');
@@ -137,27 +139,29 @@ export const documentsRouter = new Hono<AppEnv>()
     if (!/^text\/html\b/i.test(file.type || '') && !/\.html?$/i.test(file.name)) {
       throw badRequest('Only .html files can be uploaded.');
     }
+    const html = await file.text();
+    const metadata = extractHtmlMetadata(html, { fallbackTitle: title || file.name });
     const body = CreateDocumentSchema.parse({
-      title: title || file.name.replace(/\.html?$/i, ''),
+      title: title || metadata.title || file.name.replace(/\.html?$/i, ''),
       desc: descText,
       spaceId,
       visibility,
-      html: await file.text(),
+      html,
       tags: ['uploaded'],
       dot: 'accent',
     });
 
     await requireSpaceEditor(user, body.spaceId);
-    const sanitized = sanitizeHtml(body.html);
+    const checkedHtml = validateHtmlForStorage(body.html);
     const id = makeId('d');
     await db.insert(documents).values({
       id,
       spaceId: body.spaceId,
       authorId: user.id,
       title: body.title,
-      desc: body.desc,
+      desc: body.desc || metadata.summary,
       visibility: body.visibility,
-      html: sanitized.html,
+      html: checkedHtml.html,
       dot: body.dot,
       tags: body.tags,
       skillVersion: body.skillVersion ?? '1.2.4',
@@ -168,10 +172,10 @@ export const documentsRouter = new Hono<AppEnv>()
       action: 'document.upload',
       targetType: 'document',
       targetId: id,
-      details: { spaceId: body.spaceId, filename: file.name, removed: sanitized.removed },
+      details: { spaceId: body.spaceId, filename: file.name },
     });
 
-    return c.json({ id, filename: file.name, sanitized: { removed: sanitized.removed } }, 201);
+    return c.json({ id, filename: file.name, stored: { size: checkedHtml.size } }, 201);
   })
   .patch('/:id', async (c) => {
     const user = c.get('user');
@@ -193,7 +197,10 @@ export const documentsRouter = new Hono<AppEnv>()
     if (body.tags !== undefined) patch.tags = body.tags;
     if (body.skillVersion !== undefined) patch.skillVersion = body.skillVersion;
     if (body.html !== undefined) {
-      patch.html = sanitizeHtml(body.html).html;
+      patch.html = validateHtmlForStorage(body.html).html;
+      const metadata = extractHtmlMetadata(body.html, { fallbackTitle: body.title ?? doc.title });
+      if (body.title === undefined && metadata.title) patch.title = metadata.title;
+      if (body.desc === undefined && metadata.summary) patch.desc = metadata.summary;
     }
 
     await db.update(documents).set(patch).where(eq(documents.id, doc.id));

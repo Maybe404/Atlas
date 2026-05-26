@@ -11,11 +11,11 @@
 - ✅ Hono + Drizzle + SQLite 迁移已生成并验证，`db:migrate` / `db:seed` 可直接初始化。
 - ✅ 登录与 session 已有可用实现：密码登录、30 天 cookie session、双提交 CSRF token；未登录时本地仍会回落到 demo 用户林知远，方便首次体验。
 - ✅ 空间与文档权限真实执行：空间/文档查询按当前用户过滤，写操作要求 editor/admin 权限；文档可额外按成员分享 viewer/editor。
-- ✅ HTML 上传与清洗已接后端：`multipart/form-data` 上传、8 MB 大小限制、`sanitize-html` 清洗危险标签/事件属性/脚本 URL，并保存清洗后的 HTML。
+- ✅ HTML 上传已接后端：`multipart/form-data` 上传、8 MB 大小限制、自动识别标题/摘要，并保存原始 HTML 供 iframe sandbox 原样展示。
 - ✅ 回收站、Skill 版本、分享链接已有表和接口，UI 已接入恢复、过期清理、切换版本、公开链接与成员分享。
 - ✅ 分享链接支持到期、撤销、重置 token、访问计数、最近访问时间和 `allowIndexing` 标记。
 - ✅ 审计日志已记录登录/登出、空间、成员、文档、分享、Skill 变更，可通过管理员接口查看最近 100 条。
-- ✅ API 核心路径已有 Bun 测试：空间列表、上传清洗、密码登录、CSRF、权限矩阵、软删除/恢复、公开链接到期/撤销/轮换、回收站过期清理。
+- ✅ API 核心路径已有 Bun 测试：空间列表、上传原文保存与元数据识别、密码登录、CSRF、权限矩阵、软删除/恢复、公开链接到期/撤销/轮换、回收站过期清理。
 - ⚠️ 仍是 MVP：没有邮箱验证/SSO/组织级邀请流；前端 e2e、生产级 CSP/资源代理、完整审计查询 UI 仍待补。
 
 ## 本地环境要求
@@ -162,7 +162,7 @@ Seed 后示例账号如下，所有账号使用同一个演示密码：
 | `GET` | `/documents/public/:token` | 公开分享链接读取文档 |
 | `GET` | `/documents/:id` | 读取单篇文档 |
 | `POST` | `/documents` | 在可编辑空间创建文档 |
-| `POST` | `/documents/upload` | 上传 HTML 并清洗 |
+| `POST` | `/documents/upload` | 上传 HTML、识别标题摘要并保存原文 |
 | `PATCH` | `/documents/:id` | 文档 editor 更新文档 |
 | `DELETE` | `/documents/:id` | 文档 editor 移入回收站 |
 | `POST` | `/documents/:id/restore` | 管理员恢复回收站文档 |
@@ -211,7 +211,7 @@ bun run --filter @atlas/api db:seed
 - session cookie 为 `HttpOnly`、`SameSite=Lax`，有效期 30 天。
 - 真实 session 写请求要求 `X-Atlas-CSRF` header；前端 `api-client.ts` 自动从 `atlas_csrf` cookie 注入。
 - 成员响应会剔除 `passwordHash`。
-- HTML 清洗使用 `sanitize-html`，限制上传大小为 8 MB，丢弃脚本、iframe、表单控件、事件属性、`javascript:` URL 等危险内容。
+- HTML 存储限制大小为 8 MB，阅读页和预览页用 iframe sandbox 隔离原始 HTML，允许文档脚本在沙箱内运行以保持原始交互效果。
 - 公开链接支持禁用、撤销、到期、token 轮换、访问统计；已删除或过期文档不可公开访问。
 - 关键写操作会写入 `audit_logs`。
 

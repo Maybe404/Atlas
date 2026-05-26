@@ -475,6 +475,14 @@ html { transition: background 0.3s var(--ease-soft); }
   display: block;
   background: var(--canvas);
 }
+.upload-html-preview {
+  display: block;
+  width: 100%;
+  height: min(54vh, 560px);
+  border: 1px solid var(--hairline-2);
+  border-radius: var(--r-md);
+  background: white;
+}
 .reader-meta-bar {
   position: absolute;
   top: 14px;
