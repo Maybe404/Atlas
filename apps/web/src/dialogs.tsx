@@ -23,7 +23,7 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
       { type: 'cmd', id: 'theme',    title: '切换深色模式',          path: '⌘D',  icon: 'moon',    action: 'theme' },
       { type: 'cmd', id: 'trash',    title: '查看回收站',            path: '',     icon: 'trash',   go: { view: 'admin-settings' } },
       { type: 'cmd', id: 'new',      title: '新建文档…',             path: '⌘N',  icon: 'plus' },
-      { type: 'cmd', id: 'invite',   title: '邀请成员到工作区…',     path: '⌘⇧I', icon: 'members' },
+      { type: 'cmd', id: 'invite',   title: '新增成员到工作区…',     path: '⌘⇧I', icon: 'members' },
       { type: 'cmd', id: 'share',    title: '分享当前文档…',          path: '⌘⇧S', icon: 'share' },
       { type: 'cmd', id: 'skill',    title: '查看 Skill 版本',       path: '',     icon: 'layers',  go: { view: 'admin-settings' } },
     ];

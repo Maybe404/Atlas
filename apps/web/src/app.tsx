@@ -201,6 +201,7 @@ function App() {
   const ctx = { view, spaceId, docId };
   const isLogin = view === 'login';
   const isAdminView = ['admin-docs', 'admin-upload', 'admin-settings'].includes(view);
+  const lacksAdminAccess = isAdminView && user && user.role !== 'admin';
   const hasSidebar = SIDEBAR_VIEWS.has(view) && !isLogin;
   const isPublicView = view === 'public';
 
@@ -282,9 +283,10 @@ function App() {
         {isLoading && <div className="app-state-banner">正在同步工作区数据…</div>}
         {view === 'reader' && <ReaderView ctx={ctx} spaces={spaces} members={members} user={user} framedDoc={tweaks.framedDoc} chromeVisible={chromeVisible} onNavigate={navigate} onShare={() => openShare()} onLogin={openLogin}/>}
         {view === 'public' && <PublicDocumentView token={routeState.token}/>}
-        {view === 'admin-docs' && <AdminDocsView ctx={ctx} spaces={spaces} members={members} onNavigate={navigate} onShare={(id) => openShare(id)} pushToast={pushToast} mutations={mutations}/>}
-        {view === 'admin-upload' && <AdminUploadView ctx={ctx} spaces={spaces} onNavigate={navigate} pushToast={pushToast} mutations={mutations}/>}
-        {view === 'admin-settings' && <AdminSettingsView ctx={ctx} onNavigate={navigate} pushToast={pushToast} spaces={spaces} members={members} permissions={permissions} currentUser={currentUser} mutations={mutations} onEditSpace={(sp) => { setSpaceEditing(sp); setSpaceMgrOpen(true); }} onNewSpace={() => { setSpaceEditing('new'); setSpaceMgrOpen(true); }}/>}
+        {lacksAdminAccess && <AdminAccessDenied user={user} onNavigate={navigate}/>}
+        {!lacksAdminAccess && view === 'admin-docs' && <AdminDocsView ctx={ctx} spaces={spaces} members={members} onNavigate={navigate} onShare={(id) => openShare(id)} pushToast={pushToast} mutations={mutations}/>}
+        {!lacksAdminAccess && view === 'admin-upload' && <AdminUploadView ctx={ctx} spaces={spaces} onNavigate={navigate} pushToast={pushToast} mutations={mutations}/>}
+        {!lacksAdminAccess && view === 'admin-settings' && <AdminSettingsView ctx={ctx} onNavigate={navigate} pushToast={pushToast} spaces={spaces} members={members} permissions={permissions} currentUser={currentUser} mutations={mutations} onEditSpace={(sp) => { setSpaceEditing(sp); setSpaceMgrOpen(true); }} onNewSpace={() => { setSpaceEditing('new'); setSpaceMgrOpen(true); }}/>}
 
         {!isPublicView && <Dock view={view} onNavigate={navigate} visible={chromeVisible} magnify={tweaks.dockMagnify} isGuest={isGuest}/>}
       </main>
@@ -453,3 +455,28 @@ function DockGlyph({ kind, size = 18 }) {
 }
 
 export { App, Dock };
+
+function AdminAccessDenied({ user, onNavigate }) {
+  return (
+    <div className="main-card">
+      <div className="admin-denied">
+        <div className="reader-locked-glyph">
+          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <rect x="6" y="13" width="16" height="11" rx="2" stroke="currentColor" strokeWidth="1.6"/>
+            <path d="M9.5 13V10a4.5 4.5 0 0 1 9 0v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            <path d="M14 17v3.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>
+          </svg>
+        </div>
+        <h2 className="reader-locked-title">需要管理员权限</h2>
+        <p className="reader-locked-desc">
+          {user?.email || '当前账号'} 当前是{user?.role === 'editor' ? '编辑' : '仅读者'}，不能查看成员、权限和后台维护设置。请切换到管理员账号，或让管理员把这个成员的工作区角色改为管理员。
+        </p>
+        <div className="reader-locked-actions">
+          <button className="reader-locked-secondary" onClick={() => onNavigate({ view: 'reader' })}>
+            返回阅读
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

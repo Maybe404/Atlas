@@ -2222,11 +2222,13 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   display: block;
 }
 .rows-scroll .member-row,
+.rows-scroll .member-row-wrap,
 .rows-scroll .trash-row,
 .rows-scroll .skill-row,
 .rows-scroll .share-row,
 .rows-scroll .perm-row { width: 100%; }
 .rows-scroll .tree-anim-item + .tree-anim-item .member-row,
+.rows-scroll .tree-anim-item + .tree-anim-item .member-row-wrap,
 .rows-scroll .tree-anim-item + .tree-anim-item .trash-row,
 .rows-scroll .tree-anim-item + .tree-anim-item .skill-row,
 .rows-scroll .tree-anim-item + .tree-anim-item .share-row,
@@ -2441,6 +2443,14 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   position: relative;
   z-index: 60;
 }
+.member-row-wrap:has(.row-menu) {
+  position: relative;
+  z-index: 50;
+}
+.tree-anim-item:has(.member-row-menu) {
+  position: relative;
+  z-index: 50;
+}
 
 /* ─────────────────────────────────────────────────────────────────────────
    HTML EDITOR DIALOG
@@ -2597,7 +2607,74 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   gap: 14px;
   align-items: center;
 }
+.member-row-wrap {
+  position: relative;
+  background: var(--canvas);
+}
+.member-row-wrap .member-row {
+  border-top: 0;
+}
 .member-row-grid .member-meta { min-width: 0; }
+.member-actions {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+}
+.member-row-menu {
+  top: calc(100% + 6px);
+  right: 0;
+}
+.member-create-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(190px, 1.35fr) minmax(150px, 1fr) 132px auto;
+  align-items: end;
+  gap: 12px;
+  padding: 16px 22px;
+  background: var(--pearl);
+  border-bottom: 1px solid var(--hairline-2);
+}
+.field.compact {
+  margin-bottom: 0;
+  gap: 6px;
+}
+.field.compact .input {
+  padding: 8px 11px;
+  font-size: 13px;
+  background: var(--canvas);
+  border-color: var(--hairline-2);
+}
+.member-create-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  padding-bottom: 1px;
+}
+.member-password-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(180px, 260px) auto auto;
+  align-items: center;
+  gap: 10px;
+  padding: 0 22px 14px 72px;
+  background: var(--canvas);
+}
+.member-password-row .input {
+  padding: 8px 11px;
+  font-size: 13px;
+}
+.member-password-title {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+  color: var(--ink);
+}
+.member-password-sub {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--ink-4);
+  letter-spacing: -0.01em;
+}
 
 .access-trigger {
   display: inline-flex;
@@ -3611,6 +3688,23 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
     repeating-linear-gradient(135deg, transparent 0 12px, rgba(0,0,0,0.018) 12px 13px),
     var(--paper);
 }
+[data-theme="dark"] .admin-denied,
+.admin-denied {
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  text-align: center;
+  height: 100%;
+  min-height: 520px;
+  padding: 60px 24px;
+  background:
+    repeating-linear-gradient(135deg, transparent 0 12px, rgba(0,0,0,0.018) 12px 13px),
+    var(--paper);
+}
+[data-theme="dark"] .admin-denied {
+  background:
+    repeating-linear-gradient(135deg, transparent 0 12px, rgba(255,255,255,0.03) 12px 13px),
+    var(--paper);
+}
 [data-theme="dark"] .reader-locked {
   background:
     repeating-linear-gradient(135deg, transparent 0 12px, rgba(255,255,255,0.03) 12px 13px),
@@ -3684,4 +3778,30 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 .tree-node.locked .doc-title-text,
 .tree-node.locked .label {
   color: var(--ink-4);
+}
+
+@media (max-width: 980px) {
+  .member-row.member-row-grid {
+    grid-template-columns: 36px minmax(130px, 1fr) 128px auto;
+  }
+  .member-row-grid .access-cell {
+    grid-column: 2 / -1;
+  }
+  .member-row-grid .joined {
+    grid-column: 2 / 4;
+  }
+  .member-create-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .member-create-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+  .member-password-row {
+    grid-template-columns: 1fr;
+    padding-left: 22px;
+  }
+  .member-password-row .btn {
+    justify-content: center;
+  }
 }

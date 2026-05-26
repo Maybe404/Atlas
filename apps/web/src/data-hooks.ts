@@ -14,6 +14,13 @@ export const atlasKeys = {
 };
 
 export function useAtlasData() {
+  const meQuery = useQuery({
+    queryKey: atlasKeys.me,
+    queryFn: () => apiGet('/auth/me'),
+  });
+  const currentUser = meQuery.data?.user;
+  const isWorkspaceAdmin = currentUser?.role === 'admin';
+
   const spacesQuery = useQuery({
     queryKey: atlasKeys.spaces,
     queryFn: () => apiGet('/spaces'),
@@ -21,25 +28,28 @@ export function useAtlasData() {
   const membersQuery = useQuery({
     queryKey: atlasKeys.members,
     queryFn: () => apiGet('/members'),
+    enabled: isWorkspaceAdmin,
   });
   const permissionsQuery = useQuery({
     queryKey: atlasKeys.permissions,
     queryFn: () => apiGet('/members/permissions'),
-  });
-  const meQuery = useQuery({
-    queryKey: atlasKeys.me,
-    queryFn: () => apiGet('/auth/me'),
+    enabled: isWorkspaceAdmin,
   });
 
   return {
     spaces: spacesQuery.data || [],
-    members: membersQuery.data || [],
-    permissions: permissionsQuery.data || [],
-    currentUser: meQuery.data?.user,
+    members: isWorkspaceAdmin ? membersQuery.data || [] : [],
+    permissions: isWorkspaceAdmin ? permissionsQuery.data || [] : [],
+    currentUser,
     session: meQuery.data?.session,
     isLoading:
-      spacesQuery.isLoading || membersQuery.isLoading || permissionsQuery.isLoading || meQuery.isLoading,
-    error: spacesQuery.error || membersQuery.error || permissionsQuery.error || meQuery.error,
+      spacesQuery.isLoading ||
+      meQuery.isLoading ||
+      (isWorkspaceAdmin && (membersQuery.isLoading || permissionsQuery.isLoading)),
+    error:
+      spacesQuery.error ||
+      meQuery.error ||
+      (isWorkspaceAdmin ? membersQuery.error || permissionsQuery.error : null),
   };
 }
 
@@ -135,11 +145,34 @@ export function useAtlasMutations(pushToast) {
     },
   });
 
+  const createMember = useMutation({
+    mutationFn: (data) => apiJson('/members', 'POST', data),
+    onSuccess: async (data) => {
+      await queryClient.invalidateQueries({ queryKey: atlasKeys.members });
+      pushToast?.({ msg: '成员已新增', meta: data?.name });
+    },
+  });
+
   const updateMember = useMutation({
     mutationFn: ({ id, patch }) => apiJson(`/members/${id}`, 'PATCH', patch),
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
       await queryClient.invalidateQueries({ queryKey: atlasKeys.members });
-      pushToast?.({ msg: '工作区角色已更新' });
+      pushToast?.({
+        msg: variables.patch?.password ? '成员密码已更新' : '成员已更新',
+        meta: _data?.name,
+      });
+    },
+  });
+
+  const deleteMember = useMutation({
+    mutationFn: (id) => apiJson(`/members/${id}`, 'DELETE'),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: atlasKeys.members }),
+        queryClient.invalidateQueries({ queryKey: atlasKeys.permissions }),
+        queryClient.invalidateQueries({ queryKey: atlasKeys.spaces }),
+      ]);
+      pushToast?.({ msg: '成员已删除' });
     },
   });
 
@@ -171,7 +204,9 @@ export function useAtlasMutations(pushToast) {
     purgeExpiredTrash: () => purgeExpiredTrash.mutate(),
     uploadDocument: (formData, options) => uploadDocument.mutate(formData, options),
     setSpaceRole: (spaceId, memberId, role) => setSpaceRole.mutate({ spaceId, memberId, role }),
-    updateMember: (id, patch) => updateMember.mutate({ id, patch }),
+    createMember: (data, options) => createMember.mutate(data, options),
+    updateMember: (id, patch, options) => updateMember.mutate({ id, patch }, options),
+    deleteMember: (id, options) => deleteMember.mutate(id, options),
     updateShare: (documentId, patch) => updateShare.mutate({ documentId, patch }),
     activateSkill: (version) => activateSkill.mutate(version),
   };

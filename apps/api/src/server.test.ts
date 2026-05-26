@@ -14,7 +14,7 @@ await import('./db/seed');
 
 const { default: server } = await import('./server');
 const { db } = await import('./db/client');
-const { documents, shareLinks } = await import('./db/schema');
+const { documents, members, shareLinks } = await import('./db/schema');
 
 afterAll(() => {
   rmSync(testDb, { force: true });
@@ -123,6 +123,57 @@ describe('Atlas API', () => {
       },
     });
     expect(withCsrf.status).toBe(201);
+  });
+
+  test('creates members, updates their password, and deletes them', async () => {
+    const email = 'new.member@atlas.team';
+    const create = await request('/members', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: '新成员',
+        email,
+        password: 'first-password',
+        role: 'viewer',
+      }),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(create.status).toBe(201);
+    const created = (await create.json()) as { id: string; email: string; initials: string };
+    expect(created.email).toBe(email);
+    expect(created.initials).toBe('新成');
+
+    const login = await request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password: 'first-password' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(login.status).toBe(200);
+
+    const updatePassword = await request(`/members/${created.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ password: 'second-password' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(updatePassword.status).toBe(200);
+
+    const oldPassword = await request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password: 'first-password' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(oldPassword.status).toBe(401);
+
+    const newPassword = await request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password: 'second-password' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(newPassword.status).toBe(200);
+
+    const remove = await request(`/members/${created.id}`, { method: 'DELETE' });
+    expect(remove.status).toBe(200);
+    const [deleted] = await db.select().from(members).where(eq(members.id, created.id));
+    expect(deleted).toBeUndefined();
   });
 
   test('enforces document read and edit permission boundaries', async () => {

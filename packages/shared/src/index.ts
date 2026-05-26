@@ -84,9 +84,17 @@ export const LoginSchema = z.object({
   password: z.string().min(8).max(128).optional(),
 });
 
+export const CreateMemberSchema = z.object({
+  name: z.string().min(1).max(80),
+  email: z.string().email(),
+  password: z.string().min(8).max(128),
+  role: RoleSchema.default('viewer'),
+});
+
 export const UpdateMemberSchema = z.object({
   name: z.string().min(1).max(80).optional(),
   role: RoleSchema.optional(),
+  password: z.string().min(8).max(128).optional(),
 });
 
 export const SetSpaceMemberRoleSchema = z.object({
