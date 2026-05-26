@@ -16,11 +16,12 @@ type User = typeof members.$inferSelect;
 type SpaceRow = typeof spaces.$inferSelect;
 type DocumentRow = typeof documents.$inferSelect;
 
-export function isAdmin(user: User) {
-  return user.role === 'admin';
+export function isAdmin(user?: User) {
+  return user?.role === 'admin';
 }
 
-export async function getSpaceRole(user: User, spaceId: string) {
+export async function getSpaceRole(user: User | undefined, spaceId: string) {
+  if (!user) return null;
   if (isAdmin(user)) return 'editor' as const;
   const [membership] = await db
     .select()
@@ -41,9 +42,12 @@ export async function requireSpaceEditor(user: User, spaceId: string) {
   return role;
 }
 
-export async function canReadDocument(user: User, doc: DocumentRow) {
+export async function canReadDocument(user: User | undefined, doc: DocumentRow) {
   if (doc.deletedAt) return false;
+  if (doc.visibility === 'public') return true;
+  if (!user) return false;
   if (isAdmin(user) || doc.authorId === user.id) return true;
+  if (doc.visibility === 'private') return false;
   const spaceRole = await getSpaceRole(user, doc.spaceId);
   if (spaceRole) return true;
   const [direct] = await db
@@ -53,7 +57,7 @@ export async function canReadDocument(user: User, doc: DocumentRow) {
   return Boolean(direct);
 }
 
-export async function requireDocumentRead(user: User, docId: string) {
+export async function requireDocumentRead(user: User | undefined, docId: string) {
   const [doc] = await db
     .select()
     .from(documents)
@@ -62,9 +66,11 @@ export async function requireDocumentRead(user: User, docId: string) {
   return doc;
 }
 
-export async function canEditDocument(user: User, doc: DocumentRow) {
+export async function canEditDocument(user: User | undefined, doc: DocumentRow) {
   if (doc.deletedAt) return false;
+  if (!user) return false;
   if (isAdmin(user) || doc.authorId === user.id) return true;
+  if (doc.visibility === 'private') return false;
   const spaceRole = await getSpaceRole(user, doc.spaceId);
   if (spaceRole === 'editor') return true;
   const [direct] = await db
@@ -81,7 +87,8 @@ export async function requireDocumentEditor(user: User, docId: string) {
   return doc;
 }
 
-export async function listReadableSpaces(user: User) {
+export async function listReadableSpaces(user: User | undefined) {
+  if (!user) return [];
   if (isAdmin(user)) {
     return db.select().from(spaces);
   }
@@ -95,7 +102,16 @@ export async function listReadableSpaces(user: User) {
   return rows.map((row) => row.space);
 }
 
-export async function listReadableDocuments(user: User, space?: SpaceRow) {
+export async function listReadableDocuments(user: User | undefined, space?: SpaceRow) {
+  const spaceScope = space ? [eq(documents.spaceId, space.id)] : [];
+
+  if (!user) {
+    return db
+      .select()
+      .from(documents)
+      .where(and(eq(documents.visibility, 'public'), isNull(documents.deletedAt), ...spaceScope));
+  }
+
   if (isAdmin(user)) {
     if (space) {
       return db
@@ -106,15 +122,26 @@ export async function listReadableDocuments(user: User, space?: SpaceRow) {
     return db.select().from(documents).where(isNull(documents.deletedAt));
   }
 
-  const rows = await db
+  const publicRows = await db
+    .select({ doc: documents })
+    .from(documents)
+    .where(and(eq(documents.visibility, 'public'), isNull(documents.deletedAt), ...spaceScope));
+
+  const authorRows = await db
+    .select({ doc: documents })
+    .from(documents)
+    .where(and(eq(documents.authorId, user.id), isNull(documents.deletedAt), ...spaceScope));
+
+  const spaceRows = await db
     .select({ doc: documents })
     .from(documents)
     .innerJoin(spaceMembers, eq(spaceMembers.spaceId, documents.spaceId))
     .where(
       and(
         eq(spaceMembers.memberId, user.id),
+        eq(documents.visibility, 'invite'),
         isNull(documents.deletedAt),
-        ...(space ? [eq(documents.spaceId, space.id)] : []),
+        ...spaceScope,
       ),
     );
 
@@ -125,13 +152,14 @@ export async function listReadableDocuments(user: User, space?: SpaceRow) {
     .where(
       and(
         eq(documentMembers.memberId, user.id),
+        eq(documents.visibility, 'invite'),
         isNull(documents.deletedAt),
-        ...(space ? [eq(documents.spaceId, space.id)] : []),
+        ...spaceScope,
       ),
     );
 
   const seen = new Set<string>();
-  return [...rows, ...directRows].flatMap((row) => {
+  return [...publicRows, ...authorRows, ...spaceRows, ...directRows].flatMap((row) => {
     if (seen.has(row.doc.id)) return [];
     seen.add(row.doc.id);
     return [row.doc];

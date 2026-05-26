@@ -9,7 +9,7 @@
 - ✅ 前端 UI 已接真实 API：React Query 拉取空间、文档、成员、权限、回收站、Skill 版本与分享状态，CRUD 通过 mutation 同步到 SQLite。
 - ✅ URL 路由已落地：Reader、管理、上传、设置、公开链接都有可刷新地址。
 - ✅ Hono + Drizzle + SQLite 迁移已生成并验证，`db:migrate` / `db:seed` 可直接初始化。
-- ✅ 登录与 session 已有可用实现：密码登录、30 天 cookie session、双提交 CSRF token；未登录时本地仍会回落到 demo 用户林知远，方便首次体验。
+- ✅ 登录与 session 已有可用实现：密码登录、30 天 cookie session、双提交 CSRF token；未登录时按游客处理，只返回公开文章。
 - ✅ 空间与文档权限真实执行：空间/文档查询按当前用户过滤，写操作要求 editor/admin 权限；文档可额外按成员分享 viewer/editor。
 - ✅ HTML 上传已接后端：`multipart/form-data` 上传、8 MB 大小限制、自动识别标题/摘要，并保存原始 HTML 供 iframe sandbox 原样展示。
 - ✅ 回收站、Skill 版本、分享链接已有表和接口，UI 已接入恢复、过期清理、切换版本、公开链接与成员分享。
@@ -80,7 +80,7 @@ Seed 后示例账号如下，所有账号使用同一个演示密码：
 | 叶清 | `ye@atlas.team` | `editor` | `atlas-demo-password` |
 | 冯之 | `feng@atlas.team` | `viewer` | `atlas-demo-password` |
 
-未带 session cookie 时，API 会在本地数据存在 `u1` 的情况下自动使用 demo 用户，这让首次打开页面不需要先做登录页。通过 `/auth/login` 登录后会设置真实 `atlas_session` cookie 和 `atlas_csrf` cookie。
+未带 session cookie 时，API 会按游客处理：只能读取公开文章。通过 `/auth/login` 登录后会设置真实 `atlas_session` cookie 和 `atlas_csrf` cookie。
 
 ## 常用脚本
 
@@ -177,7 +177,7 @@ Seed 后示例账号如下，所有账号使用同一个演示密码：
 | `POST` | `/skills` | 管理员新增 Skill 版本 |
 | `POST` | `/skills/:version/activate` | 管理员切换启用版本 |
 
-非 `GET` 请求在真实 cookie session 下必须带 `X-Atlas-CSRF` header，值来自 `atlas_csrf` cookie。demo session 为了本地无登录体验跳过 CSRF。
+非 `GET` 请求在 cookie session 下必须带 `X-Atlas-CSRF` header，值来自 `atlas_csrf` cookie。
 
 ## 权限模型
 
@@ -187,7 +187,7 @@ Atlas 有三层权限：
 - 空间角色：`editor`、`viewer`、`null`。空间 editor 可在该空间创建/修改文档；viewer 只能读。
 - 文档成员角色：`editor`、`viewer`、`null`。文档成员分享可以给没有空间权限的人单篇访问权。
 
-读取文档时，管理员、作者、空间成员或文档成员都可读；编辑文档时，管理员、作者、空间 editor 或文档 editor 可写。软删除后的文档不再从普通读取接口返回，只能由管理员从回收站恢复或永久删除。
+读取文档时，公开文章对任何人可读；受邀文章对管理员、作者、空间成员或文档成员可读；私密文章仅管理员和作者可读。编辑文档时，公开/受邀文章允许管理员、作者、空间 editor 或文档 editor 可写；私密文章仅管理员和作者可写。软删除后的文档不再从普通读取接口返回，只能由管理员从回收站恢复或永久删除。
 
 ## 数据库与迁移
 
@@ -248,8 +248,8 @@ bun run --filter @atlas/api db:seed
 **Q: `bun:sqlite` 在 Windows 报错？**
 原生不支持，必须用 WSL2。
 
-**Q: 登录时为什么可以不先打开登录页？**
-这是本地 demo 行为：没有 session 时 API 会尝试使用 seed 里的 `u1`。真实登录接口仍可用，并会设置 cookie session 与 CSRF token。
+**Q: 不登录可以看到什么？**
+未登录时是游客身份，只能查看公开文章。受邀和私密文章需要登录后按空间权限、单篇邀请、作者或管理员身份判断。
 
 **Q: 改了 `apps/api/src/db/schema.ts` 后怎么办？**
 跑 `bun run --filter @atlas/api db:generate` 生成新迁移，再 `db:migrate` 应用。改完建议接着跑 `bun test apps/api/src`。

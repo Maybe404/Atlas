@@ -6,6 +6,7 @@ import { extractHtmlMetadata } from '@atlas/shared';
 import { I, AnimatedScrollList } from './chrome';
 import { apiGet } from './api-client';
 import { atlasKeys } from './data-hooks';
+import { visibilityLabel } from './labels';
 
 const _I2 = I;
 
@@ -202,7 +203,7 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
                   <div style={{background:'var(--pearl)', borderRadius:'var(--r-md)', padding:'14px 16px'}}>
                     <div style={{fontSize: 11, color: 'var(--ink-4)', textTransform:'uppercase', letterSpacing:'0.04em', marginBottom: 4, fontWeight: 500}}>分享设置</div>
                     <div style={{fontSize: 13.5, display:'flex', alignItems:'center', gap: 8}}>
-                      <span className={"vis-chip " + meta.visibility}>{meta.visibility==='public'?'Public':meta.visibility==='invite'?'Invite':'Private'}</span>
+                      <span className={"vis-chip " + meta.visibility}>{visibilityLabel(meta.visibility)}</span>
                       <span className="mono" style={{fontSize: 11, color:'var(--ink-3)'}}>{spaces.find(s=>s.id===meta.spaceId)?.name}</span>
                     </div>
                   </div>

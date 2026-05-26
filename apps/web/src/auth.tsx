@@ -48,7 +48,8 @@ export function canRead(doc, user) {
   if (doc.visibility === 'public') return true;
   if (!user) return false;
   if (user.role === 'admin') return true;
-  return true;
+  if (doc.author === user.id) return true;
+  return doc.visibility === 'invite';
 }
 
 export function firstPublicDoc(spaces = []) {

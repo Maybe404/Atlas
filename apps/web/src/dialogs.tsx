@@ -183,6 +183,9 @@ function ShareDialog({ open, documentId, members: workspaceMembers = [], current
 
   const share = shareQuery.data;
   const roster = share?.members || [];
+  const directViewers = roster.filter(mem => mem.role === 'viewer');
+  const directEditors = roster.filter(mem => mem.role === 'editor');
+  const canEditShare = share?.canEdit !== false;
   const publicOn = Boolean(share?.public?.enabled);
   const url = share?.public?.token ? `${window.location.origin}/share/${share.public.token}` : '';
   const docTitle = documentId ? `文档 ${documentId}` : '当前文档';
@@ -222,6 +225,7 @@ function ShareDialog({ open, documentId, members: workspaceMembers = [], current
                   style={{flex:1}}
                   placeholder="按姓名或邮箱…"
                   value={emailInput}
+                  disabled={!canEditShare}
                   onChange={e => setEmailInput(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') addMember(); }}
                   list="atlas-members"
@@ -229,20 +233,29 @@ function ShareDialog({ open, documentId, members: workspaceMembers = [], current
                 <datalist id="atlas-members">
                   {workspaceMembers.map(m => <option key={m.id} value={m.email}>{m.name}</option>)}
                 </datalist>
-                <button className="btn primary" onClick={addMember}>邀请</button>
+                <button className="btn primary" disabled={!canEditShare} onClick={addMember}>邀请</button>
               </div>
 
-              <div style={{fontSize: 11, color: 'var(--ink-4)', textTransform:'uppercase', letterSpacing:'0.04em', marginBottom: 6, fontWeight: 500}}>有访问权 · {roster.length + 1}</div>
+              <div className="share-access-summary">
+                <div>
+                  <div className="summary-kicker">单独邀请</div>
+                  <div className="summary-title">{roster.length ? `${roster.length} 位成员` : '暂无成员'}</div>
+                </div>
+                <div className="summary-counts">
+                  <span>{directViewers.length} 位可读</span>
+                  <span>{directEditors.length} 位可编辑</span>
+                </div>
+              </div>
               <div className="share-roster">
                 <AnimatedScrollList className="rows-scroll">
-                  <div className="share-row">
-                    <span className="avatar" style={{background:'var(--blue)'}}>{currentUser?.initials || 'ME'}</span>
-                    <div>
-                      <div className="name">{currentUser?.name || '当前用户'}</div>
-                      <div className="email mono">{currentUser?.email || ''}</div>
+                  {roster.length === 0 && (
+                    <div className="share-row share-row-empty">
+                      <div>
+                        <div className="name">还没有单独邀请成员</div>
+                        <div className="email">拥有空间权限的成员仍可按空间规则阅读。需要给空间外成员开放时，在上方输入姓名或邮箱。</div>
+                      </div>
                     </div>
-                    <span className="dim" style={{marginLeft:'auto', fontSize: 12}}>作者</span>
-                  </div>
+                  )}
                   {roster.map(mem => {
                     return (
                       <div key={mem.id} className="share-row">
@@ -252,13 +265,23 @@ function ShareDialog({ open, documentId, members: workspaceMembers = [], current
                           <div className="email mono">{mem.email}</div>
                         </div>
                         <select className="role-select" value={mem.role}
+                                disabled={!canEditShare}
                                 onChange={e => mutations.updateShare(documentId, { members: [{ memberId: mem.id, role: e.target.value }] })}>
                           <option value="editor">可编辑</option>
                           <option value="viewer">仅可读</option>
+                          <option value="">移除</option>
                         </select>
                       </div>
                     );
                   })}
+                  <div className="share-row share-row-owner">
+                    <span className="avatar" style={{background:'var(--blue)'}}>{currentUser?.initials || 'ME'}</span>
+                    <div>
+                      <div className="name">{currentUser?.name || '当前用户'}</div>
+                      <div className="email mono">{currentUser?.email || ''}</div>
+                    </div>
+                    <span className="share-badge">管理员/作者</span>
+                  </div>
                   {workspaceMembers.filter(mem => !roster.some(r => r.id === mem.id) && mem.id !== currentUser?.id).slice(0, 6).map(mem => (
                     <div key={'sg-' + mem.id} className="share-row" style={{opacity: 0.78}}>
                       <span className="avatar" style={{background: 'var(--parchment)', color:'var(--ink-3)'}}>{mem.initials}</span>
@@ -277,7 +300,11 @@ function ShareDialog({ open, documentId, members: workspaceMembers = [], current
           {tab === 'public' && (
             <>
               <div style={{display:'flex', alignItems:'flex-start', gap: 14, padding:'4px 0 18px', borderBottom:'1px solid var(--hairline-2)', marginBottom: 18}}>
-                <button className={"toggle " + (publicOn ? 'on' : '')} onClick={() => mutations.updateShare(documentId, { publicEnabled: !publicOn })}></button>
+                <button
+                  className={"toggle " + (publicOn ? 'on' : '')}
+                  disabled={!canEditShare}
+                  onClick={() => mutations.updateShare(documentId, { publicEnabled: !publicOn })}
+                ></button>
                 <div>
                   <div style={{fontSize: 14, fontWeight: 500, letterSpacing:'-0.012em'}}>启用公开链接</div>
                   <div style={{fontSize: 12.5, color: 'var(--ink-3)', marginTop: 2}}>任何拥有链接的人都可阅读，无需登录。</div>
@@ -301,21 +328,21 @@ function ShareDialog({ open, documentId, members: workspaceMembers = [], current
                   label="显示作者署名"
                   desc="在公开页面的脚注与索引中显示创建者"
                   value={share?.public?.showAuthor ?? true}
-                  disabled={!publicOn}
+                  disabled={!publicOn || !canEditShare}
                   onChange={(value) => mutations.updateShare(documentId, { showAuthor: value })}
                 />
                 <PublicToggle
                   label="允许搜索引擎索引"
                   desc="让公开文档出现在搜索结果中"
                   value={share?.public?.allowIndexing ?? false}
-                  disabled={!publicOn}
+                  disabled={!publicOn || !canEditShare}
                   onChange={(value) => mutations.updateShare(documentId, { allowIndexing: value })}
                 />
                 <PublicToggle
                   label="30 天后自动失效"
                   desc="到期后链接自动停用，需手动重新启用"
                   value={Boolean(share?.public?.expiresAt)}
-                  disabled={!publicOn}
+                  disabled={!publicOn || !canEditShare}
                   onChange={(value) => {
                     const expiresAt = value ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() : null;
                     mutations.updateShare(documentId, { expiresAt });
@@ -324,14 +351,14 @@ function ShareDialog({ open, documentId, members: workspaceMembers = [], current
                 <div style={{display:'flex', gap: 8, marginTop: 4}}>
                   <button
                     className="btn secondary"
-                    disabled={!publicOn}
+                    disabled={!publicOn || !canEditShare}
                     onClick={() => mutations.updateShare(documentId, { rotateToken: true, publicEnabled: true })}
                   >
                     <_I3.refresh/><span>重置链接</span>
                   </button>
                   <button
                     className="btn ghost danger"
-                    disabled={!publicOn}
+                    disabled={!publicOn || !canEditShare}
                     onClick={() => mutations.updateShare(documentId, { publicEnabled: false })}
                   >
                     <_I3.trash/><span>撤销公开链接</span>

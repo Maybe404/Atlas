@@ -6,7 +6,7 @@ import { db } from '../db/client';
 import { members, sessions } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
-import { CSRF_COOKIE, createSession, SESSION_COOKIE } from '../lib/auth';
+import { CSRF_COOKIE, createSession, requireUser, SESSION_COOKIE } from '../lib/auth';
 import { forbidden, notFound, unauthorized } from '../lib/http-error';
 import { isAdmin } from '../lib/permissions';
 import { toPublicMember } from '../lib/serializers';
@@ -14,11 +14,11 @@ import { toPublicMember } from '../lib/serializers';
 export const authRouter = new Hono<AppEnv>()
   .get('/me', (c) =>
     c.json({
-      user: toPublicMember(c.get('user')),
+      user: c.get('user') ? toPublicMember(c.get('user')!) : null,
       session: {
-        id: c.get('sessionId'),
-        csrfToken: c.get('sessionId') === 'demo' ? null : c.get('csrfToken'),
-        demo: c.get('sessionId') === 'demo',
+        id: c.get('sessionId') ?? null,
+        csrfToken: c.get('csrfToken') ?? null,
+        demo: false,
       },
     }),
   )
@@ -70,7 +70,7 @@ export const authRouter = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
   .get('/audit', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can view audit logs.');
     const rows = await db.query.auditLogs.findMany({
       orderBy: (logs, { desc }) => [desc(logs.createdAt)],

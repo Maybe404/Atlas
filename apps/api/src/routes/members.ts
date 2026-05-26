@@ -5,6 +5,7 @@ import { db } from '../db/client';
 import { documents, members, shareLinks, skillVersions, spaceMembers } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
+import { requireUser } from '../lib/auth';
 import { conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId } from '../lib/id';
 import { isAdmin } from '../lib/permissions';
@@ -32,13 +33,13 @@ function joinedMonth() {
 
 export const membersRouter = new Hono<AppEnv>()
   .get('/', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can list all members.');
     const rows = await db.select().from(members);
     return c.json(rows.map(toPublicMember));
   })
   .post('/', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can create members.');
 
     const body = CreateMemberSchema.parse(await c.req.json());
@@ -70,7 +71,7 @@ export const membersRouter = new Hono<AppEnv>()
     return c.json(toPublicMember(member), 201);
   })
   .get('/permissions', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can view all permissions.');
     const rows = await db
       .select({
@@ -82,7 +83,7 @@ export const membersRouter = new Hono<AppEnv>()
     return c.json(rows);
   })
   .patch('/:id', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can edit members.');
     const id = c.req.param('id');
     const body = UpdateMemberSchema.parse(await c.req.json());
@@ -112,7 +113,7 @@ export const membersRouter = new Hono<AppEnv>()
     return c.json(toPublicMember(member));
   })
   .delete('/:id', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can delete members.');
     const id = c.req.param('id');
     if (id === user.id) throw forbidden('You cannot delete your own member account.');

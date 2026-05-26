@@ -6,6 +6,7 @@ import { extractHtmlMetadata } from '@atlas/shared';
 import { I, AnimatedScrollList } from './chrome';
 import { apiGet } from './api-client';
 import { canRead, firstPublicDoc } from './auth';
+import { visibilityLabel } from './labels';
 
 const _I = I;
 
@@ -85,7 +86,7 @@ function ReaderView({ ctx, spaces = [], members = [], user, framedDoc, chromeVis
         <span className="author">{author?.name}</span>
         <span className="sep">·</span>
         <span className="mono dim" style={{fontSize:11}}>{doc.updated}</span>
-        {allowed ? (
+        {allowed && user && doc.canEdit ? (
           <>
             <button className="pill-btn ghost" onClick={() => {
               navigator.clipboard?.writeText('atlas.team/d/' + doc.id);
@@ -98,11 +99,11 @@ function ReaderView({ ctx, spaces = [], members = [], user, framedDoc, chromeVis
               <_I.share/><span>分享</span>
             </button>
           </>
-        ) : (
+        ) : !allowed ? (
           <span className={"vis-chip reader-lock-chip " + doc.visibility}>
             {doc.visibility === 'invite' ? '需登录 · 邀请制' : '需登录 · 私密'}
           </span>
-        )}
+        ) : null}
       </div>
 
       <div className={"reader-iframe-wrap " + (framedDoc ? "framed" : "")}>
@@ -259,7 +260,7 @@ function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }) {
                 <div className="card-head">
                   <div className={"dot " + dotClass(doc.dot)}></div>
                   <span className={"vis-chip " + doc.visibility}>
-                    {doc.visibility === 'public' ? 'Public' : doc.visibility === 'invite' ? 'Invite' : 'Private'}
+                    {visibilityLabel(doc.visibility)}
                   </span>
                 </div>
                 <h3>{doc.title}</h3>
@@ -536,7 +537,7 @@ function AdminDocsView({ ctx, spaces = [], members = [], onNavigate, onShare, pu
                 </div>
                 <div className="updated">{doc.updated}</div>
                 <span className={"vis-chip " + doc.visibility}>
-                  {doc.visibility==='public'?'Public':doc.visibility==='invite'?'Invite':'Private'}
+                  {visibilityLabel(doc.visibility)}
                 </span>
                 <div className="row-actions" style={{position:'relative'}}>
                   <button className="icon-btn" title="编辑内容" onClick={(e)=>{e.stopPropagation(); openEditor(doc);}}>

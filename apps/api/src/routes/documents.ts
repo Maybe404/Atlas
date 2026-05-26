@@ -11,6 +11,7 @@ import { db } from '../db/client';
 import { documentMembers, documents, members, shareLinks, spaces } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
+import { requireUser } from '../lib/auth';
 import { addDaysToIso, displayDate, nowIso } from '../lib/dates';
 import { badRequest, conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId, makeToken } from '../lib/id';
@@ -57,6 +58,16 @@ async function hydrateDoc(doc: typeof documents.$inferSelect) {
   return toDoc({ doc, space, author });
 }
 
+async function hydrateDocForUser(
+  doc: typeof documents.$inferSelect,
+  user: typeof members.$inferSelect | undefined,
+) {
+  return {
+    ...(await hydrateDoc(doc)),
+    canEdit: await canEditDocument(user, doc),
+  };
+}
+
 export const documentsRouter = new Hono<AppEnv>()
   .get('/', async (c) => {
     const user = c.get('user');
@@ -65,7 +76,7 @@ export const documentsRouter = new Hono<AppEnv>()
     return c.json(result);
   })
   .get('/trash', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can view trash.');
 
     const rows = await db
@@ -94,10 +105,10 @@ export const documentsRouter = new Hono<AppEnv>()
   .get('/:id', async (c) => {
     const user = c.get('user');
     const doc = await requireDocumentRead(user, c.req.param('id'));
-    return c.json(await hydrateDoc(doc));
+    return c.json(await hydrateDocForUser(doc, user));
   })
   .post('/', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     const body = CreateDocumentSchema.parse(await c.req.json());
     await requireSpaceEditor(user, body.spaceId);
 
@@ -127,7 +138,7 @@ export const documentsRouter = new Hono<AppEnv>()
     return c.json({ id, stored: { size: checkedHtml.size } }, 201);
   })
   .post('/upload', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     const form = await c.req.formData();
     const file = form.get('file');
     const title = String(form.get('title') || '');
@@ -178,7 +189,7 @@ export const documentsRouter = new Hono<AppEnv>()
     return c.json({ id, filename: file.name, stored: { size: checkedHtml.size } }, 201);
   })
   .patch('/:id', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     const doc = await requireDocumentEditor(user, c.req.param('id'));
     const body = UpdateDocumentSchema.parse(await c.req.json());
 
@@ -214,7 +225,7 @@ export const documentsRouter = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
   .delete('/:id', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     const doc = await requireDocumentEditor(user, c.req.param('id'));
     const deletedAt = nowIso();
     await db
@@ -236,7 +247,7 @@ export const documentsRouter = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
   .post('/:id/restore', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can restore deleted documents.');
 
     const [doc] = await db
@@ -259,7 +270,7 @@ export const documentsRouter = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
   .delete('/:id/permanent', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can permanently delete documents.');
     const id = c.req.param('id');
     await db.delete(documents).where(eq(documents.id, id));
@@ -272,7 +283,7 @@ export const documentsRouter = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
   .post('/trash/purge-expired', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can purge deleted documents.');
     const now = nowIso();
     const expired = await db
@@ -337,7 +348,7 @@ export const documentsRouter = new Hono<AppEnv>()
     });
   })
   .patch('/:id/share', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     const doc = await requireDocumentEditor(user, c.req.param('id'));
     const body = UpdateDocumentShareSchema.parse(await c.req.json());
     const [existing] = await db.select().from(shareLinks).where(eq(shareLinks.documentId, doc.id));
@@ -421,7 +432,7 @@ export const documentsRouter = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
   .put('/:id/members/:memberId', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     const doc = await requireDocumentEditor(user, c.req.param('id'));
     const memberId = c.req.param('memberId');
     const body = SetDocumentMemberRoleSchema.parse({ ...(await c.req.json()), memberId });

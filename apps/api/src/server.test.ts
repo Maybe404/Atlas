@@ -14,7 +14,7 @@ await import('./db/seed');
 
 const { default: server } = await import('./server');
 const { db } = await import('./db/client');
-const { documents, members, shareLinks } = await import('./db/schema');
+const { documentMembers, documents, members, shareLinks } = await import('./db/schema');
 
 afterAll(() => {
   rmSync(testDb, { force: true });
@@ -27,35 +27,62 @@ async function request(path: string, init?: RequestInit) {
 }
 
 type ApiSpace = { children: unknown[] };
-type ApiDoc = { id: string; title: string; desc: string; html: string; publicLink: { token: string } };
+type ApiDoc = {
+  id: string;
+  title: string;
+  desc: string;
+  html: string;
+  publicLink: { token: string };
+};
 type CreatedDoc = { id: string; stored: { size: number } };
 
+async function loginAs(email = 'lin@atlas.team') {
+  const login = await request('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password: 'atlas-demo-password' }),
+    headers: { 'content-type': 'application/json' },
+  });
+  const body = (await login.json()) as { csrfToken: string };
+  const cookies = login.headers
+    .getSetCookie()
+    .map((item) => item.split(';')[0])
+    .join('; ');
+  return {
+    csrfToken: body.csrfToken,
+    cookie: cookies,
+    headers: { cookie: cookies, 'x-atlas-csrf': body.csrfToken },
+  };
+}
+
 describe('Atlas API', () => {
-  test('lists spaces with seeded documents for the demo user', async () => {
+  test('anonymous visitors only see public documents in the space tree', async () => {
     const res = await request('/spaces');
     expect(res.status).toBe(200);
     const spaces = (await res.json()) as ApiSpace[];
-    expect(spaces).toHaveLength(4);
-    expect(spaces.at(0)?.children.length).toBeGreaterThan(0);
+    const docs = spaces.flatMap((space) => space.children as { visibility: string }[]);
+    expect(docs.length).toBeGreaterThan(0);
+    expect(docs.every((doc) => doc.visibility === 'public')).toBe(true);
   });
 
   test('uploads raw HTML and infers document metadata', async () => {
+    const admin = await loginAs();
     const rawHtml =
       '<!doctype html><html><head><title>Smoke Title</title></head><body><h1>Fallback</h1><script>window.__smoke = 1</script><p onclick="x()">A useful generated summary for the uploaded HTML document.</p></body></html>';
     const form = new FormData();
-    form.set(
-      'file',
-      new File([rawHtml], 'smoke.html', { type: 'text/html' }),
-    );
+    form.set('file', new File([rawHtml], 'smoke.html', { type: 'text/html' }));
     form.set('spaceId', 's1');
     form.set('visibility', 'private');
 
-    const upload = await request('/documents/upload', { method: 'POST', body: form });
+    const upload = await request('/documents/upload', {
+      method: 'POST',
+      body: form,
+      headers: admin.headers,
+    });
     expect(upload.status).toBe(201);
     const created = (await upload.json()) as CreatedDoc;
     expect(created.stored.size).toBeGreaterThan(0);
 
-    const doc = await request(`/documents/${created.id}`);
+    const doc = await request(`/documents/${created.id}`, { headers: { cookie: admin.cookie } });
     expect(doc.status).toBe(200);
     const body = (await doc.json()) as ApiDoc;
     expect(body.title).toBe('Smoke Title');
@@ -122,6 +149,7 @@ describe('Atlas API', () => {
   });
 
   test('creates members, updates their password, and deletes them', async () => {
+    const admin = await loginAs();
     const email = 'new.member@atlas.team';
     const create = await request('/members', {
       method: 'POST',
@@ -131,7 +159,7 @@ describe('Atlas API', () => {
         password: 'first-password',
         role: 'viewer',
       }),
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...admin.headers },
     });
     expect(create.status).toBe(201);
     const created = (await create.json()) as { id: string; email: string; initials: string };
@@ -148,7 +176,7 @@ describe('Atlas API', () => {
     const updatePassword = await request(`/members/${created.id}`, {
       method: 'PATCH',
       body: JSON.stringify({ password: 'second-password' }),
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...admin.headers },
     });
     expect(updatePassword.status).toBe(200);
 
@@ -166,64 +194,97 @@ describe('Atlas API', () => {
     });
     expect(newPassword.status).toBe(200);
 
-    const remove = await request(`/members/${created.id}`, { method: 'DELETE' });
+    const remove = await request(`/members/${created.id}`, {
+      method: 'DELETE',
+      headers: admin.headers,
+    });
     expect(remove.status).toBe(200);
     const [deleted] = await db.select().from(members).where(eq(members.id, created.id));
     expect(deleted).toBeUndefined();
   });
 
   test('lists only members assigned to a space', async () => {
-    const res = await request('/spaces/s1/members');
+    const admin = await loginAs();
+
+    const res = await request('/spaces/s1/members', { headers: { cookie: admin.cookie } });
     expect(res.status).toBe(200);
     const roster = (await res.json()) as { id: string; spaceRole: string }[];
     expect(roster.length).toBeGreaterThan(0);
-    expect(roster.every((member) => member.spaceRole === 'viewer' || member.spaceRole === 'editor')).toBe(
-      true,
-    );
+    expect(
+      roster.every((member) => member.spaceRole === 'viewer' || member.spaceRole === 'editor'),
+    ).toBe(true);
     expect(roster.map((member) => member.id)).not.toContain('u3');
   });
 
   test('enforces document read and edit permission boundaries', async () => {
-    const viewerSession = await request('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email: 'he@atlas.team', password: 'atlas-demo-password' }),
-      headers: { 'content-type': 'application/json' },
-    });
-    const cookies = viewerSession.headers
-      .getSetCookie()
-      .map((item) => item.split(';')[0])
-      .join('; ');
+    const viewer = await loginAs('he@atlas.team');
 
-    const noAccess = await request('/documents/d6', { headers: { cookie: cookies } });
+    const noAccess = await request('/documents/d6', { headers: { cookie: viewer.cookie } });
     expect(noAccess.status).toBe(404);
 
-    const readable = await request('/documents/d2', { headers: { cookie: cookies } });
+    const readable = await request('/documents/d3', { headers: { cookie: viewer.cookie } });
     expect(readable.status).toBe(200);
 
-    const cannotEdit = await request('/documents/d2', {
+    const cannotEdit = await request('/documents/d3', {
       method: 'PATCH',
       body: JSON.stringify({ title: 'Viewer edit attempt' }),
-      headers: { 'content-type': 'application/json', cookie: cookies },
+      headers: { 'content-type': 'application/json', ...viewer.headers },
     });
     expect(cannotEdit.status).toBe(403);
+
+    const privateDoc = await request('/documents/d2', { headers: { cookie: viewer.cookie } });
+    expect(privateDoc.status).toBe(404);
+  });
+
+  test('document invitations grant single-document access without space access', async () => {
+    const viewer = await loginAs('he@atlas.team');
+
+    expect((await request('/documents/d6', { headers: { cookie: viewer.cookie } })).status).toBe(
+      404,
+    );
+
+    await db.insert(documentMembers).values({ documentId: 'd6', memberId: 'u5', role: 'viewer' });
+
+    const readable = await request('/documents/d6', { headers: { cookie: viewer.cookie } });
+    expect(readable.status).toBe(200);
+    const readableBody = (await readable.json()) as ApiDoc & { canEdit: boolean };
+    expect(readableBody.id).toBe('d6');
+    expect(readableBody.canEdit).toBe(false);
+
+    const spacesRes = await request('/spaces', { headers: { cookie: viewer.cookie } });
+    expect(spacesRes.status).toBe(200);
+    const spaces = (await spacesRes.json()) as {
+      id: string;
+      role: string | null;
+      children: { id: string }[];
+    }[];
+    const productSpace = spaces.find((space) => space.id === 's2');
+    expect(productSpace?.role).toBeNull();
+    expect(productSpace?.children.map((doc) => doc.id)).toContain('d6');
   });
 
   test('soft deletes and restores documents', async () => {
-    const remove = await request('/documents/d2', { method: 'DELETE' });
+    const admin = await loginAs();
+    const remove = await request('/documents/d2', { method: 'DELETE', headers: admin.headers });
     expect(remove.status).toBe(200);
 
     const missing = await request('/documents/d2');
     expect(missing.status).toBe(404);
 
-    const trash = await request('/documents/trash');
+    const trash = await request('/documents/trash', { headers: { cookie: admin.cookie } });
     expect(trash.status).toBe(200);
     const items = (await trash.json()) as { id: string; purgeAfter: string }[];
     expect(items.some((item: { id: string }) => item.id === 'd2')).toBe(true);
     expect(items.find((item) => item.id === 'd2')?.purgeAfter).toBeTruthy();
 
-    const restore = await request('/documents/d2/restore', { method: 'POST' });
+    const restore = await request('/documents/d2/restore', {
+      method: 'POST',
+      headers: admin.headers,
+    });
     expect(restore.status).toBe(200);
-    expect((await request('/documents/d2')).status).toBe(200);
+    expect((await request('/documents/d2', { headers: { cookie: admin.cookie } })).status).toBe(
+      200,
+    );
   });
 
   test('serves enabled public share links', async () => {
@@ -235,6 +296,7 @@ describe('Atlas API', () => {
   });
 
   test('expires, revokes, rotates and records public share links', async () => {
+    const admin = await loginAs();
     await db
       .update(shareLinks)
       .set({ expiresAt: '2000-01-01T00:00:00.000Z' })
@@ -256,7 +318,7 @@ describe('Atlas API', () => {
     const revoke = await request('/documents/d1/share', {
       method: 'PATCH',
       body: JSON.stringify({ publicEnabled: false }),
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...admin.headers },
     });
     expect(revoke.status).toBe(200);
     expect((await request('/documents/public/demo-d1-public-link')).status).toBe(404);
@@ -264,17 +326,18 @@ describe('Atlas API', () => {
     const rotate = await request('/documents/d1/share', {
       method: 'PATCH',
       body: JSON.stringify({ publicEnabled: true, rotateToken: true }),
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...admin.headers },
     });
     expect(rotate.status).toBe(200);
 
-    const share = await request('/documents/d1/share');
+    const share = await request('/documents/d1/share', { headers: { cookie: admin.cookie } });
     const shareBody = (await share.json()) as { public: { token: string } };
     expect(shareBody.public.token).not.toBe('demo-d1-public-link');
     expect((await request(`/documents/public/${shareBody.public.token}`)).status).toBe(200);
   });
 
   test('purges expired trash items', async () => {
+    const admin = await loginAs();
     await db
       .update(documents)
       .set({
@@ -284,7 +347,10 @@ describe('Atlas API', () => {
       })
       .where(eq(documents.id, 'd3'));
 
-    const purge = await request('/documents/trash/purge-expired', { method: 'POST' });
+    const purge = await request('/documents/trash/purge-expired', {
+      method: 'POST',
+      headers: admin.headers,
+    });
     expect(purge.status).toBe(200);
     expect(await purge.json()).toEqual({ purged: 1 });
     expect((await request('/documents/d3')).status).toBe(404);

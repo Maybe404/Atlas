@@ -1,4 +1,5 @@
 import { z } from 'zod';
+
 export { extractHtmlMetadata } from './html-metadata';
 
 // ── Domain ─────────────────────────────────────────────────────────────────
@@ -36,6 +37,7 @@ export const DocumentSchema = z.object({
   tags: z.array(z.string()).default([]),
   html: z.string().optional(),
   skillVersion: z.string().optional(),
+  canEdit: z.boolean().optional(),
   deletedAt: z.string().nullable().optional(),
 });
 export type Document = z.infer<typeof DocumentSchema>;

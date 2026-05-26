@@ -61,7 +61,7 @@ function truncateText(value: string, maxLength: number) {
 }
 
 function getAttribute(tag: string, name: string) {
-  const pattern = new RegExp(`\\s${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s"'=<>` + '`' + `]+))`, 'i');
+  const pattern = new RegExp(`\\s${name}\\s*=\\s*("([^"]*)"|'([^']*)'|([^\\s"'=<>\`]+))`, 'i');
   const match = tag.match(pattern);
   return match ? decodeHtmlEntities(match[2] ?? match[3] ?? match[4] ?? '') : '';
 }

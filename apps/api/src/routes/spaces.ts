@@ -1,15 +1,19 @@
 import { CreateSpaceSchema, SetSpaceMemberRoleSchema, UpdateSpaceSchema } from '@atlas/shared';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
-import { documents, members, spaceMembers, spaces } from '../db/schema';
+import { type documents, members, spaceMembers, spaces } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
+import { requireUser } from '../lib/auth';
 import { displayDate } from '../lib/dates';
 import { forbidden, notFound } from '../lib/http-error';
 import { makeId } from '../lib/id';
 import {
+  canEditDocument,
+  getSpaceRole,
   isAdmin,
+  listReadableDocuments,
   listReadableSpaces,
   requireSpaceAccess,
   requireSpaceEditor,
@@ -34,27 +38,41 @@ function toDoc(doc: typeof documents.$inferSelect, author?: typeof members.$infe
   };
 }
 
-async function childrenForSpace(spaceId: string) {
-  const rows = await db
-    .select({ doc: documents, author: members })
-    .from(documents)
-    .innerJoin(members, eq(documents.authorId, members.id))
-    .where(and(eq(documents.spaceId, spaceId), isNull(documents.deletedAt)));
-  return rows.map((row) => toDoc(row.doc, row.author));
+async function childrenForSpace(
+  user: typeof members.$inferSelect | undefined,
+  space: typeof spaces.$inferSelect,
+) {
+  const docs = await listReadableDocuments(user, space);
+  return Promise.all(
+    docs.map(async (doc) => {
+      const [author] = await db.select().from(members).where(eq(members.id, doc.authorId));
+      return {
+        ...toDoc(doc, author),
+        canEdit: await canEditDocument(user, doc),
+      };
+    }),
+  );
 }
 
 export const spacesRouter = new Hono<AppEnv>()
   .get('/', async (c) => {
     const user = c.get('user');
-    const readableSpaces = await listReadableSpaces(user);
+    const membershipSpaces = await listReadableSpaces(user);
+    const readableDocs = await listReadableDocuments(user);
+    const readableSpaceIds = new Set([
+      ...membershipSpaces.map((sp) => sp.id),
+      ...readableDocs.map((doc) => doc.spaceId),
+    ]);
+    const allSpaces = isAdmin(user) ? membershipSpaces : await db.select().from(spaces);
+    const readableSpaces = allSpaces.filter((sp) => readableSpaceIds.has(sp.id));
     const result = await Promise.all(
       readableSpaces.map(async (sp) => {
-        const children = await childrenForSpace(sp.id);
+        const children = await childrenForSpace(user, sp);
         return {
           ...sp,
           count: children.length,
           children,
-          role: await requireSpaceAccess(user, sp.id),
+          role: await getSpaceRole(user, sp.id),
         };
       }),
     );
@@ -63,14 +81,15 @@ export const spacesRouter = new Hono<AppEnv>()
   .get('/:id', async (c) => {
     const user = c.get('user');
     const id = c.req.param('id');
-    await requireSpaceAccess(user, id);
     const [sp] = await db.select().from(spaces).where(eq(spaces.id, id));
     if (!sp) throw notFound();
-    const children = await childrenForSpace(id);
-    return c.json({ ...sp, count: children.length, children });
+    const children = await childrenForSpace(user, sp);
+    const role = await getSpaceRole(user, id);
+    if (!role && children.length === 0) throw notFound();
+    return c.json({ ...sp, count: children.length, children, role });
   })
   .post('/', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can create spaces.');
 
     const body = CreateSpaceSchema.parse(await c.req.json());
@@ -93,7 +112,7 @@ export const spacesRouter = new Hono<AppEnv>()
     return c.json({ id }, 201);
   })
   .patch('/:id', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     const id = c.req.param('id');
     await requireSpaceEditor(user, id);
 
@@ -111,7 +130,7 @@ export const spacesRouter = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
   .delete('/:id', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     const id = c.req.param('id');
     if (!isAdmin(user)) throw forbidden('Only workspace admins can delete spaces.');
     await requireSpaceAccess(user, id);
@@ -125,7 +144,7 @@ export const spacesRouter = new Hono<AppEnv>()
     return c.json({ ok: true });
   })
   .get('/:id/members', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     const spaceId = c.req.param('id');
     await requireSpaceAccess(user, spaceId);
 
@@ -143,7 +162,7 @@ export const spacesRouter = new Hono<AppEnv>()
     );
   })
   .put('/:id/members/:memberId', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can change space permissions.');
 
     const spaceId = c.req.param('id');

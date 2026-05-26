@@ -5,6 +5,7 @@ import { db } from '../db/client';
 import { skillVersions } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
+import { requireUser } from '../lib/auth';
 import { forbidden } from '../lib/http-error';
 import { makeId } from '../lib/id';
 import { isAdmin } from '../lib/permissions';
@@ -15,7 +16,7 @@ export const skillsRouter = new Hono<AppEnv>()
     return _c.json(rows);
   })
   .post('/', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can upload skill versions.');
     const body = CreateSkillVersionSchema.parse(await c.req.json());
     await db.insert(skillVersions).values({
@@ -35,7 +36,7 @@ export const skillsRouter = new Hono<AppEnv>()
     return c.json({ ok: true }, 201);
   })
   .post('/:version/activate', async (c) => {
-    const user = c.get('user');
+    const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can change skill versions.');
     const version = c.req.param('version');
     await db.update(skillVersions).set({ active: false });
