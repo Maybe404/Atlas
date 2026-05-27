@@ -14,11 +14,12 @@
 
 项目方向是合理的，但仍处在“原型迁移到产品化”的中间状态：
 
-- 后端结构相对清楚，但存在权限边界过宽、N+1 查询、缺少索引等问题。
+- 后端结构相对清楚，但存在权限边界过宽、N+1 查询、缺少索引、认证生产化配置不足等问题。
 - 声明了 `sanitize-html` 依赖，但 `validateHtmlForStorage` 实际只做了大小校验，没有调用 sanitize；`skill_versions` 表名义上跟踪 sanitize 版本，但没有任何 sanitize 逻辑真正运行。
 - 前端大量核心 TSX 仍带 `// @ts-nocheck`，Biome 也整体排除了 `apps/web/src/**/*.tsx`，前端 lint/typecheck 覆盖不足。
 - `/spaces` 接口承担了空间目录、文档列表和文档正文 bootstrap 的职责，负载过重。
 - 前端有大文件、重复色映射、持续 DOM 扫描和 idle `requestAnimationFrame` 等可维护性与效率问题。
+- `packages/shared/src/fixtures.ts`：旧原型静态数据与当前 seed/API 数据并存，已在 TODO 22 单独列出。
 
 ---
 
@@ -132,11 +133,12 @@ if (!canManage) return c.json(emptyShareState(doc.id));
 **相关文件：**
 
 - `apps/api/src/lib/sanitize.ts:1-12`
-- `apps/api/package.json:14`（`sanitize-html`、`@types/sanitize-html`）
+- `apps/api/package.json:20`（`sanitize-html`）与 `apps/api/package.json:25`（`@types/sanitize-html`）
 - `apps/api/src/db/schema.ts:107-117`（`skillVersions` 表）
 - `apps/api/src/routes/skills.ts`
 - `apps/api/src/routes/documents.ts:137,188,232`
-- `apps/web/src/views.tsx:130-135,204-209,832-836`（iframe sandbox）
+- `apps/web/src/views-admin.tsx:192`（admin preview iframe sandbox）
+- `apps/web/src/views.tsx:133,207,834`（Reader/Public/Editor iframe sandbox）
 
 **问题说明：**
 
@@ -169,7 +171,7 @@ if (!canManage) return c.json(emptyShareState(doc.id));
 
 **相关文件：**
 
-- `biome.json:13`（`!apps/web/src/**/*.tsx`）
+- `biome.json:14`（`!apps/web/src/**/*.tsx`）
 - 仍使用 `// @ts-nocheck` 的文件：
   - `apps/web/src/app.tsx:1`
   - `apps/web/src/auth.tsx:1`
@@ -323,7 +325,7 @@ queryClient.invalidateQueries({ queryKey: atlasKeys.spaces })
 
 **验收标准：**
 
-- Drizzle schema 中定义索引并生成迁移。
+- Drizzle schema 中定义索引并生成迁移；如果迁移已在环境中应用，提供增量迁移而不是直接改旧迁移。
 - 文档列表、回收站、分享链接、会话校验查询能利用到索引。
 
 ---
@@ -451,9 +453,44 @@ const DEMO_LOGIN_ACCOUNTS = [
 
 ---
 
+### TODO 12：补齐认证生产化安全边界
+
+**严重程度：P1 / 安全与生产配置风险**
+
+**相关文件：**
+
+- `apps/api/src/routes/auth.ts:25-48`
+- `apps/api/src/lib/auth.ts`
+- `apps/web/src/auth.tsx:25`
+- `apps/api/src/db/schema.ts:14-22`
+
+**问题说明：**
+
+当前登录链路更像开发/内网原型配置，主要问题包括：
+
+- 登录接口对不存在邮箱返回 `404 + No member exists for this email.`，前端也专门映射为“找不到这个邮箱”，会造成成员邮箱枚举。
+- 登录失败没有节流、锁定或审计维度聚合；密码爆破只能依赖外层网关（代码内未体现）。
+- `SESSION_COOKIE` 和 `CSRF_COOKIE` 在 `auth.ts` 中固定 `secure: false`，如果直接部署到 HTTPS 生产环境，Cookie 安全属性不符合预期。
+- `sessions` 表有 `expiresAt`，但需要确认 `authMiddleware` 每次请求都会清理/拒绝过期 session，并配合 TODO 7 为 `expiresAt` 建索引。
+
+**整改建议：**
+
+- 登录失败统一返回 `401 Email or password is incorrect.`，不要区分邮箱不存在、无密码、密码错误。
+- 增加登录限速：至少按 IP + email 做短窗口限制；若项目部署在反向代理后，明确可信 `X-Forwarded-For` 策略。
+- Cookie 的 `secure` 根据环境配置：生产 HTTPS 下必须为 `true`，本地开发可为 `false`。
+- 补充测试覆盖：不存在邮箱、错误密码、无密码账号对外响应一致；生产配置下 Cookie 带 `Secure`。
+
+**验收标准：**
+
+- 未认证攻击者不能通过登录接口区分邮箱是否存在。
+- 生产环境 Cookie 默认具备 `Secure` 属性。
+- 登录失败有明确限速策略，且测试覆盖主要分支。
+
+---
+
 ## P2：中期优化
 
-### TODO 12：增加空间成员批量权限更新接口
+### TODO 13：增加空间成员批量权限更新接口
 
 **严重程度：P2 / 性能与一致性风险**
 
@@ -486,7 +523,7 @@ targets.forEach(m => setMemberSpaceRole(m.id, space.id, role, { silent: true }))
 
 ---
 
-### TODO 13：拆分前端大文件，降低维护成本
+### TODO 14：拆分前端大文件，降低维护成本
 
 **严重程度：P2 / 可维护性风险**
 
@@ -522,7 +559,7 @@ targets.forEach(m => setMemberSpaceRole(m.id, space.id, role, { silent: true }))
 
 ---
 
-### TODO 14：统一前端颜色、dot、accent 映射
+### TODO 15：统一前端颜色、dot、accent 映射
 
 **严重程度：P2 / 一致性与冗余问题**
 
@@ -547,7 +584,7 @@ targets.forEach(m => setMemberSpaceRole(m.id, space.id, role, { silent: true }))
 
 ---
 
-### TODO 15：统一默认 `skillVersion`（如果该模块保留）
+### TODO 16：统一默认 `skillVersion`（如果该模块保留）
 
 **严重程度：P2 / 冗余与一致性问题**
 
@@ -570,7 +607,7 @@ targets.forEach(m => setMemberSpaceRole(m.id, space.id, role, { silent: true }))
 
 ## P3：低优先级清理与体验优化
 
-### TODO 16：移除 chrome 自动隐藏逻辑中的持续 DOM 扫描
+### TODO 17：移除 chrome 自动隐藏逻辑中的持续 DOM 扫描
 
 **严重程度：P3 / 前端效率与可维护性问题**
 
@@ -597,7 +634,7 @@ const attachTimer = setInterval(attachScroll, 500);
 
 ---
 
-### TODO 17：优化 `DockItem` 的持续 `requestAnimationFrame`
+### TODO 18：优化 `DockItem` 的持续 `requestAnimationFrame`
 
 **严重程度：P3 / 前端效率问题**
 
@@ -616,7 +653,7 @@ const attachTimer = setInterval(attachScroll, 500);
 
 ---
 
-### TODO 18：分享弹窗成员列表的扩展性
+### TODO 19：分享弹窗成员列表的扩展性
 
 **严重程度：P3 / 扩展性问题**
 
@@ -635,7 +672,7 @@ const attachTimer = setInterval(attachScroll, 500);
 
 ---
 
-### TODO 19：清理 Biome 历史遗留排除项
+### TODO 20：清理 Biome 历史遗留排除项
 
 **严重程度：P3 / 工程卫生问题**
 
@@ -659,7 +696,7 @@ const attachTimer = setInterval(attachScroll, 500);
 
 ---
 
-### TODO 20：统一 public share URL 来源
+### TODO 21：统一 public share URL 来源
 
 **严重程度：P3 / 一致性问题**
 
@@ -681,14 +718,46 @@ API 给出的分享 URL 是 `/public/:token`，前端实际使用并路由匹配
 
 ---
 
-## 建议整改顺序
+### TODO 22：清理旧原型 fixture 数据与误导性注释
+
+**严重程度：P3 / 冗余与工程卫生问题**
+
+**相关文件：**
+
+- `packages/shared/src/fixtures.ts`
+- `biome.json:17`（`!packages/shared/src/fixtures.ts`）
+- `apps/web/src/tweaks-panel.tsx:193-218`
+
+**问题说明：**
+
+`packages/shared/src/fixtures.ts` 仍保留大量旧原型静态数据，并且文件注释仍写着“Imported as ATLAS_DATA by apps/web and apps/api”“legacy src/data.js”。当前实际运行数据已转向 API、数据库 seed 和 React Query，`grep` 结果显示 fixture 基本只被自身导出和 Biome exclude 引用。
+
+这会带来几个问题：
+
+- 新读代码的人容易误以为 `ATLAS_DATA` 仍是运行时数据源。
+- Biome 为该 fixture 单独排除，隐藏了格式与规范问题。
+- 静态数据中的文档标题、权限、成员与 seed 数据可能逐渐漂移，形成第二套“假事实”。
+
+**整改建议：**
+
+- 如果 fixture 已不参与测试或开发预览，直接删除 `packages/shared/src/fixtures.ts` 和 Biome exclude。
+- 如果仍需要演示数据，把它迁移到明确的测试 fixture 或 seed 输入，避免放在 shared runtime 包里。
+- 同步清理仍描述 JSX/静态原型期状态的注释，例如 `tweaks-panel.tsx` 中关于旧 localStorage/deck 的说明。
+
+**验收标准：**
+
+- shared 包不再导出未使用的原型静态数据。
+- Biome 不再需要为旧 fixture 单独排除。
+- seed、测试 fixture、运行时 API 数据来源边界清晰。
+
+---
 
 1. P0：收紧 `/spaces` 对未登录用户的字段（TODO 1）、修复 `share` 存在性泄漏（TODO 2）、决定 sanitize-html / skill 模块的去留（TODO 3）。
-2. P1 安全/一致性：客户端 `canRead` 与服务端对齐（TODO 9）、移除 demo 一键切换 (TODO 10)、`/skills` 加权限（TODO 11）。
+2. P1 安全/一致性：客户端 `canRead` 与服务端对齐（TODO 9）、移除 demo 一键切换 (TODO 10)、`/skills` 加权限（TODO 11）、补齐认证生产化安全边界（TODO 12）。
 3. P1 性能：瘦身 `/spaces`（TODO 5）、治理 N+1（TODO 6）、补索引（TODO 7）、`purge-expired` 改为 SQL 过滤（TODO 8）。
 4. P1 质量：恢复前端 lint/typecheck 覆盖（TODO 4）。
-5. P2：批量空间成员更新（TODO 12）、拆分大文件（TODO 13）、统一颜色映射（TODO 14）、统一 skillVersion（TODO 15，依赖 TODO 3 结论）。
-6. P3：DOM 扫描、idle rAF、分享弹窗成员、Biome 历史 exclude、分享 URL 来源。
+5. P2：批量空间成员更新（TODO 13）、拆分大文件（TODO 14）、统一颜色映射（TODO 15）、统一 skillVersion（TODO 16，依赖 TODO 3 结论）。
+6. P3：DOM 扫描、idle rAF、分享弹窗成员、Biome 历史 exclude、分享 URL 来源、旧 fixture 清理。
 
 > 注：仓库已经在 `.gitignore` 里覆盖了 `dist`、`apps/api/data/`、`*.sqlite`、`*.sqlite-*`，`git ls-files` 也确认未跟踪这些文件——原 TODO「检查构建产物 / SQLite 是否被 git 跟踪」无须再列入。
 
@@ -696,11 +765,11 @@ API 给出的分享 URL 是 `/public/:token`，前端实际使用并路由匹配
 
 ## 后续执行建议
 
-- 安全修复（TODO 1、2、3、9、10、11）单独提交，方便回滚。
+- 安全修复（TODO 1、2、3、9、10、11、12）单独提交，方便回滚。
 - `/spaces` 响应结构变更（TODO 1、5、6）尽量在一个 PR 内一起改，并同步更新前端。
 - 类型检查恢复（TODO 4）按文件分批提交。
 - DB 索引与迁移（TODO 7）单独提交。
-- 前端拆文件（TODO 13）尽量保持行为不变，独立提交。
+- 前端拆文件（TODO 14）尽量保持行为不变，独立提交。
 
 每个 TODO 完成后建议至少运行：
 
