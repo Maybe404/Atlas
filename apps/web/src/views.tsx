@@ -43,8 +43,22 @@ function ReaderView({ ctx, spaces = [], members = [], user, framedDoc, chromeVis
   const iframeRef = useRef(null);
 
   if (denied || !space || !doc) {
+    const earlyDocId = doc?.id || ctx.docId;
     return (
       <div className="main-card reader-card">
+        <div className={"reader-meta-bar " + (chromeVisible ? '' : 'meta-bar-hidden')}>
+          {doc && <><span className={"dot " + dotClass(doc.dot)}></span><span className="doc-title">{doc.title}</span></>}
+          <div style={{flex:1}}/>
+          <button className="pill-btn ghost" onClick={copyReaderLink}>
+            {copied ? <_I.check/> : <_I.link/>}
+            <span>{copied ? '已复制' : '链接'}</span>
+          </button>
+          {earlyDocId && (
+            <button className="pill-btn" onClick={() => onShare(earlyDocId)}>
+              <_I.share/><span>分享</span>
+            </button>
+          )}
+        </div>
         <div className="reader-locked">
           <div className="reader-locked-glyph">
             <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
@@ -60,13 +74,6 @@ function ReaderView({ ctx, spaces = [], members = [], user, framedDoc, chromeVis
               : '请先登录团队账号，登录后会回到刚才的页面。'}
           </p>
           <div className="reader-locked-actions">
-            <button className="reader-locked-secondary" onClick={copyReaderLink}>
-              {copied ? <_I.check/> : <_I.link/>}
-              <span>{copied ? '已复制' : '复制链接'}</span>
-            </button>
-            <button className="reader-locked-secondary" onClick={() => onShare(doc.id)}>
-              <_I.share/><span>分享</span>
-            </button>
             {user ? (
               <button className="reader-locked-secondary" onClick={() => onNavigate({ view: 'reader', ...firstPublicDoc(spaces) })}>
                 浏览可阅读文档
@@ -145,13 +152,6 @@ function ReaderView({ ctx, spaces = [], members = [], user, framedDoc, chromeVis
                   : '这是一篇邀请制文档，加入「' + space.name + '」空间的成员可以阅读。登录后即可查看完整内容。'}
             </p>
             <div className="reader-locked-actions">
-              <button className="reader-locked-secondary" onClick={copyReaderLink}>
-                {copied ? <_I.check/> : <_I.link/>}
-                <span>{copied ? '已复制' : '复制链接'}</span>
-              </button>
-              <button className="reader-locked-secondary" onClick={() => onShare(doc.id)}>
-                <_I.share/><span>分享</span>
-              </button>
               {!user && (
                 <button className="reader-locked-primary" onClick={onLogin}>
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
