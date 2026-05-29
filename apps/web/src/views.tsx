@@ -189,7 +189,7 @@ function ReaderView({
             className="reader-iframe"
             srcDoc={doc.html || '<!doctype html><html><body><p>暂无内容</p></body></html>'}
             title={doc.title}
-            sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+            sandbox="allow-scripts allow-forms allow-popups"
           />
         ) : (
           <div className="reader-locked">
@@ -306,7 +306,7 @@ function PublicDocumentView({ token }) {
           className="reader-iframe"
           srcDoc={doc.html || '<!doctype html><html><body><p>暂无内容</p></body></html>'}
           title={doc.title}
-          sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+          sandbox="allow-scripts allow-forms allow-popups"
         />
       </div>
     </div>
@@ -1232,7 +1232,7 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
               className="editor-preview"
               srcDoc={html}
               title="预览"
-              sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+              sandbox="allow-scripts allow-forms allow-popups"
             />
           )}
         </div>

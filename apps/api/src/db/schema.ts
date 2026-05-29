@@ -53,7 +53,6 @@ export const documents = sqliteTable(
     visibility: text('visibility', { enum: ['public', 'invite', 'private'] }).notNull(),
     dot: text('dot').notNull().default('slate'),
     tags: text('tags', { mode: 'json' }).$type<string[]>().notNull().default([]),
-    skillVersion: text('skill_version').notNull().default('1.2.4'),
     updated: text('updated').notNull().default(sql`(current_timestamp)`),
     deletedAt: text('deleted_at'),
     deletedBy: text('deleted_by').references(() => members.id),
@@ -131,18 +130,6 @@ export const shareLinks = sqliteTable(
     documentIdIdx: index('share_links_document_id_idx').on(table.documentId),
   }),
 );
-
-export const skillVersions = sqliteTable('skill_versions', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull().default('sanitize-html'),
-  version: text('version').notNull().unique(),
-  note: text('note').notNull(),
-  active: integer('active', { mode: 'boolean' }).notNull().default(false),
-  createdBy: text('created_by')
-    .notNull()
-    .references(() => members.id),
-  createdAt: text('created_at').notNull().default(sql`(current_timestamp)`),
-});
 
 export const auditLogs = sqliteTable(
   'audit_logs',

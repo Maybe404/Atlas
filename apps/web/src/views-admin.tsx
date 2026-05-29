@@ -325,7 +325,7 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
                       className="upload-html-preview"
                       srcDoc={selectedHtml || '<!doctype html><html><body></body></html>'}
                       title="HTML 预览"
-                      sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
+                      sandbox="allow-scripts allow-forms allow-popups"
                     />
                   </div>
                 </div>
@@ -551,13 +551,6 @@ function AdminSettingsView({
             <_I2.trash />
             <span>回收站</span>
           </div>
-          <div
-            className={'settings-nav-item ' + (pane === 'skills' ? 'active' : '')}
-            onClick={() => setPane('skills')}
-          >
-            <_I2.layers />
-            <span>Skill 版本</span>
-          </div>
         </nav>
 
         <div className="settings-pane">
@@ -596,7 +589,6 @@ function AdminSettingsView({
             />
           )}
           {pane === 'trash' && <TrashPane pushToast={pushToast} mutations={mutations} />}
-          {pane === 'skills' && <SkillsPane pushToast={pushToast} mutations={mutations} />}
         </div>
       </div>
     </div>
@@ -1429,73 +1421,3 @@ function TrashPane({ pushToast, mutations }) {
   );
 }
 
-function SkillsPane({ pushToast, mutations }) {
-  const skillsQuery = useQuery({
-    queryKey: atlasKeys.skills,
-    queryFn: () => apiGet('/skills'),
-  });
-  const versions = skillsQuery.data || [];
-  return (
-    <>
-      <div className="pane-head">
-        <div style={{ fontSize: 13, color: 'var(--blue)', fontWeight: 500, marginBottom: 6 }}>
-          维护 · Skill
-        </div>
-        <h1>Skill 版本</h1>
-        <p className="pane-sub">
-          Skill 是 Atlas 用来处理外部 HTML
-          的小程序。切换版本影响后续上传的文档；历史文档保留发布时的版本。
-        </p>
-      </div>
-
-      <div className="setting-card">
-        <div className="card-head">
-          <div>
-            <h3>HTML sandbox</h3>
-            <div className="sub" style={{ maxWidth: 520 }}>
-              负责将外部 HTML 隔离在阅读页 iframe 中，保留原文脚本与样式，避免上传内容触达 Atlas
-              应用外壳。
-            </div>
-          </div>
-          <button className="btn secondary">
-            <_I2.upload width="13" height="13" />
-            <span>上传新版本</span>
-          </button>
-        </div>
-        <div className="card-body card-body-scroll">
-          <AnimatedScrollList className="rows-scroll">
-            {versions.map((v) => {
-              const isActive = v.active;
-              return (
-                <div key={v.version} className="skill-row">
-                  <div>
-                    <div className={'ver ' + (isActive ? 'current' : '')}>v{v.version}</div>
-                    <div className="note">{v.note}</div>
-                  </div>
-                  <div className="status">{isActive ? '使用中' : '可回滚'}</div>
-                  <div>
-                    <div className="when">{new Date(v.createdAt).toLocaleDateString('zh-CN')}</div>
-                    <div className="note" style={{ fontSize: 11.5 }}>
-                      {v.name}
-                    </div>
-                  </div>
-                  <div>
-                    {!isActive && (
-                      <button
-                        className="btn secondary"
-                        style={{ padding: '5px 12px', fontSize: 12.5 }}
-                        onClick={() => mutations.activateSkill(v.version)}
-                      >
-                        切换至此
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </AnimatedScrollList>
-        </div>
-      </div>
-    </>
-  );
-}

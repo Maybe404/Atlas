@@ -36,7 +36,6 @@ export const DocumentSchema = z.object({
   dot: AccentSchema.or(z.string()),
   tags: z.array(z.string()).default([]),
   html: z.string().optional(),
-  skillVersion: z.string().optional(),
   canEdit: z.boolean().optional(),
   deletedAt: z.string().nullable().optional(),
 });
@@ -77,7 +76,6 @@ export const CreateDocumentSchema = z.object({
   html: z.string().default(''),
   dot: AccentSchema.or(z.string()).default('slate'),
   tags: z.array(z.string()).default([]),
-  skillVersion: z.string().optional(),
 });
 
 export const UpdateDocumentSchema = CreateDocumentSchema.partial();
@@ -117,9 +115,4 @@ export const UpdateDocumentShareSchema = z.object({
   expiresAt: z.string().nullable().optional(),
   rotateToken: z.boolean().optional(),
   members: z.array(SetDocumentMemberRoleSchema).optional(),
-});
-
-export const CreateSkillVersionSchema = z.object({
-  version: z.string().min(1).max(32),
-  note: z.string().min(1).max(240),
 });

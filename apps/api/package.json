@@ -17,12 +17,10 @@
     "@atlas/shared": "workspace:*",
     "drizzle-orm": "^0.36.0",
     "hono": "^4.6.0",
-    "sanitize-html": "^2.17.4",
     "zod": "^3.23.0"
   },
   "devDependencies": {
     "@types/bun": "latest",
-    "@types/sanitize-html": "^2.16.1",
     "drizzle-kit": "^0.28.0"
   }
 }

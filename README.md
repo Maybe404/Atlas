@@ -128,8 +128,8 @@ Seed 后示例账号如下，所有账号使用同一个演示密码：
 │   │       └── data-hooks.ts                React Query 查询与 mutation
 │   └── api/        后端 (Hono + Drizzle + bun:sqlite)
 │       ├── src/server.ts                    Hono app + CORS + logger + error handler
-│       ├── src/routes/{auth,members,spaces,documents,skills}.ts
-│       ├── src/lib/{auth,permissions,sanitize,audit,serializers,...}.ts
+│       ├── src/routes/{auth,members,spaces,documents}.ts
+│       ├── src/lib/{auth,permissions,html-limits,audit,serializers,...}.ts
 │       └── src/db/{schema,client,migrate,seed,migrations}.ts
 ├── packages/
 │   └── shared/     共享 Zod schema、领域类型、ATLAS_DATA fixtures
@@ -173,9 +173,6 @@ Seed 后示例账号如下，所有账号使用同一个演示密码：
 | `GET` | `/members` | 管理员查看成员 |
 | `GET` | `/members/permissions` | 管理员查看空间权限矩阵 |
 | `PATCH` | `/members/:id` | 管理员更新成员姓名或工作区角色 |
-| `GET` | `/skills` | 查看 Skill 版本 |
-| `POST` | `/skills` | 管理员新增 Skill 版本 |
-| `POST` | `/skills/:version/activate` | 管理员切换启用版本 |
 
 非 `GET` 请求在 cookie session 下必须带 `X-Atlas-CSRF` header，值来自 `atlas_csrf` cookie。
 
@@ -211,7 +208,7 @@ bun run --filter @atlas/api db:seed
 - session cookie 为 `HttpOnly`、`SameSite=Lax`，有效期 30 天。
 - 真实 session 写请求要求 `X-Atlas-CSRF` header；前端 `api-client.ts` 自动从 `atlas_csrf` cookie 注入。
 - 成员响应会剔除 `passwordHash`。
-- HTML 存储限制大小为 8 MB，阅读页和预览页用 iframe sandbox 隔离原始 HTML，允许文档脚本在沙箱内运行以保持原始交互效果。
+- **HTML 不做服务端清洗（no server-side sanitization）**：上传的 HTML 原样入库（仅做 8 MB 大小校验，见 `apps/api/src/lib/html-limits.ts`），阅读页与预览页用 iframe `sandbox="allow-scripts allow-forms allow-popups"` 隔离原始 HTML。由于沙箱**不含** `allow-same-origin`，文档脚本拿不到父页的 cookie/localStorage——**这个 sandbox iframe 是唯一的隔离边界**。文档脚本被有意允许在沙箱内运行以保持原始交互效果，因此切勿移除 sandbox，也不要给文档来源以 same-origin 信任。
 - 公开链接支持禁用、撤销、到期、token 轮换、访问统计；已删除或过期文档不可公开访问。
 - 关键写操作会写入 `audit_logs`。
 

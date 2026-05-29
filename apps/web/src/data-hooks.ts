@@ -30,7 +30,6 @@ export const atlasKeys = {
   permissions: ['permissions'] as const,
   spaceMembers: (spaceId: string) => ['space-members', spaceId] as const,
   trash: ['trash'] as const,
-  skills: ['skills'] as const,
   share: (documentId: string) => ['share', documentId] as const,
 };
 
@@ -224,14 +223,6 @@ export function useAtlasMutations(pushToast?: PushToast) {
     },
   });
 
-  const activateSkill = useMutation({
-    mutationFn: (version: string) => apiJson(`/skills/${version}/activate`, 'POST'),
-    onSuccess: async (_data: unknown, version: string) => {
-      await queryClient.invalidateQueries({ queryKey: atlasKeys.skills });
-      pushToast?.({ msg: '已切换 skill 版本', meta: `v${version}` });
-    },
-  });
-
   return {
     createSpace: (data: CreateSpaceInput) => createSpace.mutate(data),
     updateSpace: (id: string, patch: UpdateSpaceInput) => updateSpace.mutate({ id, patch }),
@@ -270,6 +261,5 @@ export function useAtlasMutations(pushToast?: PushToast) {
       deleteMember.mutate(id, options),
     updateShare: (documentId: string, patch: UpdateShareInput) =>
       updateShare.mutate({ documentId, patch }),
-    activateSkill: (version: string) => activateSkill.mutate(version),
   };
 }

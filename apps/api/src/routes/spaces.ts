@@ -38,7 +38,6 @@ function toDoc(
     dot: doc.dot,
     tags: doc.tags,
     ...(options.includeHtml ? { html: doc.html } : {}),
-    skillVersion: doc.skillVersion,
     deletedAt: doc.deletedAt,
     canRead: options.canRead ?? false,
   };

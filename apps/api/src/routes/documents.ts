@@ -13,6 +13,7 @@ import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
 import { addDaysToIso, displayDate, nowIso } from '../lib/dates';
+import { validateHtmlForStorage } from '../lib/html-limits';
 import { badRequest, conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId, makeToken } from '../lib/id';
 import {
@@ -25,7 +26,6 @@ import {
   requireDocumentRead,
   requireSpaceEditor,
 } from '../lib/permissions';
-import { validateHtmlForStorage } from '../lib/sanitize';
 import { toPublicMember } from '../lib/serializers';
 
 function toDoc(row: {
@@ -47,7 +47,6 @@ function toDoc(row: {
     dot: row.doc.dot,
     tags: row.doc.tags,
     html: row.doc.html,
-    skillVersion: row.doc.skillVersion,
     deletedAt: row.doc.deletedAt,
     purgeAfter: row.doc.purgeAfter,
   };
@@ -147,7 +146,6 @@ export const documentsRouter = new Hono<AppEnv>()
       html: checkedHtml.html,
       dot: body.dot,
       tags: body.tags,
-      skillVersion: body.skillVersion ?? '1.2.4',
       updated: nowIso(),
     });
     await writeAudit({
@@ -197,7 +195,6 @@ export const documentsRouter = new Hono<AppEnv>()
       html: checkedHtml.html,
       dot: body.dot,
       tags: body.tags,
-      skillVersion: body.skillVersion ?? '1.2.4',
       updated: nowIso(),
     });
     await writeAudit({
@@ -228,7 +225,6 @@ export const documentsRouter = new Hono<AppEnv>()
     if (body.visibility !== undefined) patch.visibility = body.visibility;
     if (body.dot !== undefined) patch.dot = body.dot;
     if (body.tags !== undefined) patch.tags = body.tags;
-    if (body.skillVersion !== undefined) patch.skillVersion = body.skillVersion;
     if (body.html !== undefined) {
       patch.html = validateHtmlForStorage(body.html).html;
       const metadata = extractHtmlMetadata(body.html, { fallbackTitle: body.title ?? doc.title });

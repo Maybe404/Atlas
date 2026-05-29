@@ -130,7 +130,21 @@ if (!canManage) return c.json(emptyShareState(doc.id));
 
 ---
 
-### TODO 3：实装 HTML 入库 sanitization（或移除 sanitize-html / skill 版本概念）
+### TODO 3：实装 HTML 入库 sanitization（或移除 sanitize-html / skill 版本概念）✅ 已解决
+
+**状态：已完成（2026-05-29）—— 采用选项 2（承认不做服务端 sanitize，明确 sandbox iframe 为唯一隔离边界）**
+
+**方案与现状：**
+
+考虑到产品本质是「隔离展示外部生成的交互式 HTML」（iframe 故意开启 `allow-scripts`，文档需要运行自身脚本），真正接入 sanitize-html 的严格白名单会剥离脚本、破坏核心体验，因此选择选项 2 删除整套「看似有清洗」的死代码：
+
+- **删除死依赖**：从 `apps/api/package.json` 移除 `sanitize-html` 与 `@types/sanitize-html`，并更新 `bun.lock`（已确认 lockfile 不再含 sanitize-html）。
+- **删除 skill 模块死功能**：删掉 `skill_versions` 表、`/skills` 路由（`routes/skills.ts`）、`documents.skill_version` 列、`CreateSkillVersionSchema`、前端 `SkillsPane` + 设置导航项 + `activateSkill` mutation + `atlasKeys.skills`，以及 seed.ts 中的 skillVersions 数据和各处 `skillVersion` 字段。生成并应用增量迁移 `0003_calm_sinister_six.sql`（DROP TABLE skill_versions + DROP COLUMN skill_version）。
+- **消除误导命名**：`lib/sanitize.ts` → `lib/html-limits.ts`，`validateHtmlForStorage` 保留（它只做 8 MB 大小校验，是真实行为），并加注释说明 Atlas 不做服务端清洗、sandbox iframe 是唯一隔离边界。
+- **收紧 sandbox**：四处渲染 iframe 的 sandbox 去掉 `allow-popups-to-escape-sandbox`，改为 `allow-scripts allow-forms allow-popups`（弹窗不再逃出沙箱）。
+- **写入 README**：明确文档正文不做服务端 sanitize、sandbox iframe（无 `allow-same-origin`）是唯一隔离边界，并移除 README 中的 `/skills` API 行与 `sanitize`/`skills` 路径引用。
+
+解决的问题：消除了「声明 sanitize 依赖但从不调用」「skill_versions 名义跟踪 sanitize 版本却无任何效果」的死代码与误导；隔离边界的真实假设被显式记录；并顺手收紧了会逃逸沙箱的弹窗权限。`bun run typecheck` 全绿、13 个 API 测试通过、改动文件 Biome 无新增告警（剩余 lint red 为 TODO 4 已记录的 TSX 存量问题）。
 
 **严重程度：P0 / 安全风险 + 死代码**
 

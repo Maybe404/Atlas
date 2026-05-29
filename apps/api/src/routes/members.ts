@@ -2,7 +2,7 @@ import { CreateMemberSchema, UpdateMemberSchema } from '@atlas/shared';
 import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
-import { documents, members, shareLinks, skillVersions, spaceMembers } from '../db/schema';
+import { documents, members, shareLinks, spaceMembers } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
@@ -123,10 +123,6 @@ export const membersRouter = new Hono<AppEnv>()
     await db.update(documents).set({ authorId: user.id }).where(eq(documents.authorId, id));
     await db.update(documents).set({ deletedBy: null }).where(eq(documents.deletedBy, id));
     await db.update(shareLinks).set({ createdBy: user.id }).where(eq(shareLinks.createdBy, id));
-    await db
-      .update(skillVersions)
-      .set({ createdBy: user.id })
-      .where(eq(skillVersions.createdBy, id));
     await db.delete(members).where(eq(members.id, id));
     await writeAudit({
       actorId: user.id,

@@ -6,7 +6,6 @@ import {
   members,
   sessions,
   shareLinks,
-  skillVersions,
   spaceMembers,
   spaces,
 } from './schema';
@@ -18,7 +17,6 @@ await db.delete(documentMembers);
 await db.delete(shareLinks);
 await db.delete(documents);
 await db.delete(spaceMembers);
-await db.delete(skillVersions);
 await db.delete(spaces);
 await db.delete(members);
 
@@ -98,7 +96,6 @@ for (const sp of ATLAS_DATA.tree) {
       dot: doc.dot as string,
       tags: doc.tags ?? [],
       html: sampleHtml(doc),
-      skillVersion: '1.2.4',
       updated: doc.updated,
     });
   }
@@ -135,41 +132,6 @@ await db.insert(shareLinks).values({
   createdAt: now,
   updatedAt: now,
 });
-
-await db.insert(skillVersions).values([
-  {
-    id: 'skill_124',
-    version: '1.2.4',
-    note: '修复 SVG <use> 处理；表格保留行高样式',
-    active: true,
-    createdBy: 'u1',
-    createdAt: '2025-05-14T10:00:00.000Z',
-  },
-  {
-    id: 'skill_123',
-    version: '1.2.3',
-    note: '代理 google-fonts；外链 CSS 内联化',
-    active: false,
-    createdBy: 'u1',
-    createdAt: '2025-05-02T10:00:00.000Z',
-  },
-  {
-    id: 'skill_122',
-    version: '1.2.2',
-    note: '放宽 data-* 属性白名单',
-    active: false,
-    createdBy: 'u2',
-    createdAt: '2025-04-19T10:00:00.000Z',
-  },
-  {
-    id: 'skill_121',
-    version: '1.2.1',
-    note: '初次稳定版本',
-    active: false,
-    createdBy: 'u1',
-    createdAt: '2025-04-04T10:00:00.000Z',
-  },
-]);
 
 console.log(
   `seeded ${ATLAS_DATA.members.length} members, ${ATLAS_DATA.tree.length} spaces, ${permissions.length} permissions`,
