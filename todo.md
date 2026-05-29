@@ -1,8 +1,11 @@
 # Atlas 项目代码审查 TODO
 
 > 生成日期：2026-05-27
+> 复核日期：2026-05-29（逐项核对源码，更正 TODO 22 的错误前提，补充 TODO 4/12 的实际现状，详见各条内标注）
 > 范围：`apps/api`、`apps/web`、`packages/shared`、根配置文件
 > 目标：记录当前项目中的冗余、规范、权限、性能和架构合理性问题，便于后续逐项整改。
+>
+> 复核结论：TODO 1–21 的描述与当前源码一致，定级合理。主要更正集中在 TODO 22（fixtures 仍是 API seed 的数据源，不能直接删）；另补充 `bun run lint` 当前为 red（见 TODO 4）。`bun run typecheck`、`bun run test`（13 pass）当前通过。
 
 ## 总体结论
 
@@ -62,6 +65,7 @@ export async function listDirectoryDocuments(user: User | undefined, space?: Spa
 - 更新时间
 - 可见性
 - 标签
+- dot（颜色标记）
 - skillVersion
 - deletedAt
 
@@ -186,6 +190,13 @@ if (!canManage) return c.json(emptyShareState(doc.id));
 **问题说明：**
 
 `biome.json` 整体排除了 `apps/web/src/**/*.tsx`，再叠加 `@ts-nocheck`，等价于前端核心代码不参与类型与 lint 检查。重构没有安全网。
+
+**补充（2026-05-29 复核）：** 当前 `bun run typecheck` 与 `bun run test` 均通过（typecheck 通过本身就是因为上述排除 + `@ts-nocheck`，并非真的“干净”），但 **`bun run lint` 现在就是失败的**：
+
+- `apps/api/src/server.test.ts:347,370`：2 处 formatter 错误（单行 `request(...)` 超出 100 列未折行）。
+- `apps/api/src/routes/spaces.ts:18`：`listReadableDocuments` 为未使用 import（`lint/correctness/noUnusedImports` 警告，FIXABLE）。spaces.ts 实际只用到 `listDirectoryDocuments`。
+
+也就是说后端代码已经在 lint 范围内，但 lint 本身处于 red 状态。恢复前端覆盖之前，应先让现有后端的 lint/format 回到 green（`bun run fmt` 可修 formatter，移除 spaces.ts 的未使用 import 可清掉警告）。
 
 **整改建议：**
 
@@ -471,7 +482,7 @@ const DEMO_LOGIN_ACCOUNTS = [
 - 登录接口对不存在邮箱返回 `404 + No member exists for this email.`，前端也专门映射为“找不到这个邮箱”，会造成成员邮箱枚举。
 - 登录失败没有节流、锁定或审计维度聚合；密码爆破只能依赖外层网关（代码内未体现）。
 - `SESSION_COOKIE` 和 `CSRF_COOKIE` 在 `auth.ts` 中固定 `secure: false`，如果直接部署到 HTTPS 生产环境，Cookie 安全属性不符合预期。
-- `sessions` 表有 `expiresAt`，但需要确认 `authMiddleware` 每次请求都会清理/拒绝过期 session，并配合 TODO 7 为 `expiresAt` 建索引。
+- `sessions` 表有 `expiresAt`，`authMiddleware`（`apps/api/src/lib/auth.ts:49`）已经用 `gt(sessions.expiresAt, now)` **拒绝**过期 session（已复核，这点没问题）；但它**从不删除**过期行，过期 session 会无限堆积在表里。需要一个清理任务（类似 `purge-expired`），并配合 TODO 7 为 `expiresAt` 建索引让拒绝查询走索引。
 
 **整改建议：**
 
@@ -730,25 +741,29 @@ API 给出的分享 URL 是 `/public/:token`，前端实际使用并路由匹配
 
 **问题说明：**
 
-`packages/shared/src/fixtures.ts` 仍保留大量旧原型静态数据，并且文件注释仍写着“Imported as ATLAS_DATA by apps/web and apps/api”“legacy src/data.js”。当前实际运行数据已转向 API、数据库 seed 和 React Query，`grep` 结果显示 fixture 基本只被自身导出和 Biome exclude 引用。
+`packages/shared/src/fixtures.ts` 仍保留大量旧原型静态数据，并且文件注释仍写着“Imported as ATLAS_DATA by apps/web and apps/api”“legacy src/data.js”。
 
-这会带来几个问题：
+**更正（2026-05-29 复核）：** 之前 TODO 写的“`grep` 结果显示 fixture 基本只被自身导出和 Biome exclude 引用”是**错误**的。实际上 `apps/api/src/db/seed.ts:1` 仍 `import { ATLAS_DATA } from '@atlas/shared/fixtures'`，并在 seed 流程中大量使用（`ATLAS_DATA.members` / `ATLAS_DATA.tree` / `ATLAS_DATA.docContent`，见 seed.ts:26,35,82,108-109,175）。也就是说 fixture 现在是 **数据库 seed 的唯一数据源**，不是死代码。前端（`apps/web`）确实已不再引用它，注释里“by apps/web”才是过时的部分。
 
-- 新读代码的人容易误以为 `ATLAS_DATA` 仍是运行时数据源。
+因此**不能直接删除** `fixtures.ts`，否则会让 `db:seed` 失败。真正的问题是：
+
+- 文件注释（“by apps/web and apps/api”“legacy src/data.js”）已过时，会误导读者以为它仍是前端/运行时数据源。
+- 它被放在 `packages/shared`（运行时共享包），而它实际上只服务于 API 的 seed，职责定位不清。
 - Biome 为该 fixture 单独排除，隐藏了格式与规范问题。
-- 静态数据中的文档标题、权限、成员与 seed 数据可能逐渐漂移，形成第二套“假事实”。
+- 静态数据中的文档标题、权限、成员若与 schema/路由演进脱节，会形成第二套“假事实”。
 
 **整改建议：**
 
-- 如果 fixture 已不参与测试或开发预览，直接删除 `packages/shared/src/fixtures.ts` 和 Biome exclude。
-- 如果仍需要演示数据，把它迁移到明确的测试 fixture 或 seed 输入，避免放在 shared runtime 包里。
+- 不要删除 fixture；先修正注释，明确它现在只被 `apps/api` 的 seed 使用，与前端运行时无关。
+- 评估是否把 seed 数据从 `packages/shared` 迁移到 `apps/api`（例如 `apps/api/src/db/seed-data.ts`），让“演示/seed 数据”不再混在跨端 runtime 包里。
+- 迁移后再决定是否能去掉 Biome 对 fixture 的单独排除。
 - 同步清理仍描述 JSX/静态原型期状态的注释，例如 `tweaks-panel.tsx` 中关于旧 localStorage/deck 的说明。
 
 **验收标准：**
 
-- shared 包不再导出未使用的原型静态数据。
-- Biome 不再需要为旧 fixture 单独排除。
-- seed、测试 fixture、运行时 API 数据来源边界清晰。
+- fixture 的注释准确描述其当前唯一消费者（API seed）。
+- seed 数据的归属包清晰（建议归 `apps/api`），不再放在跨端共享 runtime 包内。
+- 迁移后 Biome 不再需要为旧 fixture 单独排除，且 `bun run --filter @atlas/api db:seed` 仍能正常工作。
 
 ---
 
