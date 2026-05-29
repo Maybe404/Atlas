@@ -8,10 +8,7 @@
       "!dist",
       "!build",
       "!.turbo",
-      "!src/data.js",
-      "!tweaks-panel.jsx",
       "!**/*.html",
-      "!apps/web/src/**/*.tsx",
       "!apps/web/src/styles.css",
       "!apps/api/src/db/migrations/meta",
       "!packages/shared/src/fixtures.ts"

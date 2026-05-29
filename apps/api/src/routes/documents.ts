@@ -5,7 +5,7 @@ import {
   UpdateDocumentSchema,
   UpdateDocumentShareSchema,
 } from '@atlas/shared';
-import { and, desc, eq, isNotNull, isNull } from 'drizzle-orm';
+import { and, desc, eq, isNotNull, isNull, lte } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
 import { documentMembers, documents, members, shareLinks, spaces } from '../db/schema';
@@ -308,15 +308,26 @@ export const documentsRouter = new Hono<AppEnv>()
     const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can purge deleted documents.');
     const now = nowIso();
-    const expired = await db
-      .select()
+    const toPurge = await db
+      .select({ id: documents.id })
       .from(documents)
-      .where(and(isNotNull(documents.deletedAt), isNotNull(documents.purgeAfter)));
-    const toPurge = expired.filter(
-      (doc) => doc.purgeAfter && new Date(doc.purgeAfter).getTime() <= new Date(now).getTime(),
-    );
-    for (const doc of toPurge) {
-      await db.delete(documents).where(eq(documents.id, doc.id));
+      .where(
+        and(
+          isNotNull(documents.deletedAt),
+          isNotNull(documents.purgeAfter),
+          lte(documents.purgeAfter, now),
+        ),
+      );
+    if (toPurge.length > 0) {
+      await db
+        .delete(documents)
+        .where(
+          and(
+            isNotNull(documents.deletedAt),
+            isNotNull(documents.purgeAfter),
+            lte(documents.purgeAfter, now),
+          ),
+        );
     }
     await writeAudit({
       actorId: user.id,

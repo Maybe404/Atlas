@@ -11,12 +11,17 @@ import { visibilityLabel } from './labels';
 const _I2 = I;
 
 function dotClass2(d) {
-  return d === 'accent' ? 'dot-blue'
-    : d === 'moss' ? 'dot-green'
-    : d === 'slate' ? 'dot-blue'
-    : d === 'plum' ? 'dot-purple'
-    : d === 'ink' ? 'dot-gray'
-    : 'dot-blue';
+  return d === 'accent'
+    ? 'dot-blue'
+    : d === 'moss'
+      ? 'dot-green'
+      : d === 'slate'
+        ? 'dot-blue'
+        : d === 'plum'
+          ? 'dot-purple'
+          : d === 'ink'
+            ? 'dot-gray'
+            : 'dot-blue';
 }
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -37,49 +42,67 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
 
   useEffect(() => {
     if (!spaces.length) return;
-    setMeta(m => ({ ...m, spaceId: spaces.some(s => s.id === m.spaceId) ? m.spaceId : spaces[0].id }));
+    setMeta((m) => ({
+      ...m,
+      spaceId: spaces.some((s) => s.id === m.spaceId) ? m.spaceId : spaces[0].id,
+    }));
   }, [spaces]);
 
   const acceptFiles = useCallback((incoming) => {
-    const file = Array.from(incoming || []).find(f => /\.html?$/i.test(f.name)) || incoming?.[0];
+    const file = Array.from(incoming || []).find((f) => /\.html?$/i.test(f.name)) || incoming?.[0];
     if (!file) return;
     setSelectedFile(file);
     file.text().then((html) => {
       const metadata = extractHtmlMetadata(html, { fallbackTitle: file.name });
       setSelectedHtml(html);
-      setMeta(m => ({
+      setMeta((m) => ({
         ...m,
         title: metadata.title || file.name.replace(/\.html?$/i, ''),
         desc: metadata.summary || '',
       }));
     });
-    const ns = [{ name: file.name, size: `${Math.max(1, Math.round(file.size / 1024))} KB`, progress: 0 }];
+    const ns = [
+      { name: file.name, size: `${Math.max(1, Math.round(file.size / 1024))} KB`, progress: 0 },
+    ];
     setFiles(ns);
     ns.forEach((f, i) => {
       let p = 0;
       const tick = () => {
-        p += 14 + Math.random()*18;
-        setFiles(fs => fs.map((x, ix) => ix === i ? { ...x, progress: Math.min(100, p) } : x));
-        if (p < 100) setTimeout(tick, 100 + i*40 + Math.random()*80);
+        p += 14 + Math.random() * 18;
+        setFiles((fs) => fs.map((x, ix) => (ix === i ? { ...x, progress: Math.min(100, p) } : x)));
+        if (p < 100) setTimeout(tick, 100 + i * 40 + Math.random() * 80);
       };
-      setTimeout(tick, 100 + i*60);
+      setTimeout(tick, 100 + i * 60);
     });
   }, []);
-  const allDone = files.length > 0 && files.every(f => f.progress >= 100);
+  const allDone = files.length > 0 && files.every((f) => f.progress >= 100);
 
   return (
     <div className="main-card">
       <div className="main-scroll">
         <div className="upload-wrap">
           <div className="upload-head">
-            <div style={{fontSize: 13, color: 'var(--blue)', fontWeight: 500, marginBottom: 8, letterSpacing:'-0.012em'}}>团队后台 · 上传</div>
+            <div
+              style={{
+                fontSize: 13,
+                color: 'var(--blue)',
+                fontWeight: 500,
+                marginBottom: 8,
+                letterSpacing: '-0.012em',
+              }}
+            >
+              团队后台 · 上传
+            </div>
             <h1>上传 HTML 文档</h1>
-            <p className="sub">Atlas 不编辑 HTML——它只负责隔离展示外部生成的文档。上传后会保存原始文件，并自动识别标题与摘要。</p>
+            <p className="sub">
+              Atlas 不编辑
+              HTML——它只负责隔离展示外部生成的文档。上传后会保存原始文件，并自动识别标题与摘要。
+            </p>
 
             <div className="steps">
               {['选择文件', '填写信息', '审阅与发布'].map((s, i) => (
-                <div key={i} className={"step " + (step === i ? 'active' : step > i ? 'done' : '')}>
-                  <span className="num">{step > i ? <_I2.check/> : String(i+1)}</span>
+                <div key={i} className={'step ' + (step === i ? 'active' : step > i ? 'done' : '')}>
+                  <span className="num">{step > i ? <_I2.check /> : String(i + 1)}</span>
                   <span>{s}</span>
                 </div>
               ))}
@@ -90,43 +113,74 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
             {step === 0 && (
               <>
                 <div
-                  className={"dropzone " + (over ? 'over' : '')}
-                  onDragOver={e => { e.preventDefault(); setOver(true); }}
+                  className={'dropzone ' + (over ? 'over' : '')}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setOver(true);
+                  }}
                   onDragLeave={() => setOver(false)}
-                  onDrop={e => { e.preventDefault(); setOver(false); acceptFiles(e.dataTransfer.files); }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    setOver(false);
+                    acceptFiles(e.dataTransfer.files);
+                  }}
                 >
                   <input
                     type="file"
                     accept=".html,.htm,text/html"
-                    style={{display:'none'}}
+                    style={{ display: 'none' }}
                     id="atlas-upload-file"
                     onChange={(e) => acceptFiles(e.target.files)}
                   />
                   <div className="big">把 HTML 拖到这里</div>
                   <div className="small">支持单个 .html 文件</div>
                   <div className="meta">最多 8 MB · sandbox 隔离展示</div>
-                  <label className="btn secondary" htmlFor="atlas-upload-file" style={{marginTop: 14}}>选择文件</label>
+                  <label
+                    className="btn secondary"
+                    htmlFor="atlas-upload-file"
+                    style={{ marginTop: 14 }}
+                  >
+                    选择文件
+                  </label>
                 </div>
 
                 {files.length > 0 && (
-                  <div style={{marginTop: 22}}>
-                    <div style={{fontSize: 12.5, color: 'var(--ink-3)', marginBottom: 10, fontWeight: 500}}>已选文件 · {files.length}</div>
+                  <div style={{ marginTop: 22 }}>
+                    <div
+                      style={{
+                        fontSize: 12.5,
+                        color: 'var(--ink-3)',
+                        marginBottom: 10,
+                        fontWeight: 500,
+                      }}
+                    >
+                      已选文件 · {files.length}
+                    </div>
                     {files.map((f, i) => (
                       <div key={i} className="file-line">
-                        <div className="icon-tile"><_I2.doc/></div>
+                        <div className="icon-tile">
+                          <_I2.doc />
+                        </div>
                         <span className="name">{f.name}</span>
                         <span className="meta">{f.size}</span>
-                        <div className="bar"><span style={{width: f.progress + '%'}}></span></div>
-                        <span className="meta" style={{minWidth: 36, textAlign: 'right'}}>{Math.round(f.progress)}%</span>
+                        <div className="bar">
+                          <span style={{ width: f.progress + '%' }}></span>
+                        </div>
+                        <span className="meta" style={{ minWidth: 36, textAlign: 'right' }}>
+                          {Math.round(f.progress)}%
+                        </span>
                       </div>
                     ))}
                   </div>
                 )}
 
                 <div className="flow-footer">
-                  <button className="btn ghost" onClick={() => onNavigate({view:'admin-docs'})}>取消</button>
+                  <button className="btn ghost" onClick={() => onNavigate({ view: 'admin-docs' })}>
+                    取消
+                  </button>
                   <button className="btn primary" disabled={!allDone} onClick={() => setStep(1)}>
-                    <span>下一步</span><_I2.arrow/>
+                    <span>下一步</span>
+                    <_I2.arrow />
                   </button>
                 </div>
               </>
@@ -136,18 +190,34 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
               <>
                 <div className="field">
                   <label className="field-label">标题</label>
-                  <input className="input" value={meta.title} onChange={e => setMeta(m => ({...m, title: e.target.value}))}/>
+                  <input
+                    className="input"
+                    value={meta.title}
+                    onChange={(e) => setMeta((m) => ({ ...m, title: e.target.value }))}
+                  />
                 </div>
-                <div style={{display:'grid', gridTemplateColumns:'1fr 1fr', gap: 14}}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <div className="field">
                     <label className="field-label">归属空间</label>
-                    <select className="input" value={meta.spaceId} onChange={e => setMeta(m => ({...m, spaceId: e.target.value}))}>
-                      {spaces.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    <select
+                      className="input"
+                      value={meta.spaceId}
+                      onChange={(e) => setMeta((m) => ({ ...m, spaceId: e.target.value }))}
+                    >
+                      {spaces.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ))}
                     </select>
                   </div>
                   <div className="field">
                     <label className="field-label">可见性</label>
-                    <select className="input" value={meta.visibility} onChange={e => setMeta(m => ({...m, visibility: e.target.value}))}>
+                    <select
+                      className="input"
+                      value={meta.visibility}
+                      onChange={(e) => setMeta((m) => ({ ...m, visibility: e.target.value }))}
+                    >
                       <option value="private">私密</option>
                       <option value="invite">受邀</option>
                       <option value="public">公开</option>
@@ -156,20 +226,48 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
                 </div>
                 <div className="field">
                   <label className="field-label">摘要 · 在索引页显示</label>
-                  <textarea className="input textarea" value={meta.desc} onChange={e => setMeta(m => ({...m, desc: e.target.value}))}/>
+                  <textarea
+                    className="input textarea"
+                    value={meta.desc}
+                    onChange={(e) => setMeta((m) => ({ ...m, desc: e.target.value }))}
+                  />
                 </div>
                 <div className="field">
                   <label className="field-label">展示方式</label>
-                  <div className="input" style={{display:'flex', alignItems:'center', gap: 10, fontFamily:'var(--font-mono)', fontSize: 12.5}}>
-                    <span className="dot dot-green" style={{width:7, height:7, borderRadius:'50%'}}></span>
+                  <div
+                    className="input"
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 10,
+                      fontFamily: 'var(--font-mono)',
+                      fontSize: 12.5,
+                    }}
+                  >
+                    <span
+                      className="dot dot-green"
+                      style={{ width: 7, height: 7, borderRadius: '50%' }}
+                    ></span>
                     <span>iframe sandbox</span>
-                    <span className="dim" style={{marginLeft:'auto', fontSize: 11, fontFamily:'var(--font)'}}>原始 HTML</span>
+                    <span
+                      className="dim"
+                      style={{ marginLeft: 'auto', fontSize: 11, fontFamily: 'var(--font)' }}
+                    >
+                      原始 HTML
+                    </span>
                   </div>
                 </div>
                 <div className="flow-footer">
-                  <button className="btn ghost" onClick={() => setStep(0)}>上一步</button>
-                  <button className="btn primary" disabled={!meta.title.trim()} onClick={() => setStep(2)}>
-                    <span>预览与发布</span><_I2.arrow/>
+                  <button className="btn ghost" onClick={() => setStep(0)}>
+                    上一步
+                  </button>
+                  <button
+                    className="btn primary"
+                    disabled={!meta.title.trim()}
+                    onClick={() => setStep(2)}
+                  >
+                    <span>预览与发布</span>
+                    <_I2.arrow />
                   </button>
                 </div>
               </>
@@ -177,14 +275,52 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
 
             {step === 2 && (
               <>
-                <div style={{borderRadius:'var(--r-md)', overflow:'hidden', border:'1px solid var(--hairline-2)'}}>
-                  <div style={{padding:'14px 18px', borderBottom:'1px solid var(--hairline-2)', display:'flex', justifyContent:'space-between', alignItems:'center', background:'var(--pearl)'}}>
-                    <span style={{fontSize: 13, fontWeight: 500, letterSpacing:'-0.012em'}}>发布信息</span>
-                    <span className="mono dim" style={{fontSize: 11}}>sandbox iframe · 原文保存</span>
+                <div
+                  style={{
+                    borderRadius: 'var(--r-md)',
+                    overflow: 'hidden',
+                    border: '1px solid var(--hairline-2)',
+                  }}
+                >
+                  <div
+                    style={{
+                      padding: '14px 18px',
+                      borderBottom: '1px solid var(--hairline-2)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      background: 'var(--pearl)',
+                    }}
+                  >
+                    <span style={{ fontSize: 13, fontWeight: 500, letterSpacing: '-0.012em' }}>
+                      发布信息
+                    </span>
+                    <span className="mono dim" style={{ fontSize: 11 }}>
+                      sandbox iframe · 原文保存
+                    </span>
                   </div>
-                  <div style={{padding:'28px 24px', background: 'var(--canvas)'}}>
-                    <div style={{fontFamily:'var(--font-display)', fontSize: 24, fontWeight: 600, letterSpacing:'-0.022em', marginBottom: 8}}>{meta.title}</div>
-                    <div style={{color: 'var(--ink-3)', fontSize: 14, marginBottom: 18, letterSpacing:'-0.012em'}}>{meta.desc}</div>
+                  <div style={{ padding: '28px 24px', background: 'var(--canvas)' }}>
+                    <div
+                      style={{
+                        fontFamily: 'var(--font-display)',
+                        fontSize: 24,
+                        fontWeight: 600,
+                        letterSpacing: '-0.022em',
+                        marginBottom: 8,
+                      }}
+                    >
+                      {meta.title}
+                    </div>
+                    <div
+                      style={{
+                        color: 'var(--ink-3)',
+                        fontSize: 14,
+                        marginBottom: 18,
+                        letterSpacing: '-0.012em',
+                      }}
+                    >
+                      {meta.desc}
+                    </div>
                     <iframe
                       className="upload-html-preview"
                       srcDoc={selectedHtml || '<!doctype html><html><body></body></html>'}
@@ -194,40 +330,94 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
                   </div>
                 </div>
 
-                <div style={{marginTop: 16, display:'grid', gridTemplateColumns:'1fr 1fr', gap: 12}}>
-                  <div style={{background:'var(--pearl)', borderRadius:'var(--r-md)', padding:'14px 16px'}}>
-                    <div style={{fontSize: 11, color: 'var(--ink-4)', textTransform:'uppercase', letterSpacing:'0.04em', marginBottom: 4, fontWeight: 500}}>HTML 存储</div>
-                    <div style={{fontSize: 13.5}}>保留原始内容</div>
-                    <div style={{fontSize: 13.5, color: 'var(--ink-3)'}}>阅读页由 iframe sandbox 隔离</div>
+                <div
+                  style={{
+                    marginTop: 16,
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: 12,
+                  }}
+                >
+                  <div
+                    style={{
+                      background: 'var(--pearl)',
+                      borderRadius: 'var(--r-md)',
+                      padding: '14px 16px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: 'var(--ink-4)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        marginBottom: 4,
+                        fontWeight: 500,
+                      }}
+                    >
+                      HTML 存储
+                    </div>
+                    <div style={{ fontSize: 13.5 }}>保留原始内容</div>
+                    <div style={{ fontSize: 13.5, color: 'var(--ink-3)' }}>
+                      阅读页由 iframe sandbox 隔离
+                    </div>
                   </div>
-                  <div style={{background:'var(--pearl)', borderRadius:'var(--r-md)', padding:'14px 16px'}}>
-                    <div style={{fontSize: 11, color: 'var(--ink-4)', textTransform:'uppercase', letterSpacing:'0.04em', marginBottom: 4, fontWeight: 500}}>分享设置</div>
-                    <div style={{fontSize: 13.5, display:'flex', alignItems:'center', gap: 8}}>
-                      <span className={"vis-chip " + meta.visibility}>{visibilityLabel(meta.visibility)}</span>
-                      <span className="mono" style={{fontSize: 11, color:'var(--ink-3)'}}>{spaces.find(s=>s.id===meta.spaceId)?.name}</span>
+                  <div
+                    style={{
+                      background: 'var(--pearl)',
+                      borderRadius: 'var(--r-md)',
+                      padding: '14px 16px',
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 11,
+                        color: 'var(--ink-4)',
+                        textTransform: 'uppercase',
+                        letterSpacing: '0.04em',
+                        marginBottom: 4,
+                        fontWeight: 500,
+                      }}
+                    >
+                      分享设置
+                    </div>
+                    <div style={{ fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span className={'vis-chip ' + meta.visibility}>
+                        {visibilityLabel(meta.visibility)}
+                      </span>
+                      <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
+                        {spaces.find((s) => s.id === meta.spaceId)?.name}
+                      </span>
                     </div>
                   </div>
                 </div>
 
                 <div className="flow-footer">
-                  <button className="btn ghost" onClick={() => setStep(1)}>上一步</button>
-                  <div style={{display:'flex', gap: 8}}>
+                  <button className="btn ghost" onClick={() => setStep(1)}>
+                    上一步
+                  </button>
+                  <div style={{ display: 'flex', gap: 8 }}>
                     <button className="btn secondary">存为草稿</button>
-                    <button className="btn primary" disabled={!selectedFile || !meta.title.trim()} onClick={() => {
-                      const formData = new FormData();
-                      formData.set('file', selectedFile);
-                      formData.set('title', meta.title.trim());
-                      formData.set('desc', meta.desc);
-                      formData.set('spaceId', meta.spaceId);
-                      formData.set('visibility', meta.visibility);
-                      mutations.uploadDocument(formData, {
-                        onSuccess: () => {
-                          setStep(3);
-                          setTimeout(() => onNavigate({view:'admin-docs'}), 900);
-                        },
-                      });
-                    }}>
-                      <_I2.check/><span>发布</span>
+                    <button
+                      className="btn primary"
+                      disabled={!selectedFile || !meta.title.trim()}
+                      onClick={() => {
+                        const formData = new FormData();
+                        formData.set('file', selectedFile);
+                        formData.set('title', meta.title.trim());
+                        formData.set('desc', meta.desc);
+                        formData.set('spaceId', meta.spaceId);
+                        formData.set('visibility', meta.visibility);
+                        mutations.uploadDocument(formData, {
+                          onSuccess: () => {
+                            setStep(3);
+                            setTimeout(() => onNavigate({ view: 'admin-docs' }), 900);
+                          },
+                        });
+                      }}
+                    >
+                      <_I2.check />
+                      <span>发布</span>
                     </button>
                   </div>
                 </div>
@@ -235,19 +425,45 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
             )}
 
             {step === 3 && (
-              <div style={{textAlign:'center', padding:'60px 0'}}>
-                <div style={{
-                  width: 60, height: 60, margin: '0 auto 18px',
-                  background: 'var(--blue)', borderRadius: '50%',
-                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  color: 'white', animation: 'pop 0.4s var(--ease-spring)',
-                }}>
+              <div style={{ textAlign: 'center', padding: '60px 0' }}>
+                <div
+                  style={{
+                    width: 60,
+                    height: 60,
+                    margin: '0 auto 18px',
+                    background: 'var(--blue)',
+                    borderRadius: '50%',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: 'white',
+                    animation: 'pop 0.4s var(--ease-spring)',
+                  }}
+                >
                   <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-                    <path d="m6 14 6 6L22 8" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                    <path
+                      d="m6 14 6 6L22 8"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
                   </svg>
                 </div>
-                <div style={{fontFamily:'var(--font-display)', fontSize: 24, fontWeight: 600, letterSpacing:'-0.022em', marginBottom: 6}}>文档已发布</div>
-                <div className="muted" style={{fontSize: 14}}>正在跳转回文档列表…</div>
+                <div
+                  style={{
+                    fontFamily: 'var(--font-display)',
+                    fontSize: 24,
+                    fontWeight: 600,
+                    letterSpacing: '-0.022em',
+                    marginBottom: 6,
+                  }}
+                >
+                  文档已发布
+                </div>
+                <div className="muted" style={{ fontSize: 14 }}>
+                  正在跳转回文档列表…
+                </div>
               </div>
             )}
           </div>
@@ -261,14 +477,27 @@ export { AdminUploadView };
 // ─────────────────────────────────────────────────────────────────────────
 // ADMIN · settings
 // ─────────────────────────────────────────────────────────────────────────
-function AdminSettingsView({ ctx, onNavigate, pushToast, spaces = [], members = [], permissions = [], currentUser, mutations, onEditSpace, onNewSpace }) {
+function AdminSettingsView({
+  ctx,
+  onNavigate,
+  pushToast,
+  spaces = [],
+  members = [],
+  permissions = [],
+  currentUser,
+  mutations,
+  onEditSpace,
+  onNewSpace,
+}) {
   const [pane, setPane] = useState('spaces');
 
   const perms = useMemo(() => {
     const p = {};
     members.forEach((m) => {
       p[m.id] = {};
-      spaces.forEach((s) => { p[m.id][s.id] = null; });
+      spaces.forEach((s) => {
+        p[m.id][s.id] = null;
+      });
     });
     permissions.forEach((perm) => {
       p[perm.memberId] = p[perm.memberId] || {};
@@ -286,42 +515,88 @@ function AdminSettingsView({ ctx, onNavigate, pushToast, spaces = [], members = 
       <div className="settings-shell">
         <nav className="settings-nav">
           <div className="settings-nav-group">工作区</div>
-          <div className={"settings-nav-item " + (pane==='general'?'active':'')} onClick={()=>setPane('general')}>
-            <_I2.settings/><span>常规</span>
+          <div
+            className={'settings-nav-item ' + (pane === 'general' ? 'active' : '')}
+            onClick={() => setPane('general')}
+          >
+            <_I2.settings />
+            <span>常规</span>
           </div>
-          <div className={"settings-nav-item " + (pane==='spaces'?'active':'')} onClick={()=>setPane('spaces')}>
-            <_I2.folder/><span>空间</span>
+          <div
+            className={'settings-nav-item ' + (pane === 'spaces' ? 'active' : '')}
+            onClick={() => setPane('spaces')}
+          >
+            <_I2.folder />
+            <span>空间</span>
           </div>
-          <div className={"settings-nav-item " + (pane==='members'?'active':'')} onClick={()=>setPane('members')}>
-            <_I2.members/><span>成员</span>
+          <div
+            className={'settings-nav-item ' + (pane === 'members' ? 'active' : '')}
+            onClick={() => setPane('members')}
+          >
+            <_I2.members />
+            <span>成员</span>
           </div>
-          <div className={"settings-nav-item " + (pane==='permissions'?'active':'')} onClick={()=>setPane('permissions')}>
-            <_I2.lock/><span>空间权限</span>
+          <div
+            className={'settings-nav-item ' + (pane === 'permissions' ? 'active' : '')}
+            onClick={() => setPane('permissions')}
+          >
+            <_I2.lock />
+            <span>空间权限</span>
           </div>
           <div className="settings-nav-group">维护</div>
-          <div className={"settings-nav-item " + (pane==='trash'?'active':'')} onClick={()=>setPane('trash')}>
-            <_I2.trash/><span>回收站</span>
+          <div
+            className={'settings-nav-item ' + (pane === 'trash' ? 'active' : '')}
+            onClick={() => setPane('trash')}
+          >
+            <_I2.trash />
+            <span>回收站</span>
           </div>
-          <div className={"settings-nav-item " + (pane==='skills'?'active':'')} onClick={()=>setPane('skills')}>
-            <_I2.layers/><span>Skill 版本</span>
+          <div
+            className={'settings-nav-item ' + (pane === 'skills' ? 'active' : '')}
+            onClick={() => setPane('skills')}
+          >
+            <_I2.layers />
+            <span>Skill 版本</span>
           </div>
         </nav>
 
         <div className="settings-pane">
-          {pane === 'general' && <GeneralPane/>}
+          {pane === 'general' && <GeneralPane />}
           {pane === 'spaces' && (
             <SpacesPane
               spaces={spaces}
               perms={perms}
               onEditSpace={onEditSpace}
               onNewSpace={onNewSpace}
-              onDeleteSpace={(id) => { if (confirm('确认删除该空间？其下文档会一起删除。')) { mutations.deleteSpace(id); } }}
+              onDeleteSpace={(id) => {
+                if (confirm('确认删除该空间？其下文档会一起删除。')) {
+                  mutations.deleteSpace(id);
+                }
+              }}
             />
           )}
-          {pane === 'members' && <MembersPane spaces={spaces} members={members} perms={perms} currentUser={currentUser} setMemberSpaceRole={setMemberSpaceRole} pushToast={pushToast} mutations={mutations}/>}
-          {pane === 'permissions' && <PermissionsPane spaces={spaces} members={members} perms={perms} setMemberSpaceRole={setMemberSpaceRole} pushToast={pushToast}/>}
-          {pane === 'trash' && <TrashPane pushToast={pushToast} mutations={mutations}/>}
-          {pane === 'skills' && <SkillsPane pushToast={pushToast} mutations={mutations}/>}
+          {pane === 'members' && (
+            <MembersPane
+              spaces={spaces}
+              members={members}
+              perms={perms}
+              currentUser={currentUser}
+              setMemberSpaceRole={setMemberSpaceRole}
+              pushToast={pushToast}
+              mutations={mutations}
+            />
+          )}
+          {pane === 'permissions' && (
+            <PermissionsPane
+              spaces={spaces}
+              members={members}
+              perms={perms}
+              setMemberSpaceRole={setMemberSpaceRole}
+              pushToast={pushToast}
+            />
+          )}
+          {pane === 'trash' && <TrashPane pushToast={pushToast} mutations={mutations} />}
+          {pane === 'skills' && <SkillsPane pushToast={pushToast} mutations={mutations} />}
         </div>
       </div>
     </div>
@@ -333,7 +608,17 @@ function GeneralPane() {
   return (
     <>
       <div className="pane-head">
-        <div style={{fontSize: 13, color: 'var(--blue)', fontWeight: 500, marginBottom: 6, letterSpacing:'-0.012em'}}>工作区 · 林氏工作室</div>
+        <div
+          style={{
+            fontSize: 13,
+            color: 'var(--blue)',
+            fontWeight: 500,
+            marginBottom: 6,
+            letterSpacing: '-0.012em',
+          }}
+        >
+          工作区 · 林氏工作室
+        </div>
         <h1>常规</h1>
         <p className="pane-sub">工作区基本信息。</p>
       </div>
@@ -341,18 +626,42 @@ function GeneralPane() {
         <div className="card-body">
           <div className="field">
             <label className="field-label">工作区名称</label>
-            <input className="input" defaultValue="林氏工作室"/>
+            <input className="input" defaultValue="林氏工作室" />
           </div>
           <div className="field">
             <label className="field-label">URL 标识符</label>
-            <div style={{display:'flex', alignItems:'center', gap: 0}}>
-              <div style={{padding:'10px 14px', background:'var(--pearl)', borderTopLeftRadius:'var(--r-md)', borderBottomLeftRadius:'var(--r-md)', fontFamily:'var(--font-mono)', fontSize: 13, color: 'var(--ink-3)'}}>atlas.team /</div>
-              <input className="input" defaultValue="lin-studio" style={{flex: 1, borderTopLeftRadius:0, borderBottomLeftRadius:0, fontFamily:'var(--font-mono)'}}/>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
+              <div
+                style={{
+                  padding: '10px 14px',
+                  background: 'var(--pearl)',
+                  borderTopLeftRadius: 'var(--r-md)',
+                  borderBottomLeftRadius: 'var(--r-md)',
+                  fontFamily: 'var(--font-mono)',
+                  fontSize: 13,
+                  color: 'var(--ink-3)',
+                }}
+              >
+                atlas.team /
+              </div>
+              <input
+                className="input"
+                defaultValue="lin-studio"
+                style={{
+                  flex: 1,
+                  borderTopLeftRadius: 0,
+                  borderBottomLeftRadius: 0,
+                  fontFamily: 'var(--font-mono)',
+                }}
+              />
             </div>
           </div>
-          <div className="field" style={{marginBottom: 0}}>
+          <div className="field" style={{ marginBottom: 0 }}>
             <label className="field-label">默认语言</label>
-            <select className="input"><option>简体中文</option><option>English</option></select>
+            <select className="input">
+              <option>简体中文</option>
+              <option>English</option>
+            </select>
           </div>
         </div>
       </div>
@@ -364,23 +673,37 @@ function GeneralPane() {
 // SPACES PANE — CRUD on spaces; replaces the old reader-side mini dialog
 // ─────────────────────────────────────────────────────────────────────────
 const SPACE_COLOR_MAP = {
-  accent: '#cc785c', moss: '#34c759', slate: '#0066cc',
-  plum: '#af52de', ink: '#6e6e73', rose: '#ff2d55',
+  accent: '#cc785c',
+  moss: '#34c759',
+  slate: '#0066cc',
+  plum: '#af52de',
+  ink: '#6e6e73',
+  rose: '#ff2d55',
 };
 const SPACE_COLOR_LABEL = {
-  accent: '珊瑚', moss: '苔藓', slate: '靛蓝', plum: '紫梅', ink: '墨灰', rose: '玫红',
+  accent: '珊瑚',
+  moss: '苔藓',
+  slate: '靛蓝',
+  plum: '紫梅',
+  ink: '墨灰',
+  rose: '玫红',
 };
 
 function SpacesPane({ spaces, perms, onEditSpace, onNewSpace, onDeleteSpace }) {
   const memberCountFor = (spaceId) => {
-    return Object.values(perms).filter(p => p?.[spaceId]).length;
+    return Object.values(perms).filter((p) => p?.[spaceId]).length;
   };
   return (
     <>
       <div className="pane-head">
-        <div style={{fontSize: 13, color: 'var(--blue)', fontWeight: 500, marginBottom: 6}}>工作区 · 空间</div>
+        <div style={{ fontSize: 13, color: 'var(--blue)', fontWeight: 500, marginBottom: 6 }}>
+          工作区 · 空间
+        </div>
         <h1>空间</h1>
-        <p className="pane-sub">空间是文档的归属单元——每篇 HTML 文章必须属于一个空间。成员对空间的访问权限可在「空间权限」中分别设置。</p>
+        <p className="pane-sub">
+          空间是文档的归属单元——每篇 HTML
+          文章必须属于一个空间。成员对空间的访问权限可在「空间权限」中分别设置。
+        </p>
       </div>
 
       <div className="setting-card">
@@ -389,27 +712,46 @@ function SpacesPane({ spaces, perms, onEditSpace, onNewSpace, onDeleteSpace }) {
             <h3>所有空间 · {spaces.length}</h3>
             <div className="sub">点击行编辑名称与配色，或删除（其下文档移至「私人草稿」）</div>
           </div>
-          <button className="btn primary" onClick={onNewSpace}><_I2.plus/><span>新建空间</span></button>
+          <button className="btn primary" onClick={onNewSpace}>
+            <_I2.plus />
+            <span>新建空间</span>
+          </button>
         </div>
         <div className="card-body card-body-scroll">
           <AnimatedScrollList className="rows-scroll">
-            {spaces.map(sp => {
+            {spaces.map((sp) => {
               const color = SPACE_COLOR_MAP[sp.accent] || SPACE_COLOR_MAP.accent;
               const label = SPACE_COLOR_LABEL[sp.accent] || '珊瑚';
               return (
-                <div key={sp.id} className="space-mgr-row" onClick={() => onEditSpace(sp)} style={{cursor:'pointer'}}>
-                  <div className="sm-mark" style={{background: color}}>{sp.mark || sp.name.slice(0,1)}</div>
+                <div
+                  key={sp.id}
+                  className="space-mgr-row"
+                  onClick={() => onEditSpace(sp)}
+                  style={{ cursor: 'pointer' }}
+                >
+                  <div className="sm-mark" style={{ background: color }}>
+                    {sp.mark || sp.name.slice(0, 1)}
+                  </div>
                   <div>
                     <div className="sm-name">{sp.name}</div>
-                    <div className="sm-meta">{label} · {sp.children?.length || 0} 篇文档 · {memberCountFor(sp.id)} 位成员</div>
+                    <div className="sm-meta">
+                      {label} · {sp.children?.length || 0} 篇文档 · {memberCountFor(sp.id)} 位成员
+                    </div>
                   </div>
                   <div className="sm-count">{sp.count || sp.children?.length || 0}</div>
-                  <div className="sm-actions" onClick={(e)=>e.stopPropagation()}>
+                  <div className="sm-actions" onClick={(e) => e.stopPropagation()}>
                     <button className="icon-btn" title="编辑" onClick={() => onEditSpace(sp)}>
-                      <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><path d="m9 2.5 2.5 2.5L4 12.5H1.5V10z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/></svg>
+                      <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                        <path
+                          d="m9 2.5 2.5 2.5L4 12.5H1.5V10z"
+                          stroke="currentColor"
+                          strokeWidth="1.3"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
                     </button>
                     <button className="icon-btn" title="删除" onClick={() => onDeleteSpace(sp.id)}>
-                      <_I2.trash/>
+                      <_I2.trash />
                     </button>
                   </div>
                 </div>
@@ -422,14 +764,31 @@ function SpacesPane({ spaces, perms, onEditSpace, onNewSpace, onDeleteSpace }) {
   );
 }
 
-function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceRole, pushToast, mutations }) {
+function MembersPane({
+  spaces,
+  members = [],
+  perms,
+  currentUser,
+  setMemberSpaceRole,
+  pushToast,
+  mutations,
+}) {
   const [editingMember, setEditingMember] = useState(null); // member id whose space-access menu is open
   const [menuOpenId, setMenuOpenId] = useState(null);
   const [passwordMember, setPasswordMember] = useState(null);
   const [showNewMember, setShowNewMember] = useState(false);
   const [newMember, setNewMember] = useState({ name: '', email: '', password: '', role: 'viewer' });
   const [passwordDraft, setPasswordDraft] = useState('');
-  const avatarColors = ['var(--blue)', '#ff9500', '#34c759', '#af52de', '#ff2d55', '#5856d6', '#ff6482', '#30b0c7'];
+  const avatarColors = [
+    'var(--blue)',
+    '#ff9500',
+    '#34c759',
+    '#af52de',
+    '#ff2d55',
+    '#5856d6',
+    '#ff6482',
+    '#30b0c7',
+  ];
 
   useEffect(() => {
     if (!editingMember) return;
@@ -477,13 +836,17 @@ function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceR
       pushToast?.({ msg: '密码至少 8 位', meta: member.name });
       return;
     }
-    mutations.updateMember(member.id, { password: passwordDraft }, {
-      onSuccess: () => {
-        setPasswordMember(null);
-        setPasswordDraft('');
+    mutations.updateMember(
+      member.id,
+      { password: passwordDraft },
+      {
+        onSuccess: () => {
+          setPasswordMember(null);
+          setPasswordDraft('');
+        },
+        onError: (error) => pushToast?.({ msg: '密码更新失败', meta: error?.message }),
       },
-      onError: (error) => pushToast?.({ msg: '密码更新失败', meta: error?.message }),
-    });
+    );
   };
 
   const deleteMember = (member) => {
@@ -507,9 +870,14 @@ function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceR
   return (
     <>
       <div className="pane-head">
-        <div style={{fontSize: 13, color: 'var(--blue)', fontWeight: 500, marginBottom: 6}}>工作区 · 成员</div>
+        <div style={{ fontSize: 13, color: 'var(--blue)', fontWeight: 500, marginBottom: 6 }}>
+          工作区 · 成员
+        </div>
         <h1>成员</h1>
-        <p className="pane-sub">{members.length} 位成员协作于 {spaces.length} 个空间。每位成员可同时拥有多个空间的访问权限；点击右侧的「空间访问」可逐项调整。</p>
+        <p className="pane-sub">
+          {members.length} 位成员协作于 {spaces.length}{' '}
+          个空间。每位成员可同时拥有多个空间的访问权限；点击右侧的「空间访问」可逐项调整。
+        </p>
       </div>
 
       <div className="setting-card">
@@ -518,8 +886,9 @@ function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceR
             <h3>团队成员</h3>
             <div className="sub">所有成员对此列表可见</div>
           </div>
-          <button className="btn primary" onClick={() => setShowNewMember(v => !v)}>
-            <_I2.plus/><span>新增成员</span>
+          <button className="btn primary" onClick={() => setShowNewMember((v) => !v)}>
+            <_I2.plus />
+            <span>新增成员</span>
           </button>
         </div>
         {showNewMember && (
@@ -529,7 +898,7 @@ function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceR
               <input
                 className="input"
                 value={newMember.name}
-                onChange={(e) => setNewMember(m => ({ ...m, name: e.target.value }))}
+                onChange={(e) => setNewMember((m) => ({ ...m, name: e.target.value }))}
                 placeholder="成员姓名"
                 autoFocus
               />
@@ -540,7 +909,7 @@ function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceR
                 className="input"
                 type="email"
                 value={newMember.email}
-                onChange={(e) => setNewMember(m => ({ ...m, email: e.target.value }))}
+                onChange={(e) => setNewMember((m) => ({ ...m, email: e.target.value }))}
                 placeholder="name@atlas.team"
               />
             </div>
@@ -550,7 +919,7 @@ function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceR
                 className="input"
                 type="password"
                 value={newMember.password}
-                onChange={(e) => setNewMember(m => ({ ...m, password: e.target.value }))}
+                onChange={(e) => setNewMember((m) => ({ ...m, password: e.target.value }))}
                 placeholder="至少 8 位"
                 autoComplete="new-password"
               />
@@ -560,7 +929,7 @@ function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceR
               <select
                 className="input"
                 value={newMember.role}
-                onChange={(e) => setNewMember(m => ({ ...m, role: e.target.value }))}
+                onChange={(e) => setNewMember((m) => ({ ...m, role: e.target.value }))}
               >
                 <option value="admin">管理员</option>
                 <option value="editor">编辑</option>
@@ -568,8 +937,12 @@ function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceR
               </select>
             </div>
             <div className="member-create-actions">
-              <button type="button" className="btn ghost" onClick={() => setShowNewMember(false)}>取消</button>
-              <button type="submit" className="btn primary">保存</button>
+              <button type="button" className="btn ghost" onClick={() => setShowNewMember(false)}>
+                取消
+              </button>
+              <button type="submit" className="btn primary">
+                保存
+              </button>
             </div>
           </form>
         )}
@@ -577,11 +950,16 @@ function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceR
           <AnimatedScrollList className="rows-scroll">
             {members.map((m, i) => {
               const memberPerms = perms[m.id] || {};
-              const accessSpaces = spaces.filter(s => memberPerms[s.id]);
+              const accessSpaces = spaces.filter((s) => memberPerms[s.id]);
               return (
                 <div key={m.id} className="member-row-wrap">
                   <div className="member-row member-row-grid">
-                    <span className="avatar" style={{background: avatarColors[i % avatarColors.length]}}>{m.initials}</span>
+                    <span
+                      className="avatar"
+                      style={{ background: avatarColors[i % avatarColors.length] }}
+                    >
+                      {m.initials}
+                    </span>
                     <div className="member-meta">
                       <div className="name">{m.name}</div>
                       <div className="email mono">{m.email}</div>
@@ -589,15 +967,16 @@ function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceR
                     <select
                       className="input"
                       value={m.role}
-                      onChange={e => {
+                      onChange={(e) => {
                         mutations.updateMember(m.id, { role: e.target.value });
                       }}
-                      style={{padding:'6px 32px 6px 10px', fontSize:13}}>
+                      style={{ padding: '6px 32px 6px 10px', fontSize: 13 }}
+                    >
                       <option value="admin">管理员</option>
                       <option value="editor">编辑</option>
                       <option value="viewer">仅读者</option>
                     </select>
-                    <div className="access-cell" style={{position:'relative'}}>
+                    <div className="access-cell" style={{ position: 'relative' }}>
                       <button
                         className="access-trigger"
                         data-access-trigger
@@ -607,37 +986,82 @@ function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceR
                         {accessSpaces.length === 0 && (
                           <span className="access-empty">未分配空间</span>
                         )}
-                        {accessSpaces.slice(0, 3).map(s => (
+                        {accessSpaces.slice(0, 3).map((s) => (
                           <span key={s.id} className="access-pill">
-                            <span className="dot" style={{background: SPACE_COLOR_MAP[s.accent]}}></span>
+                            <span
+                              className="dot"
+                              style={{ background: SPACE_COLOR_MAP[s.accent] }}
+                            ></span>
                             <span>{s.name}</span>
-                            <span className="role">{memberPerms[s.id] === 'editor' ? '编' : '读'}</span>
+                            <span className="role">
+                              {memberPerms[s.id] === 'editor' ? '编' : '读'}
+                            </span>
                           </span>
                         ))}
                         {accessSpaces.length > 3 && (
                           <span className="access-pill more">+{accessSpaces.length - 3}</span>
                         )}
-                        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{marginLeft: 2, color:'var(--ink-4)'}}>
-                          <path d="M2 3.5 5 7 8 3.5" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+                        <svg
+                          width="10"
+                          height="10"
+                          viewBox="0 0 10 10"
+                          fill="none"
+                          style={{ marginLeft: 2, color: 'var(--ink-4)' }}
+                        >
+                          <path
+                            d="M2 3.5 5 7 8 3.5"
+                            stroke="currentColor"
+                            strokeWidth="1.4"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
                         </svg>
                       </button>
                       {editingMember === m.id && (
-                        <div className="access-pop" onMouseDown={(e)=>e.stopPropagation()}>
+                        <div className="access-pop" onMouseDown={(e) => e.stopPropagation()}>
                           <div className="access-pop-head">
                             <span>{m.name} · 空间访问</span>
-                            <button className="icon-btn" onClick={()=>setEditingMember(null)}><_I2.close/></button>
+                            <button className="icon-btn" onClick={() => setEditingMember(null)}>
+                              <_I2.close />
+                            </button>
                           </div>
                           <div className="access-pop-body">
-                            {spaces.map(s => {
+                            {spaces.map((s) => {
                               const role = memberPerms[s.id] || null;
                               return (
                                 <div key={s.id} className="access-pop-row">
-                                  <span className="sm-mark" style={{background: SPACE_COLOR_MAP[s.accent], width: 22, height: 22, borderRadius: 6, fontSize: 11}}>{s.mark || s.name.slice(0,1)}</span>
+                                  <span
+                                    className="sm-mark"
+                                    style={{
+                                      background: SPACE_COLOR_MAP[s.accent],
+                                      width: 22,
+                                      height: 22,
+                                      borderRadius: 6,
+                                      fontSize: 11,
+                                    }}
+                                  >
+                                    {s.mark || s.name.slice(0, 1)}
+                                  </span>
                                   <span className="access-pop-name">{s.name}</span>
                                   <div className="segmented access-seg">
-                                    <button className={role===null?'active':''} onClick={() => setMemberSpaceRole(m.id, s.id, null)}>无</button>
-                                    <button className={role==='viewer'?'active':''} onClick={() => setMemberSpaceRole(m.id, s.id, 'viewer')}>仅读</button>
-                                    <button className={role==='editor'?'active':''} onClick={() => setMemberSpaceRole(m.id, s.id, 'editor')}>编辑</button>
+                                    <button
+                                      className={role === null ? 'active' : ''}
+                                      onClick={() => setMemberSpaceRole(m.id, s.id, null)}
+                                    >
+                                      无
+                                    </button>
+                                    <button
+                                      className={role === 'viewer' ? 'active' : ''}
+                                      onClick={() => setMemberSpaceRole(m.id, s.id, 'viewer')}
+                                    >
+                                      仅读
+                                    </button>
+                                    <button
+                                      className={role === 'editor' ? 'active' : ''}
+                                      onClick={() => setMemberSpaceRole(m.id, s.id, 'editor')}
+                                    >
+                                      编辑
+                                    </button>
                                   </div>
                                 </div>
                               );
@@ -657,20 +1081,28 @@ function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceR
                           setMenuOpenId(menuOpenId === m.id ? null : m.id);
                         }}
                       >
-                        <_I2.more/>
+                        <_I2.more />
                       </button>
                       {menuOpenId === m.id && (
-                        <div className="row-menu member-row-menu" onClick={(e)=>e.stopPropagation()}>
-                          <button className="row-menu-item" onClick={() => {
-                            setPasswordMember(m.id);
-                            setPasswordDraft('');
-                            setMenuOpenId(null);
-                          }}>
-                            <_I2.lock/><span>编辑密码</span>
+                        <div
+                          className="row-menu member-row-menu"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            className="row-menu-item"
+                            onClick={() => {
+                              setPasswordMember(m.id);
+                              setPasswordDraft('');
+                              setMenuOpenId(null);
+                            }}
+                          >
+                            <_I2.lock />
+                            <span>编辑密码</span>
                           </button>
                           <div className="row-menu-sep"></div>
                           <button className="row-menu-item danger" onClick={() => deleteMember(m)}>
-                            <_I2.trash/><span>删除成员</span>
+                            <_I2.trash />
+                            <span>删除成员</span>
                           </button>
                         </div>
                       )}
@@ -680,7 +1112,9 @@ function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceR
                     <div className="member-password-row">
                       <div>
                         <div className="member-password-title">编辑 {m.name} 的登录密码</div>
-                        <div className="member-password-sub">保存后该成员下次登录需使用新密码。</div>
+                        <div className="member-password-sub">
+                          保存后该成员下次登录需使用新密码。
+                        </div>
                       </div>
                       <input
                         className="input"
@@ -698,11 +1132,18 @@ function MembersPane({ spaces, members = [], perms, currentUser, setMemberSpaceR
                         autoComplete="new-password"
                         autoFocus
                       />
-                      <button className="btn ghost" onClick={() => {
-                        setPasswordMember(null);
-                        setPasswordDraft('');
-                      }}>取消</button>
-                      <button className="btn primary" onClick={() => savePassword(m)}>保存密码</button>
+                      <button
+                        className="btn ghost"
+                        onClick={() => {
+                          setPasswordMember(null);
+                          setPasswordDraft('');
+                        }}
+                      >
+                        取消
+                      </button>
+                      <button className="btn primary" onClick={() => savePassword(m)}>
+                        保存密码
+                      </button>
                     </div>
                   )}
                 </div>
@@ -725,7 +1166,7 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
     }
   }, [activeSpace, spaces]);
 
-  const space = spaces.find(s => s.id === activeSpace) || spaces[0];
+  const space = spaces.find((s) => s.id === activeSpace) || spaces[0];
   const spaceMembersQuery = useQuery({
     queryKey: space?.id ? atlasKeys.spaceMembers(space.id) : ['space-members', 'empty'],
     queryFn: () => apiGet(`/spaces/${space.id}/members`),
@@ -740,7 +1181,13 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
   );
   const activeCount = assignedMembers.length;
 
-  if (!space) return <div className="pane-head"><h1>空间权限</h1><p className="pane-sub">尚未创建任何空间。</p></div>;
+  if (!space)
+    return (
+      <div className="pane-head">
+        <h1>空间权限</h1>
+        <p className="pane-sub">尚未创建任何空间。</p>
+      </div>
+    );
 
   const spaceColor = SPACE_COLOR_MAP[space.accent] || SPACE_COLOR_MAP.accent;
 
@@ -750,7 +1197,7 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
       pushToast?.({ msg: role ? '没有可更新的成员' : '当前空间已清空', meta: space.name });
       return;
     }
-    targets.forEach(m => setMemberSpaceRole(m.id, space.id, role, { silent: true }));
+    targets.forEach((m) => setMemberSpaceRole(m.id, space.id, role, { silent: true }));
     pushToast?.({
       msg: role ? '已批量更新空间权限' : '已清空空间权限',
       meta: `${space.name} · ${targets.length} 位成员`,
@@ -765,21 +1212,27 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
   return (
     <>
       <div className="pane-head">
-        <div style={{fontSize: 13, color: 'var(--blue)', fontWeight: 500, marginBottom: 6}}>工作区 · 空间权限</div>
+        <div style={{ fontSize: 13, color: 'var(--blue)', fontWeight: 500, marginBottom: 6 }}>
+          工作区 · 空间权限
+        </div>
         <h1>空间权限</h1>
-        <p className="pane-sub">为每个空间分别指定成员的角色——编辑可创建与修改文档，仅读只能查看。一位成员可以同时拥有多个空间的访问权限。</p>
+        <p className="pane-sub">
+          为每个空间分别指定成员的角色——编辑可创建与修改文档，仅读只能查看。一位成员可以同时拥有多个空间的访问权限。
+        </p>
       </div>
 
       <div className="space-tabs">
-        {spaces.map(s => (
+        {spaces.map((s) => (
           <button
             key={s.id}
-            className={"space-tab " + (activeSpace === s.id ? 'active' : '')}
-            onClick={()=>setSpaceWithMotion(s.id)}
+            className={'space-tab ' + (activeSpace === s.id ? 'active' : '')}
+            onClick={() => setSpaceWithMotion(s.id)}
           >
-            <span className="dot" style={{background: SPACE_COLOR_MAP[s.accent]}}></span>
+            <span className="dot" style={{ background: SPACE_COLOR_MAP[s.accent] }}></span>
             <span>{s.name}</span>
-            <span className="count mono">{Object.values(perms).filter(p => p?.[s.id]).length}</span>
+            <span className="count mono">
+              {Object.values(perms).filter((p) => p?.[s.id]).length}
+            </span>
           </button>
         ))}
       </div>
@@ -787,8 +1240,20 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
       <div className="setting-card">
         <div className="card-head">
           <div>
-            <h3 style={{display:'flex', alignItems:'center', gap: 8}}>
-              <span className="sm-mark" style={{background: spaceColor, width: 22, height: 22, borderRadius: 6, fontSize: 11, flex: '0 0 auto'}}>{space.mark || space.name.slice(0,1)}</span>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span
+                className="sm-mark"
+                style={{
+                  background: spaceColor,
+                  width: 22,
+                  height: 22,
+                  borderRadius: 6,
+                  fontSize: 11,
+                  flex: '0 0 auto',
+                }}
+              >
+                {space.mark || space.name.slice(0, 1)}
+              </span>
               <span>{space.name} · 成员访问</span>
             </h3>
             <div className="sub">
@@ -797,9 +1262,13 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
                 : `${activeCount} 位成员拥有该空间访问权限，修改立即生效。`}
             </div>
           </div>
-          <div style={{display:'flex', gap: 6}}>
-            <button className="btn ghost" disabled={activeCount === 0} onClick={()=>setAll(null)}>清空</button>
-            <button className="btn secondary" onClick={()=>setAll('viewer')}>全部设为仅读</button>
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button className="btn ghost" disabled={activeCount === 0} onClick={() => setAll(null)}>
+              清空
+            </button>
+            <button className="btn secondary" onClick={() => setAll('viewer')}>
+              全部设为仅读
+            </button>
           </div>
         </div>
         <div className="card-body card-body-scroll">
@@ -810,37 +1279,39 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
             {!spaceMembersQuery.isLoading && assignedMembers.length === 0 && (
               <div className="perm-empty">当前空间还没有成员访问权限。</div>
             )}
-            {!spaceMembersQuery.isLoading && assignedMembers.map(m => {
-              const role = m.spaceRole || perms[m.id]?.[space.id] || null;
-              return (
-                <PermissionMemberRow
-                  key={m.id}
-                  member={m}
-                  role={role}
-                  spaceId={space.id}
-                  setMemberSpaceRole={setMemberSpaceRole}
-                />
-              );
-            })}
+            {!spaceMembersQuery.isLoading &&
+              assignedMembers.map((m) => {
+                const role = m.spaceRole || perms[m.id]?.[space.id] || null;
+                return (
+                  <PermissionMemberRow
+                    key={m.id}
+                    member={m}
+                    role={role}
+                    spaceId={space.id}
+                    setMemberSpaceRole={setMemberSpaceRole}
+                  />
+                );
+              })}
             {!spaceMembersQuery.isLoading && unassignedMembers.length > 0 && (
               <div className="perm-unassigned">
                 <button
                   className="perm-unassigned-trigger"
-                  onClick={() => setShowUnassigned(v => !v)}
+                  onClick={() => setShowUnassigned((v) => !v)}
                 >
                   <span>{showUnassigned ? '收起未分配成员' : '添加未分配成员'}</span>
                   <span className="mono">{unassignedMembers.length}</span>
                 </button>
-                {showUnassigned && unassignedMembers.map(m => (
-                  <PermissionMemberRow
-                    key={m.id}
-                    member={m}
-                    role={null}
-                    spaceId={space.id}
-                    muted
-                    setMemberSpaceRole={setMemberSpaceRole}
-                  />
-                ))}
+                {showUnassigned &&
+                  unassignedMembers.map((m) => (
+                    <PermissionMemberRow
+                      key={m.id}
+                      member={m}
+                      role={null}
+                      spaceId={space.id}
+                      muted
+                      setMemberSpaceRole={setMemberSpaceRole}
+                    />
+                  ))}
               </div>
             )}
           </AnimatedScrollList>
@@ -852,16 +1323,31 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
 
 function PermissionMemberRow({ member, role, spaceId, muted = false, setMemberSpaceRole }) {
   return (
-    <div className={"perm-matrix-row " + (muted ? 'muted' : '')}>
+    <div className={'perm-matrix-row ' + (muted ? 'muted' : '')}>
       <span className="avatar small">{member.initials}</span>
       <div className="perm-matrix-meta">
         <div className="name">{member.name}</div>
         <div className="email mono">{member.email}</div>
       </div>
       <div className="segmented access-seg">
-        <button className={role===null?'active':''} onClick={() => setMemberSpaceRole(member.id, spaceId, null)}>无访问</button>
-        <button className={role==='viewer'?'active':''} onClick={() => setMemberSpaceRole(member.id, spaceId, 'viewer')}>仅读</button>
-        <button className={role==='editor'?'active':''} onClick={() => setMemberSpaceRole(member.id, spaceId, 'editor')}>编辑</button>
+        <button
+          className={role === null ? 'active' : ''}
+          onClick={() => setMemberSpaceRole(member.id, spaceId, null)}
+        >
+          无访问
+        </button>
+        <button
+          className={role === 'viewer' ? 'active' : ''}
+          onClick={() => setMemberSpaceRole(member.id, spaceId, 'viewer')}
+        >
+          仅读
+        </button>
+        <button
+          className={role === 'editor' ? 'active' : ''}
+          onClick={() => setMemberSpaceRole(member.id, spaceId, 'editor')}
+        >
+          编辑
+        </button>
       </div>
     </div>
   );
@@ -875,7 +1361,11 @@ function PermRow({ label, desc, def }) {
         <div className="label">{label}</div>
         <div className="desc">{desc}</div>
       </div>
-      <button className={"toggle " + (on ? 'on' : '')} onClick={() => setOn(o => !o)} aria-label={label}></button>
+      <button
+        className={'toggle ' + (on ? 'on' : '')}
+        onClick={() => setOn((o) => !o)}
+        aria-label={label}
+      ></button>
     </div>
   );
 }
@@ -889,7 +1379,9 @@ function TrashPane({ pushToast, mutations }) {
   return (
     <>
       <div className="pane-head">
-        <div style={{fontSize: 13, color: 'var(--blue)', fontWeight: 500, marginBottom: 6}}>维护 · 回收站</div>
+        <div style={{ fontSize: 13, color: 'var(--blue)', fontWeight: 500, marginBottom: 6 }}>
+          维护 · 回收站
+        </div>
         <h1>回收站</h1>
         <p className="pane-sub">删除后保留 30 天，可恢复至原空间。过期项目将被永久删除。</p>
       </div>
@@ -906,7 +1398,7 @@ function TrashPane({ pushToast, mutations }) {
         </div>
         <div className="card-body card-body-scroll">
           <AnimatedScrollList className="rows-scroll">
-            {items.map(it => (
+            {items.map((it) => (
               <div key={it.id} className="trash-row">
                 <div>
                   <div className="doc-name">{it.title}</div>
@@ -914,10 +1406,20 @@ function TrashPane({ pushToast, mutations }) {
                 </div>
                 <div className="by">作者 · {it.authorName}</div>
                 <div className="when">{it.updated}</div>
-                <div className="expires">{it.purgeAfter ? `${new Date(it.purgeAfter).toLocaleDateString('zh-CN')} 清理` : '30 天内'}</div>
-                <button className="icon-btn" title="恢复" onClick={() => {
-                  mutations.restoreDocument(it.id);
-                }}><_I2.refresh/></button>
+                <div className="expires">
+                  {it.purgeAfter
+                    ? `${new Date(it.purgeAfter).toLocaleDateString('zh-CN')} 清理`
+                    : '30 天内'}
+                </div>
+                <button
+                  className="icon-btn"
+                  title="恢复"
+                  onClick={() => {
+                    mutations.restoreDocument(it.id);
+                  }}
+                >
+                  <_I2.refresh />
+                </button>
               </div>
             ))}
           </AnimatedScrollList>
@@ -936,38 +1438,54 @@ function SkillsPane({ pushToast, mutations }) {
   return (
     <>
       <div className="pane-head">
-        <div style={{fontSize: 13, color: 'var(--blue)', fontWeight: 500, marginBottom: 6}}>维护 · Skill</div>
+        <div style={{ fontSize: 13, color: 'var(--blue)', fontWeight: 500, marginBottom: 6 }}>
+          维护 · Skill
+        </div>
         <h1>Skill 版本</h1>
-        <p className="pane-sub">Skill 是 Atlas 用来处理外部 HTML 的小程序。切换版本影响后续上传的文档；历史文档保留发布时的版本。</p>
+        <p className="pane-sub">
+          Skill 是 Atlas 用来处理外部 HTML
+          的小程序。切换版本影响后续上传的文档；历史文档保留发布时的版本。
+        </p>
       </div>
 
       <div className="setting-card">
         <div className="card-head">
           <div>
             <h3>HTML sandbox</h3>
-            <div className="sub" style={{maxWidth: 520}}>负责将外部 HTML 隔离在阅读页 iframe 中，保留原文脚本与样式，避免上传内容触达 Atlas 应用外壳。</div>
+            <div className="sub" style={{ maxWidth: 520 }}>
+              负责将外部 HTML 隔离在阅读页 iframe 中，保留原文脚本与样式，避免上传内容触达 Atlas
+              应用外壳。
+            </div>
           </div>
-          <button className="btn secondary"><_I2.upload width="13" height="13"/><span>上传新版本</span></button>
+          <button className="btn secondary">
+            <_I2.upload width="13" height="13" />
+            <span>上传新版本</span>
+          </button>
         </div>
         <div className="card-body card-body-scroll">
           <AnimatedScrollList className="rows-scroll">
-            {versions.map(v => {
+            {versions.map((v) => {
               const isActive = v.active;
               return (
                 <div key={v.version} className="skill-row">
                   <div>
-                    <div className={"ver " + (isActive ? 'current' : '')}>v{v.version}</div>
+                    <div className={'ver ' + (isActive ? 'current' : '')}>v{v.version}</div>
                     <div className="note">{v.note}</div>
                   </div>
                   <div className="status">{isActive ? '使用中' : '可回滚'}</div>
                   <div>
                     <div className="when">{new Date(v.createdAt).toLocaleDateString('zh-CN')}</div>
-                    <div className="note" style={{fontSize: 11.5}}>{v.name}</div>
+                    <div className="note" style={{ fontSize: 11.5 }}>
+                      {v.name}
+                    </div>
                   </div>
                   <div>
                     {!isActive && (
-                      <button className="btn secondary" style={{padding:'5px 12px', fontSize: 12.5}}
-                        onClick={() => mutations.activateSkill(v.version)}>
+                      <button
+                        className="btn secondary"
+                        style={{ padding: '5px 12px', fontSize: 12.5 }}
+                        onClick={() => mutations.activateSkill(v.version)}
+                      >
                         切换至此
                       </button>
                     )}

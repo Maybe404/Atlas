@@ -344,7 +344,9 @@ describe('Atlas API', () => {
 
   test('only admins and document authors can manage share settings', async () => {
     const viewer = await loginAs('he@atlas.team');
-    const readonlyShare = await request('/documents/d3/share', { headers: { cookie: viewer.cookie } });
+    const readonlyShare = await request('/documents/d3/share', {
+      headers: { cookie: viewer.cookie },
+    });
     expect(readonlyShare.status).toBe(200);
     const readonlyBody = (await readonlyShare.json()) as {
       canManage: boolean;
@@ -367,7 +369,9 @@ describe('Atlas API', () => {
     expect(((await guestShare.json()) as { canManage: boolean }).canManage).toBe(false);
 
     const author = await loginAs('chen@atlas.team');
-    const authorShare = await request('/documents/d4/share', { headers: { cookie: author.cookie } });
+    const authorShare = await request('/documents/d4/share', {
+      headers: { cookie: author.cookie },
+    });
     expect(authorShare.status).toBe(200);
     const authorBody = (await authorShare.json()) as {
       canManage: boolean;

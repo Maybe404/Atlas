@@ -10,11 +10,11 @@ import { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakToggle } from '.
 import { useAtlasData, useAtlasMutations } from './data-hooks';
 import { firstPublicDoc, LoginView, useAuth } from './auth';
 
-const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
-  "theme": "warm",
-  "framedDoc": false,
-  "dockMagnify": true
-}/*EDITMODE-END*/;
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/ {
+  theme: 'warm',
+  framedDoc: false,
+  dockMagnify: true,
+} /*EDITMODE-END*/;
 
 // Views that have a sidebar (only reader per spec — admin pages are full-width)
 const SIDEBAR_VIEWS = new Set(['reader']);
@@ -22,15 +22,40 @@ const SIDEBAR_VIEWS = new Set(['reader']);
 function stateFromLocation(location) {
   const params = new URLSearchParams(location.search);
   const path = location.pathname;
-  if (path.startsWith('/admin/upload')) return { view: 'admin-upload', spaceId: params.get('space') || 's1', docId: params.get('doc') || 'd1' };
-  if (path.startsWith('/admin/settings')) return { view: 'admin-settings', spaceId: params.get('space') || 's1', docId: params.get('doc') || 'd1' };
-  if (path.startsWith('/admin/docs')) return { view: 'admin-docs', spaceId: params.get('space') || 's1', docId: params.get('doc') || 'd1' };
-  if (path.startsWith('/login')) return { view: 'login', spaceId: params.get('space') || 's1', docId: params.get('doc') || 'd1' };
+  if (path.startsWith('/admin/upload'))
+    return {
+      view: 'admin-upload',
+      spaceId: params.get('space') || 's1',
+      docId: params.get('doc') || 'd1',
+    };
+  if (path.startsWith('/admin/settings'))
+    return {
+      view: 'admin-settings',
+      spaceId: params.get('space') || 's1',
+      docId: params.get('doc') || 'd1',
+    };
+  if (path.startsWith('/admin/docs'))
+    return {
+      view: 'admin-docs',
+      spaceId: params.get('space') || 's1',
+      docId: params.get('doc') || 'd1',
+    };
+  if (path.startsWith('/login'))
+    return {
+      view: 'login',
+      spaceId: params.get('space') || 's1',
+      docId: params.get('doc') || 'd1',
+    };
   const publicMatch = path.match(/^\/share\/([^/]+)/);
-  if (publicMatch) return { view: 'public', token: publicMatch[1], spaceId: 'public', docId: publicMatch[1] };
+  if (publicMatch)
+    return { view: 'public', token: publicMatch[1], spaceId: 'public', docId: publicMatch[1] };
   const docMatch = path.match(/^\/spaces\/([^/]+)\/docs\/([^/]+)/);
   if (docMatch) return { view: 'reader', spaceId: docMatch[1], docId: docMatch[2] };
-  return { view: params.get('view') || 'reader', spaceId: params.get('space') || 's1', docId: params.get('doc') || 'd1' };
+  return {
+    view: params.get('view') || 'reader',
+    spaceId: params.get('space') || 's1',
+    docId: params.get('doc') || 'd1',
+  };
 }
 
 function urlForState(next) {
@@ -59,13 +84,16 @@ function App() {
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', tweaks.theme === 'light' ? '' : tweaks.theme);
+    document.documentElement.setAttribute(
+      'data-theme',
+      tweaks.theme === 'light' ? '' : tweaks.theme,
+    );
   }, [tweaks.theme]);
 
   const pushToast = useCallback(({ msg, meta }) => {
     const id = Math.random().toString(36).slice(2);
-    setToasts(ts => [...ts, { id, msg, meta }]);
-    setTimeout(() => setToasts(ts => ts.filter(t => t.id !== id)), 2200);
+    setToasts((ts) => [...ts, { id, msg, meta }]);
+    setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), 2200);
   }, []);
 
   const { spaces, members, permissions, currentUser, session, isLoading, error } = useAtlasData();
@@ -73,19 +101,22 @@ function App() {
   const { user, login, logout, switchTo } = auth;
   const isGuest = !user;
 
-  const navigate = useCallback(({ view: v, spaceId: s, docId: d }) => {
-    if (!user && ['admin-docs', 'admin-upload', 'admin-settings'].includes(v)) {
-      setReturnTo({ view, spaceId, docId });
-      routerNavigate('/login');
-      return;
-    }
-    const next = {
-      view: v || view,
-      spaceId: s || spaceId,
-      docId: d || docId,
-    };
-    routerNavigate(urlForState(next));
-  }, [docId, routerNavigate, spaceId, user, view]);
+  const navigate = useCallback(
+    ({ view: v, spaceId: s, docId: d }) => {
+      if (!user && ['admin-docs', 'admin-upload', 'admin-settings'].includes(v)) {
+        setReturnTo({ view, spaceId, docId });
+        routerNavigate('/login');
+        return;
+      }
+      const next = {
+        view: v || view,
+        spaceId: s || spaceId,
+        docId: d || docId,
+      };
+      routerNavigate(urlForState(next));
+    },
+    [docId, routerNavigate, spaceId, user, view],
+  );
   const mutations = useAtlasMutations(pushToast);
 
   const openLogin = useCallback(() => {
@@ -107,15 +138,19 @@ function App() {
     navigate(target);
   }, [navigate, returnTo, spaces]);
 
-  const handleLogin = useCallback(async (email, password) => {
-    const result = await login(email, password);
-    if (result.ok) {
-      const target = returnTo && returnTo.view !== 'login' ? returnTo : stateFromLocation(location);
-      setReturnTo(null);
-      routerNavigate(urlForState(target));
-    }
-    return result;
-  }, [location, login, returnTo, routerNavigate]);
+  const handleLogin = useCallback(
+    async (email, password) => {
+      const result = await login(email, password);
+      if (result.ok) {
+        const target =
+          returnTo && returnTo.view !== 'login' ? returnTo : stateFromLocation(location);
+        setReturnTo(null);
+        routerNavigate(urlForState(target));
+      }
+      return result;
+    },
+    [location, login, returnTo, routerNavigate],
+  );
 
   const handleLogout = useCallback(async () => {
     await logout();
@@ -124,14 +159,18 @@ function App() {
     }
   }, [logout, routerNavigate, spaces, view]);
 
-  const cycleTheme = useCallback((to) => {
-    setTweak({ theme: to });
-  }, [setTweak]);
+  const cycleTheme = useCallback(
+    (to) => {
+      setTweak({ theme: to });
+    },
+    [setTweak],
+  );
 
   useEffect(() => {
     const onKey = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
-        e.preventDefault(); setCmdkOpen(true);
+        e.preventDefault();
+        setCmdkOpen(true);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -158,7 +197,8 @@ function App() {
     // arm initial timer so chrome auto-hides on first idle
     hideTimer = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
 
-    const INTERACTIVE = 'button, a[href], input, select, textarea, .toggle, .doc-card, .doc-row, .radio-card, .tree-node, .dock-item, .tab, .cmdk-item, .share-row, .member-row, .skill-row, .trash-row, .file-line, .step, .space-mgr-row, .icon-btn, .color-swatch, .pill-btn, .role-select, .sidebar-collapse-btn, .sidebar-fab';
+    const INTERACTIVE =
+      'button, a[href], input, select, textarea, .toggle, .doc-card, .doc-row, .radio-card, .tree-node, .dock-item, .tab, .cmdk-item, .share-row, .member-row, .skill-row, .trash-row, .file-line, .step, .space-mgr-row, .icon-btn, .color-swatch, .pill-btn, .role-select, .sidebar-collapse-btn, .sidebar-fab';
 
     const onClick = (e) => {
       // ignore clicks on actual interactive controls — only "blank space" wakes
@@ -171,14 +211,22 @@ function App() {
     };
 
     const attachScroll = () => {
-      document.querySelectorAll('.main-scroll, .scroll-list, .settings-pane, .reader-iframe-wrap, .cmdk-results, .dialog-body, .upload-wrap').forEach(el => {
-        el.removeEventListener('scroll', onScroll);
-        el.addEventListener('scroll', onScroll, { passive: true });
-      });
-      document.querySelectorAll('iframe.reader-iframe').forEach(ifr => {
-        try { ifr.contentWindow?.addEventListener('scroll', onScroll, { passive: true }); } catch (e) {}
+      document
+        .querySelectorAll(
+          '.main-scroll, .scroll-list, .settings-pane, .reader-iframe-wrap, .cmdk-results, .dialog-body, .upload-wrap',
+        )
+        .forEach((el) => {
+          el.removeEventListener('scroll', onScroll);
+          el.addEventListener('scroll', onScroll, { passive: true });
+        });
+      document.querySelectorAll('iframe.reader-iframe').forEach((ifr) => {
+        try {
+          ifr.contentWindow?.addEventListener('scroll', onScroll, { passive: true });
+        } catch (e) {}
         ifr.addEventListener('load', () => {
-          try { ifr.contentWindow.addEventListener('scroll', onScroll, { passive: true }); } catch (e) {}
+          try {
+            ifr.contentWindow.addEventListener('scroll', onScroll, { passive: true });
+          } catch (e) {}
         });
       });
     };
@@ -205,12 +253,15 @@ function App() {
   const hasSidebar = SIDEBAR_VIEWS.has(view) && !isLogin;
   const isPublicView = view === 'public';
 
-  const activeDoc = spaces.flatMap(s => s.children || []).find(d => d.id === docId);
+  const activeDoc = spaces.flatMap((s) => s.children || []).find((d) => d.id === docId);
   const shareDocId = sharingDocId || activeDoc?.id || docId;
-  const openShare = useCallback((targetDocId) => {
-    setSharingDocId(targetDocId || activeDoc?.id || docId);
-    setShareOpen(true);
-  }, [activeDoc?.id, docId]);
+  const openShare = useCallback(
+    (targetDocId) => {
+      setSharingDocId(targetDocId || activeDoc?.id || docId);
+      setShareOpen(true);
+    },
+    [activeDoc?.id, docId],
+  );
 
   useEffect(() => {
     if (!isLoading && isGuest && isAdminView) {
@@ -222,17 +273,21 @@ function App() {
   if (isLogin) {
     return (
       <div className="app no-sidebar login-shell">
-        <LoginView
-          onLogin={handleLogin}
-          onContinueAsGuest={continueAsGuest}
-          returnTo={returnTo}
-        />
+        <LoginView onLogin={handleLogin} onContinueAsGuest={continueAsGuest} returnTo={returnTo} />
       </div>
     );
   }
 
   return (
-    <div className={"app " + (!hasSidebar ? 'no-sidebar ' : '') + (isPublicView ? 'public-shell ' : '') + (sidebarCollapsed ? 'sidebar-collapsed ' : '') + (chromeVisible ? '' : 'chrome-hidden ')}>
+    <div
+      className={
+        'app ' +
+        (!hasSidebar ? 'no-sidebar ' : '') +
+        (isPublicView ? 'public-shell ' : '') +
+        (sidebarCollapsed ? 'sidebar-collapsed ' : '') +
+        (chromeVisible ? '' : 'chrome-hidden ')
+      }
+    >
       {!isPublicView && (
         <Topbar
           ctx={ctx}
@@ -255,7 +310,7 @@ function App() {
           spaces={spaces}
           user={user}
           collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed(v => !v)}
+          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
           onNavigate={navigate}
         />
       )}
@@ -267,75 +322,173 @@ function App() {
           title="展开目录"
         >
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-            <path d="M3 3.5h8M3 7h8M3 10.5h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
+            <path
+              d="M3 3.5h8M3 7h8M3 10.5h8"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
           </svg>
           <span className="sidebar-fab-label">目录</span>
         </button>
       )}
-      <main className="main" ref={mainRef} data-screen-label={
-        view === 'reader' ? '01 Reader · Doc (iframe)'
-        : view === 'admin-docs' ? '02 Admin · Documents'
-        : view === 'admin-upload' ? '03 Admin · Upload'
-        : view === 'public' ? 'Public · Document'
-        : '04 Admin · Settings'
-      }>
+      <main
+        className="main"
+        ref={mainRef}
+        data-screen-label={
+          view === 'reader'
+            ? '01 Reader · Doc (iframe)'
+            : view === 'admin-docs'
+              ? '02 Admin · Documents'
+              : view === 'admin-upload'
+                ? '03 Admin · Upload'
+                : view === 'public'
+                  ? 'Public · Document'
+                  : '04 Admin · Settings'
+        }
+      >
         {error && <div className="app-state-banner">加载失败 · {error.message}</div>}
         {isLoading && <div className="app-state-banner">正在同步工作区数据…</div>}
-        {view === 'reader' && <ReaderView ctx={ctx} spaces={spaces} members={members} user={user} framedDoc={tweaks.framedDoc} chromeVisible={chromeVisible} onNavigate={navigate} onShare={(id) => openShare(id)} onLogin={openLogin}/>}
-        {view === 'public' && <PublicDocumentView token={routeState.token}/>}
-        {lacksAdminAccess && <AdminAccessDenied user={user} onNavigate={navigate}/>}
-        {!lacksAdminAccess && view === 'admin-docs' && <AdminDocsView ctx={ctx} spaces={spaces} members={members} onNavigate={navigate} onShare={(id) => openShare(id)} pushToast={pushToast} mutations={mutations}/>}
-        {!lacksAdminAccess && view === 'admin-upload' && <AdminUploadView ctx={ctx} spaces={spaces} onNavigate={navigate} pushToast={pushToast} mutations={mutations}/>}
-        {!lacksAdminAccess && view === 'admin-settings' && <AdminSettingsView ctx={ctx} onNavigate={navigate} pushToast={pushToast} spaces={spaces} members={members} permissions={permissions} currentUser={currentUser} mutations={mutations} onEditSpace={(sp) => { setSpaceEditing(sp); setSpaceMgrOpen(true); }} onNewSpace={() => { setSpaceEditing('new'); setSpaceMgrOpen(true); }}/>}
+        {view === 'reader' && (
+          <ReaderView
+            ctx={ctx}
+            spaces={spaces}
+            members={members}
+            user={user}
+            framedDoc={tweaks.framedDoc}
+            chromeVisible={chromeVisible}
+            onNavigate={navigate}
+            onShare={(id) => openShare(id)}
+            onLogin={openLogin}
+          />
+        )}
+        {view === 'public' && <PublicDocumentView token={routeState.token} />}
+        {lacksAdminAccess && <AdminAccessDenied user={user} onNavigate={navigate} />}
+        {!lacksAdminAccess && view === 'admin-docs' && (
+          <AdminDocsView
+            ctx={ctx}
+            spaces={spaces}
+            members={members}
+            onNavigate={navigate}
+            onShare={(id) => openShare(id)}
+            pushToast={pushToast}
+            mutations={mutations}
+          />
+        )}
+        {!lacksAdminAccess && view === 'admin-upload' && (
+          <AdminUploadView
+            ctx={ctx}
+            spaces={spaces}
+            onNavigate={navigate}
+            pushToast={pushToast}
+            mutations={mutations}
+          />
+        )}
+        {!lacksAdminAccess && view === 'admin-settings' && (
+          <AdminSettingsView
+            ctx={ctx}
+            onNavigate={navigate}
+            pushToast={pushToast}
+            spaces={spaces}
+            members={members}
+            permissions={permissions}
+            currentUser={currentUser}
+            mutations={mutations}
+            onEditSpace={(sp) => {
+              setSpaceEditing(sp);
+              setSpaceMgrOpen(true);
+            }}
+            onNewSpace={() => {
+              setSpaceEditing('new');
+              setSpaceMgrOpen(true);
+            }}
+          />
+        )}
 
-        {!isPublicView && <Dock view={view} onNavigate={navigate} visible={chromeVisible} magnify={tweaks.dockMagnify} isGuest={isGuest}/>}
+        {!isPublicView && (
+          <Dock
+            view={view}
+            onNavigate={navigate}
+            visible={chromeVisible}
+            magnify={tweaks.dockMagnify}
+            isGuest={isGuest}
+          />
+        )}
       </main>
 
-      {!isPublicView && <CmdK open={cmdkOpen} spaces={spaces} members={members} onClose={() => setCmdkOpen(false)} onNavigate={navigate} onToggleTheme={() => cycleTheme(tweaks.theme === 'dark' ? 'warm' : 'dark')}/>}
-      <ShareDialog open={shareOpen} documentId={shareDocId} members={members} currentUser={currentUser} onClose={() => { setShareOpen(false); setSharingDocId(null); }} pushToast={pushToast} mutations={mutations}/>
+      {!isPublicView && (
+        <CmdK
+          open={cmdkOpen}
+          spaces={spaces}
+          members={members}
+          onClose={() => setCmdkOpen(false)}
+          onNavigate={navigate}
+          onToggleTheme={() => cycleTheme(tweaks.theme === 'dark' ? 'warm' : 'dark')}
+        />
+      )}
+      <ShareDialog
+        open={shareOpen}
+        documentId={shareDocId}
+        members={members}
+        currentUser={currentUser}
+        onClose={() => {
+          setShareOpen(false);
+          setSharingDocId(null);
+        }}
+        pushToast={pushToast}
+        mutations={mutations}
+      />
       <SpaceManagerDialog
         open={spaceMgrOpen}
         editing={spaceEditing}
-        onClose={() => { setSpaceMgrOpen(false); setSpaceEditing(null); }}
+        onClose={() => {
+          setSpaceMgrOpen(false);
+          setSpaceEditing(null);
+        }}
         onCreate={mutations.createSpace}
         onUpdate={mutations.updateSpace}
         onDelete={mutations.deleteSpace}
       />
-      <ToastWrap toasts={toasts}/>
+      <ToastWrap toasts={toasts} />
 
       <TweaksPanel title="Tweaks">
         <TweakSection label="主题">
           <TweakRadio
             label="模式"
             value={tweaks.theme}
-            onChange={v => setTweak({ theme: v })}
-            options={[{label:'浅', value:'light'}, {label:'暖', value:'warm'}, {label:'深', value:'dark'}]}
+            onChange={(v) => setTweak({ theme: v })}
+            options={[
+              { label: '浅', value: 'light' },
+              { label: '暖', value: 'warm' },
+              { label: '深', value: 'dark' },
+            ]}
           />
         </TweakSection>
         <TweakSection label="阅读器">
           <TweakToggle
             label="iframe 边框"
             value={tweaks.framedDoc}
-            onChange={v => setTweak({ framedDoc: v })}
+            onChange={(v) => setTweak({ framedDoc: v })}
           />
         </TweakSection>
         <TweakSection label="底部 Dock">
           <TweakToggle
             label="Dock 放大效果"
             value={tweaks.dockMagnify}
-            onChange={v => setTweak({ dockMagnify: v })}
+            onChange={(v) => setTweak({ dockMagnify: v })}
           />
         </TweakSection>
         <TweakSection label="跳转视图">
-          <div style={{display:'flex', flexDirection:'column', gap: 6}}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {[
-              {l:'读者 · 单文档', v:{view:'reader', spaceId:'s1', docId:'d1'}},
-              {l:'团队 · 文档列表', v:{view:'admin-docs'}},
-              {l:'团队 · 上传', v:{view:'admin-upload'}},
-              {l:'管理员 · 设置', v:{view:'admin-settings'}},
-            ].map(x => (
+              { l: '读者 · 单文档', v: { view: 'reader', spaceId: 's1', docId: 'd1' } },
+              { l: '团队 · 文档列表', v: { view: 'admin-docs' } },
+              { l: '团队 · 上传', v: { view: 'admin-upload' } },
+              { l: '管理员 · 设置', v: { view: 'admin-settings' } },
+            ].map((x) => (
               <div key={x.l} className="tweak-link" onClick={() => navigate(x.v)}>
-                <span>{x.l}</span><span style={{color:'var(--ink-4)'}}>→</span>
+                <span>{x.l}</span>
+                <span style={{ color: 'var(--ink-4)' }}>→</span>
               </div>
             ))}
           </div>
@@ -350,12 +503,18 @@ function App() {
 // ─────────────────────────────────────────────────────────────────────────
 function Dock({ view, onNavigate, visible, magnify, isGuest }) {
   const allItems = [
-    { id: 'reader',         label: '阅读',     icon: 'book',     go: { view: 'reader', spaceId: 's1', docId: 'd1' }, guest: true },
-    { id: 'admin-docs',     label: '管理',     icon: 'admin',    go: { view: 'admin-docs' } },
-    { id: 'admin-upload',   label: '上传',     icon: 'upload',   go: { view: 'admin-upload' } },
-    { id: 'admin-settings', label: '设置',     icon: 'settings', go: { view: 'admin-settings' } },
+    {
+      id: 'reader',
+      label: '阅读',
+      icon: 'book',
+      go: { view: 'reader', spaceId: 's1', docId: 'd1' },
+      guest: true,
+    },
+    { id: 'admin-docs', label: '管理', icon: 'admin', go: { view: 'admin-docs' } },
+    { id: 'admin-upload', label: '上传', icon: 'upload', go: { view: 'admin-upload' } },
+    { id: 'admin-settings', label: '设置', icon: 'settings', go: { view: 'admin-settings' } },
   ];
-  const items = isGuest ? allItems.filter(item => item.guest) : allItems;
+  const items = isGuest ? allItems.filter((item) => item.guest) : allItems;
 
   const BASE = 34;
   const MAG = 48;
@@ -374,7 +533,7 @@ function Dock({ view, onNavigate, visible, magnify, isGuest }) {
   };
 
   return (
-    <div className={"dock-anchor " + (visible ? '' : 'hidden')}>
+    <div className={'dock-anchor ' + (visible ? '' : 'hidden')}>
       <div
         ref={dockRef}
         className="dock-panel"
@@ -403,7 +562,7 @@ function DockItem({ item, active, onClick, getSize }) {
     const tick = () => {
       const target = getSize(0, ref.current);
       // simple spring
-      setSize(prev => prev + (target - prev) * 0.35);
+      setSize((prev) => prev + (target - prev) * 0.35);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -414,11 +573,13 @@ function DockItem({ item, active, onClick, getSize }) {
   return (
     <div
       ref={ref}
-      className={"dock-item " + (active ? 'active' : '')}
+      className={'dock-item ' + (active ? 'active' : '')}
       style={{ width: size, height: size }}
       onClick={onClick}
     >
-      <div className="dock-glyph"><DockGlyph kind={item.icon} size={iconSize}/></div>
+      <div className="dock-glyph">
+        <DockGlyph kind={item.icon} size={iconSize} />
+      </div>
       <div className="dock-label">{item.label}</div>
       <div className="dock-dot"></div>
     </div>
@@ -426,31 +587,75 @@ function DockItem({ item, active, onClick, getSize }) {
 }
 
 function DockGlyph({ kind, size = 18 }) {
-  const s = size, sw = 1.5;
-  if (kind === 'book') return (
-    <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
-      <path d="M3 3.5h5.5a2 2 0 0 1 2 2V15a1.5 1.5 0 0 0-1.5-1.5H3z" stroke="currentColor" strokeWidth={sw} strokeLinejoin="round"/>
-      <path d="M15 3.5H9.5a2 2 0 0 0-2 2V15a1.5 1.5 0 0 1 1.5-1.5H15z" stroke="currentColor" strokeWidth={sw} strokeLinejoin="round"/>
-    </svg>
-  );
-  if (kind === 'admin') return (
-    <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
-      <rect x="2.5" y="3.5" width="13" height="11" rx="1.5" stroke="currentColor" strokeWidth={sw}/>
-      <path d="M2.5 7h13M5.5 10.5h4M5.5 12.5h6" stroke="currentColor" strokeWidth={sw} strokeLinecap="round"/>
-    </svg>
-  );
-  if (kind === 'upload') return (
-    <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
-      <path d="M9 11.5V3M9 3 6 6M9 3l3 3" stroke="currentColor" strokeWidth={sw} strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M3 12v2a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 15 14v-2" stroke="currentColor" strokeWidth={sw} strokeLinecap="round"/>
-    </svg>
-  );
-  if (kind === 'settings') return (
-    <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
-      <circle cx="9" cy="9" r="2.4" stroke="currentColor" strokeWidth={sw}/>
-      <path d="M9 1.6v2.2M9 14.2v2.2M1.6 9h2.2M14.2 9h2.2M3.8 3.8l1.6 1.6M12.6 12.6l1.6 1.6M14.2 3.8l-1.6 1.6M5.4 12.6l-1.6 1.6" stroke="currentColor" strokeWidth={sw} strokeLinecap="round"/>
-    </svg>
-  );
+  const s = size,
+    sw = 1.5;
+  if (kind === 'book')
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <path
+          d="M3 3.5h5.5a2 2 0 0 1 2 2V15a1.5 1.5 0 0 0-1.5-1.5H3z"
+          stroke="currentColor"
+          strokeWidth={sw}
+          strokeLinejoin="round"
+        />
+        <path
+          d="M15 3.5H9.5a2 2 0 0 0-2 2V15a1.5 1.5 0 0 1 1.5-1.5H15z"
+          stroke="currentColor"
+          strokeWidth={sw}
+          strokeLinejoin="round"
+        />
+      </svg>
+    );
+  if (kind === 'admin')
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <rect
+          x="2.5"
+          y="3.5"
+          width="13"
+          height="11"
+          rx="1.5"
+          stroke="currentColor"
+          strokeWidth={sw}
+        />
+        <path
+          d="M2.5 7h13M5.5 10.5h4M5.5 12.5h6"
+          stroke="currentColor"
+          strokeWidth={sw}
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  if (kind === 'upload')
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <path
+          d="M9 11.5V3M9 3 6 6M9 3l3 3"
+          stroke="currentColor"
+          strokeWidth={sw}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M3 12v2a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 15 14v-2"
+          stroke="currentColor"
+          strokeWidth={sw}
+          strokeLinecap="round"
+        />
+      </svg>
+    );
+  if (kind === 'settings')
+    return (
+      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <circle cx="9" cy="9" r="2.4" stroke="currentColor" strokeWidth={sw} />
+        <path
+          d="M9 1.6v2.2M9 14.2v2.2M1.6 9h2.2M14.2 9h2.2M3.8 3.8l1.6 1.6M12.6 12.6l1.6 1.6M14.2 3.8l-1.6 1.6M5.4 12.6l-1.6 1.6"
+          stroke="currentColor"
+          strokeWidth={sw}
+          strokeLinecap="round"
+        />
+      </svg>
+    );
   return null;
 }
 
@@ -462,17 +667,34 @@ function AdminAccessDenied({ user, onNavigate }) {
       <div className="admin-denied">
         <div className="reader-locked-glyph">
           <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <rect x="6" y="13" width="16" height="11" rx="2" stroke="currentColor" strokeWidth="1.6"/>
-            <path d="M9.5 13V10a4.5 4.5 0 0 1 9 0v3" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"/>
-            <path d="M14 17v3.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/>
+            <rect
+              x="6"
+              y="13"
+              width="16"
+              height="11"
+              rx="2"
+              stroke="currentColor"
+              strokeWidth="1.6"
+            />
+            <path
+              d="M9.5 13V10a4.5 4.5 0 0 1 9 0v3"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+            />
+            <path d="M14 17v3.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
           </svg>
         </div>
         <h2 className="reader-locked-title">需要管理员权限</h2>
         <p className="reader-locked-desc">
-          {user?.email || '当前账号'} 当前是{user?.role === 'editor' ? '编辑' : '仅读者'}，不能查看成员、权限和后台维护设置。请切换到管理员账号，或让管理员把这个成员的工作区角色改为管理员。
+          {user?.email || '当前账号'} 当前是{user?.role === 'editor' ? '编辑' : '仅读者'}
+          ，不能查看成员、权限和后台维护设置。请切换到管理员账号，或让管理员把这个成员的工作区角色改为管理员。
         </p>
         <div className="reader-locked-actions">
-          <button className="reader-locked-secondary" onClick={() => onNavigate({ view: 'reader' })}>
+          <button
+            className="reader-locked-secondary"
+            onClick={() => onNavigate({ view: 'reader' })}
+          >
             返回阅读
           </button>
         </div>

@@ -10,12 +10,11 @@ import { displayDate } from '../lib/dates';
 import { forbidden, notFound } from '../lib/http-error';
 import { makeId } from '../lib/id';
 import {
-  canReadDocument,
   canEditDocument,
+  canReadDocument,
   getSpaceRole,
   isAdmin,
   listDirectoryDocuments,
-  listReadableDocuments,
   listReadableSpaces,
   requireSpaceAccess,
   requireSpaceEditor,

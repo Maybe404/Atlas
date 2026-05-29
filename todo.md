@@ -169,7 +169,15 @@ if (!canManage) return c.json(emptyShareState(doc.id));
 
 ## P1：质量与架构优先整改
 
-### TODO 4：恢复前端核心代码的 lint/typecheck 覆盖
+### TODO 4：恢复前端核心代码的 lint/typecheck 覆盖 ✅ 已解决
+
+**状态：已完成（2026-05-29）**
+
+已完成阶段一+二：
+- 移除 `biome.json` 中的 `!apps/web/src/**/*.tsx`、`!src/data.js`、`!tweaks-panel.jsx` 三个历史排除，TSX 文件现在进入 lint 扫描范围并能真实暴露问题。
+- 修复后端已有的 lint red：`server.test.ts` 两处超列格式错误、`spaces.ts` 未使用 import（`listReadableDocuments`）。
+- 移除 `data-hooks.ts` 的 `// @ts-nocheck`，为所有 mutation/query 函数补全完整 TypeScript 类型（使用 `@atlas/shared` 的 Zod 推导类型），`bun run typecheck` 全绿。
+- 当前 `bun run lint` 会报出 TSX 文件的存量问题（SVG 无 title、未使用 import 等），这是期望行为——真实状况已暴露。后续按 TODO 4 原建议逐文件移除 `@ts-nocheck`（tweaks-panel → chrome → auth → dialogs → app → views → views-admin）。
 
 **严重程度：P1 / 代码质量风险**
 
@@ -296,7 +304,17 @@ queryClient.invalidateQueries({ queryKey: atlasKeys.spaces })
 
 ---
 
-### TODO 7：补充常用查询索引
+### TODO 7：补充常用查询索引 ✅ 已解决
+
+**状态：已完成（2026-05-29）**
+
+在 `apps/api/src/db/schema.ts` 中为所有高频字段添加了 Drizzle `index()`：
+- `documents`：`spaceId`、`authorId`、`visibility`、`deletedAt`，及复合索引 `(spaceId, deletedAt)`、`(visibility, deletedAt)`、`(authorId, deletedAt)`
+- `sessions`：`memberId`、`expiresAt`
+- `shareLinks`：`documentId`
+- `auditLogs`：`actorId`、`targetId`
+
+生成并应用了增量迁移 `0002_rare_sandman.sql`（纯 CREATE INDEX，不改既有表结构）。所有 13 个 API 测试仍通过。
 
 **严重程度：P1 / 数据库性能风险**
 
@@ -341,7 +359,14 @@ queryClient.invalidateQueries({ queryKey: atlasKeys.spaces })
 
 ---
 
-### TODO 8：`purge-expired` 在 SQL 中过滤，而不是先 load all 再 in-memory filter
+### TODO 8：`purge-expired` 在 SQL 中过滤，而不是先 load all 再 in-memory filter ✅ 已解决
+
+**状态：已完成（2026-05-29）**
+
+重写 `apps/api/src/routes/documents.ts` 中的 `POST /trash/purge-expired` 处理逻辑：
+- 先用 `SELECT { id }` + `lte(documents.purgeAfter, now)` 在 SQL 层过滤，只取 id，不再把含 html 字段的完整行加载到内存。
+- 再用一次 `DELETE ... WHERE` 同条件批量删除，替代原来的 N 次循环 delete。
+- 利用了 TODO 7 新增的 `documents_deleted_at_idx` 索引加速过滤。
 
 **严重程度：P1 / 性能与正确性风险**
 

@@ -1,17 +1,37 @@
-// @ts-nocheck — keeps the migrated prototype moving while API wiring lands.
+import type {
+  CreateDocumentSchema,
+  CreateMemberSchema,
+  CreateSpaceSchema,
+  UpdateDocumentSchema,
+  UpdateDocumentShareSchema,
+  UpdateMemberSchema,
+  UpdateSpaceSchema,
+} from '@atlas/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { z } from 'zod';
 import { apiForm, apiGet, apiJson } from './api-client';
 
+type CreateSpaceInput = z.infer<typeof CreateSpaceSchema>;
+type UpdateSpaceInput = z.infer<typeof UpdateSpaceSchema>;
+type CreateDocumentInput = z.infer<typeof CreateDocumentSchema>;
+type UpdateDocumentInput = z.infer<typeof UpdateDocumentSchema>;
+type CreateMemberInput = z.infer<typeof CreateMemberSchema>;
+type UpdateMemberInput = z.infer<typeof UpdateMemberSchema>;
+type UpdateShareInput = z.infer<typeof UpdateDocumentShareSchema>;
+
+type Toast = { msg: string; meta?: string };
+type PushToast = (toast: Toast) => void;
+
 export const atlasKeys = {
-  me: ['me'],
-  spaces: ['spaces'],
-  documents: ['documents'],
-  members: ['members'],
-  permissions: ['permissions'],
-  spaceMembers: (spaceId) => ['space-members', spaceId],
-  trash: ['trash'],
-  skills: ['skills'],
-  share: (documentId) => ['share', documentId],
+  me: ['me'] as const,
+  spaces: ['spaces'] as const,
+  documents: ['documents'] as const,
+  members: ['members'] as const,
+  permissions: ['permissions'] as const,
+  spaceMembers: (spaceId: string) => ['space-members', spaceId] as const,
+  trash: ['trash'] as const,
+  skills: ['skills'] as const,
+  share: (documentId: string) => ['share', documentId] as const,
 };
 
 export function useAtlasData() {
@@ -54,7 +74,7 @@ export function useAtlasData() {
   };
 }
 
-export function useAtlasMutations(pushToast) {
+export function useAtlasMutations(pushToast?: PushToast) {
   const queryClient = useQueryClient();
   const invalidateCore = async () => {
     await Promise.all([
@@ -67,23 +87,24 @@ export function useAtlasMutations(pushToast) {
   };
 
   const createSpace = useMutation({
-    mutationFn: (data) => apiJson('/spaces', 'POST', data),
-    onSuccess: async (_data, variables) => {
+    mutationFn: (data: CreateSpaceInput) => apiJson('/spaces', 'POST', data),
+    onSuccess: async (_data: unknown, variables: CreateSpaceInput) => {
       await invalidateCore();
       pushToast?.({ msg: '空间已创建', meta: variables.name });
     },
   });
 
   const updateSpace = useMutation({
-    mutationFn: ({ id, patch }) => apiJson(`/spaces/${id}`, 'PATCH', patch),
-    onSuccess: async (_data, variables) => {
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateSpaceInput }) =>
+      apiJson(`/spaces/${id}`, 'PATCH', patch),
+    onSuccess: async (_data: unknown, variables: { id: string; patch: UpdateSpaceInput }) => {
       await invalidateCore();
       pushToast?.({ msg: '空间已更新', meta: variables.patch?.name });
     },
   });
 
   const deleteSpace = useMutation({
-    mutationFn: (id) => apiJson(`/spaces/${id}`, 'DELETE'),
+    mutationFn: (id: string) => apiJson(`/spaces/${id}`, 'DELETE'),
     onSuccess: async () => {
       await invalidateCore();
       pushToast?.({ msg: '空间已删除' });
@@ -91,23 +112,24 @@ export function useAtlasMutations(pushToast) {
   });
 
   const createDocument = useMutation({
-    mutationFn: (data) => apiJson('/documents', 'POST', data),
-    onSuccess: async (_data, variables) => {
+    mutationFn: (data: CreateDocumentInput) => apiJson('/documents', 'POST', data),
+    onSuccess: async (_data: unknown, variables: CreateDocumentInput) => {
       await invalidateCore();
       pushToast?.({ msg: '文章已创建', meta: variables.title });
     },
   });
 
   const updateDocument = useMutation({
-    mutationFn: ({ id, patch }) => apiJson(`/documents/${id}`, 'PATCH', patch),
-    onSuccess: async (_data, variables) => {
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateDocumentInput }) =>
+      apiJson(`/documents/${id}`, 'PATCH', patch),
+    onSuccess: async (_data: unknown, variables: { id: string; patch: UpdateDocumentInput }) => {
       await invalidateCore();
       pushToast?.({ msg: '已保存', meta: variables.patch?.title || '内容已更新' });
     },
   });
 
   const deleteDocument = useMutation({
-    mutationFn: (id) => apiJson(`/documents/${id}`, 'DELETE'),
+    mutationFn: (id: string) => apiJson(`/documents/${id}`, 'DELETE'),
     onSuccess: async () => {
       await invalidateCore();
       pushToast?.({ msg: '已移至回收站' });
@@ -115,7 +137,7 @@ export function useAtlasMutations(pushToast) {
   });
 
   const restoreDocument = useMutation({
-    mutationFn: (id) => apiJson(`/documents/${id}/restore`, 'POST'),
+    mutationFn: (id: string) => apiJson(`/documents/${id}/restore`, 'POST'),
     onSuccess: async () => {
       await invalidateCore();
       pushToast?.({ msg: '已恢复' });
@@ -124,24 +146,33 @@ export function useAtlasMutations(pushToast) {
 
   const purgeExpiredTrash = useMutation({
     mutationFn: () => apiJson('/documents/trash/purge-expired', 'POST'),
-    onSuccess: async (data) => {
+    onSuccess: async (data: unknown) => {
       await invalidateCore();
-      pushToast?.({ msg: '已清理过期项目', meta: `${data?.purged ?? 0} 篇` });
+      pushToast?.({
+        msg: '已清理过期项目',
+        meta: `${(data as { purged?: number })?.purged ?? 0} 篇`,
+      });
     },
   });
 
   const uploadDocument = useMutation({
-    mutationFn: (formData) => apiForm('/documents/upload', formData),
-    onSuccess: async (_data, variables) => {
+    mutationFn: (formData: FormData) => apiForm('/documents/upload', formData),
+    onSuccess: async (_data: unknown, variables: FormData) => {
       await invalidateCore();
-      pushToast?.({ msg: '已发布', meta: variables.get('title') });
+      pushToast?.({ msg: '已发布', meta: variables.get('title') as string | undefined });
     },
   });
 
+  type SetSpaceRoleVars = {
+    spaceId: string;
+    memberId: string;
+    role: string | null;
+    silent?: boolean;
+  };
   const setSpaceRole = useMutation({
-    mutationFn: ({ spaceId, memberId, role }) =>
+    mutationFn: ({ spaceId, memberId, role }: SetSpaceRoleVars) =>
       apiJson(`/spaces/${spaceId}/members/${memberId}`, 'PUT', { role }),
-    onSuccess: async (_data, variables) => {
+    onSuccess: async (_data: unknown, variables: SetSpaceRoleVars) => {
       await invalidateCore();
       if (!variables?.silent) {
         pushToast?.({ msg: '空间权限已更新' });
@@ -150,26 +181,27 @@ export function useAtlasMutations(pushToast) {
   });
 
   const createMember = useMutation({
-    mutationFn: (data) => apiJson('/members', 'POST', data),
-    onSuccess: async (data) => {
+    mutationFn: (data: CreateMemberInput) => apiJson('/members', 'POST', data),
+    onSuccess: async (data: unknown) => {
       await queryClient.invalidateQueries({ queryKey: atlasKeys.members });
-      pushToast?.({ msg: '成员已新增', meta: data?.name });
+      pushToast?.({ msg: '成员已新增', meta: (data as { name?: string })?.name });
     },
   });
 
   const updateMember = useMutation({
-    mutationFn: ({ id, patch }) => apiJson(`/members/${id}`, 'PATCH', patch),
-    onSuccess: async (_data, variables) => {
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateMemberInput }) =>
+      apiJson(`/members/${id}`, 'PATCH', patch),
+    onSuccess: async (data: unknown, variables: { id: string; patch: UpdateMemberInput }) => {
       await queryClient.invalidateQueries({ queryKey: atlasKeys.members });
       pushToast?.({
         msg: variables.patch?.password ? '成员密码已更新' : '成员已更新',
-        meta: _data?.name,
+        meta: (data as { name?: string })?.name,
       });
     },
   });
 
   const deleteMember = useMutation({
-    mutationFn: (id) => apiJson(`/members/${id}`, 'DELETE'),
+    mutationFn: (id: string) => apiJson(`/members/${id}`, 'DELETE'),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: atlasKeys.members }),
@@ -181,40 +213,63 @@ export function useAtlasMutations(pushToast) {
   });
 
   const updateShare = useMutation({
-    mutationFn: ({ documentId, patch }) =>
+    mutationFn: ({ documentId, patch }: { documentId: string; patch: UpdateShareInput }) =>
       apiJson(`/documents/${documentId}/share`, 'PATCH', patch),
-    onSuccess: async (_data, variables) => {
+    onSuccess: async (
+      _data: unknown,
+      variables: { documentId: string; patch: UpdateShareInput },
+    ) => {
       await queryClient.invalidateQueries({ queryKey: atlasKeys.share(variables.documentId) });
       pushToast?.({ msg: '分享设置已更新' });
     },
   });
 
   const activateSkill = useMutation({
-    mutationFn: (version) => apiJson(`/skills/${version}/activate`, 'POST'),
-    onSuccess: async (_data, version) => {
+    mutationFn: (version: string) => apiJson(`/skills/${version}/activate`, 'POST'),
+    onSuccess: async (_data: unknown, version: string) => {
       await queryClient.invalidateQueries({ queryKey: atlasKeys.skills });
       pushToast?.({ msg: '已切换 skill 版本', meta: `v${version}` });
     },
   });
 
   return {
-    createSpace: (data) => createSpace.mutate(data),
-    updateSpace: (id, patch) => updateSpace.mutate({ id, patch }),
-    deleteSpace: (id) => deleteSpace.mutate(id),
-    createDocument: (data, options) => createDocument.mutate(data, options),
-    updateDocument: (id, patch, options) => updateDocument.mutate({ id, patch }, options),
-    deleteDocument: (id) => deleteDocument.mutate(id),
-    restoreDocument: (id) => restoreDocument.mutate(id),
+    createSpace: (data: CreateSpaceInput) => createSpace.mutate(data),
+    updateSpace: (id: string, patch: UpdateSpaceInput) => updateSpace.mutate({ id, patch }),
+    deleteSpace: (id: string) => deleteSpace.mutate(id),
+    createDocument: (
+      data: CreateDocumentInput,
+      options?: Parameters<typeof createDocument.mutate>[1],
+    ) => createDocument.mutate(data, options),
+    updateDocument: (
+      id: string,
+      patch: UpdateDocumentInput,
+      options?: Parameters<typeof updateDocument.mutate>[1],
+    ) => updateDocument.mutate({ id, patch }, options),
+    deleteDocument: (id: string) => deleteDocument.mutate(id),
+    restoreDocument: (id: string) => restoreDocument.mutate(id),
     purgeExpiredTrash: () => purgeExpiredTrash.mutate(),
-    uploadDocument: (formData, options) => uploadDocument.mutate(formData, options),
-    setSpaceRole: (spaceId, memberId, role, options = {}) => {
-      const { silent, ...mutationOptions } = options || {};
+    uploadDocument: (formData: FormData, options?: Parameters<typeof uploadDocument.mutate>[1]) =>
+      uploadDocument.mutate(formData, options),
+    setSpaceRole: (
+      spaceId: string,
+      memberId: string,
+      role: string | null,
+      options: { silent?: boolean } & Parameters<typeof setSpaceRole.mutate>[1] = {},
+    ) => {
+      const { silent, ...mutationOptions } = options;
       setSpaceRole.mutate({ spaceId, memberId, role, silent }, mutationOptions);
     },
-    createMember: (data, options) => createMember.mutate(data, options),
-    updateMember: (id, patch, options) => updateMember.mutate({ id, patch }, options),
-    deleteMember: (id, options) => deleteMember.mutate(id, options),
-    updateShare: (documentId, patch) => updateShare.mutate({ documentId, patch }),
-    activateSkill: (version) => activateSkill.mutate(version),
+    createMember: (data: CreateMemberInput, options?: Parameters<typeof createMember.mutate>[1]) =>
+      createMember.mutate(data, options),
+    updateMember: (
+      id: string,
+      patch: UpdateMemberInput,
+      options?: Parameters<typeof updateMember.mutate>[1],
+    ) => updateMember.mutate({ id, patch }, options),
+    deleteMember: (id: string, options?: Parameters<typeof deleteMember.mutate>[1]) =>
+      deleteMember.mutate(id, options),
+    updateShare: (documentId: string, patch: UpdateShareInput) =>
+      updateShare.mutate({ documentId, patch }),
+    activateSkill: (version: string) => activateSkill.mutate(version),
   };
 }
