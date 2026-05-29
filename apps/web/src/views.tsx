@@ -45,10 +45,10 @@ function ReaderView({
   const requestedDoc = requestedSpace?.children?.find((c) => c.id === ctx.docId);
   const doc =
     requestedDoc || (requestedSpace ? requestedSpace.children?.[0] : space?.children?.[0]);
-  const author = members.find((m) => m.id === doc?.author);
-  const [copied, setCopied] = useState(false);
   const denied = Boolean(user && ctx.spaceId && ctx.docId && (!requestedSpace || !requestedDoc));
   const allowed = !denied && canRead(doc, user);
+  const author = allowed && doc?.author ? members.find((m) => m.id === doc.author) : null;
+  const [copied, setCopied] = useState(false);
   const readerLink = window.location.href;
   const copyReaderLink = () => {
     navigator.clipboard?.writeText(readerLink);
@@ -65,7 +65,7 @@ function ReaderView({
         <div className={'reader-meta-bar ' + (chromeVisible ? '' : 'meta-bar-hidden')}>
           {doc && (
             <>
-              <span className={'dot ' + dotClass(doc.dot)}></span>
+              <span className={'dot ' + dotClass(doc.dot || 'slate')}></span>
               <span className="doc-title">{doc.title}</span>
             </>
           )}
@@ -74,7 +74,7 @@ function ReaderView({
             {copied ? <_I.check /> : <_I.link />}
             <span>{copied ? '已复制' : '链接'}</span>
           </button>
-          {earlyDocId && (
+          {allowed && earlyDocId && (
             <button className="pill-btn" onClick={() => onShare(earlyDocId)}>
               <_I.share />
               <span>分享</span>
@@ -155,29 +155,39 @@ function ReaderView({
   return (
     <div className="main-card reader-card">
       <div className={'reader-meta-bar ' + (chromeVisible ? '' : 'meta-bar-hidden')}>
-        <span className={'dot ' + dotClass(doc.dot)}></span>
+        <span className={'dot ' + dotClass(doc.dot || 'slate')}></span>
         <span className="doc-title">{doc.title}</span>
-        <span className="sep">·</span>
-        <span className="author">{author?.name}</span>
-        <span className="sep">·</span>
-        <span className="mono dim" style={{ fontSize: 11 }}>
-          {doc.updated}
-        </span>
+        {allowed ? (
+          <>
+            <span className="sep">·</span>
+            <span className="author">{author?.name}</span>
+            <span className="sep">·</span>
+            <span className="mono dim" style={{ fontSize: 11 }}>
+              {doc.updated}
+            </span>
+          </>
+        ) : null}
         {doc ? (
           <>
             <button className="pill-btn ghost" onClick={copyReaderLink}>
               {copied ? <_I.check /> : <_I.link />}
               <span>{copied ? '已复制' : '链接'}</span>
             </button>
-            <button className="pill-btn" onClick={() => onShare(doc.id)}>
-              <_I.share />
-              <span>分享</span>
-            </button>
+            {allowed && (
+              <button className="pill-btn" onClick={() => onShare(doc.id)}>
+                <_I.share />
+                <span>分享</span>
+              </button>
+            )}
           </>
         ) : null}
         {!allowed ? (
-          <span className={'vis-chip reader-lock-chip ' + doc.visibility}>
-            {doc.visibility === 'invite' ? '需登录 · 邀请制' : '需登录 · 私密'}
+          <span className={'vis-chip reader-lock-chip ' + (doc.visibility || 'locked')}>
+            {doc.visibility === 'invite'
+              ? '需登录 · 邀请制'
+              : doc.visibility === 'private'
+                ? '需登录 · 私密'
+                : '需登录'}
           </span>
         ) : null}
       </div>
@@ -223,9 +233,11 @@ function ReaderView({
                   '」空间中这篇文档的阅读权限。请联系管理员添加空间权限，或让文档所有者单独分享给你。'
                 : doc.visibility === 'private'
                   ? '这是一篇私密文档。请先登录团队账号，系统会按你的空间和文档权限判断是否可读。'
-                  : '这是一篇邀请制文档，加入「' +
-                    space.name +
-                    '」空间的成员可以阅读。登录后即可查看完整内容。'}
+                  : doc.visibility === 'invite'
+                    ? '这是一篇邀请制文档，加入「' +
+                      space.name +
+                      '」空间的成员可以阅读。登录后即可查看完整内容。'
+                    : '请先登录团队账号，登录后系统会按你的空间和文档权限判断是否可读。'}
             </p>
             <div className="reader-locked-actions">
               {!user && (
@@ -292,7 +304,7 @@ function PublicDocumentView({ token }) {
   return (
     <div className="main-card reader-card">
       <div className="reader-meta-bar">
-        <span className={'dot ' + dotClass(doc.dot)}></span>
+        <span className={'dot ' + dotClass(doc.dot || 'slate')}></span>
         <span className="doc-title">{doc.title}</span>
         <span className="sep">·</span>
         <span className="author">{doc.authorName || '公开文档'}</span>
@@ -403,7 +415,8 @@ function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }) {
 
         <div className="doc-grid">
           {docs.map((doc) => {
-            const author = members.find((m) => m.id === doc.author);
+            const locked = !canRead(doc);
+            const author = !locked && doc.author ? members.find((m) => m.id === doc.author) : null;
             return (
               <div
                 key={doc.id}
@@ -411,18 +424,20 @@ function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }) {
                 onClick={() => onNavigate({ view: 'reader', spaceId: space.id, docId: doc.id })}
               >
                 <div className="card-head">
-                  <div className={'dot ' + dotClass(doc.dot)}></div>
-                  <span className={'vis-chip ' + doc.visibility}>
-                    {visibilityLabel(doc.visibility)}
+                  <div className={'dot ' + dotClass(doc.dot || 'slate')}></div>
+                  <span className={'vis-chip ' + (locked ? 'locked' : doc.visibility)}>
+                    {locked ? '需登录' : visibilityLabel(doc.visibility)}
                   </span>
                 </div>
                 <h3>{doc.title}</h3>
-                <p className="desc">{doc.desc}</p>
-                <div className="card-foot">
-                  <span className="avatar small">{author?.initials}</span>
-                  <span>{author?.name}</span>
-                  <span className="updated">{doc.updated}</span>
-                </div>
+                <p className="desc">{locked ? '登录后查看摘要和正文。' : doc.desc}</p>
+                {!locked && (
+                  <div className="card-foot">
+                    <span className="avatar small">{author?.initials}</span>
+                    <span>{author?.name}</span>
+                    <span className="updated">{doc.updated}</span>
+                  </div>
+                )}
               </div>
             );
           })}
@@ -750,7 +765,7 @@ function AdminDocsView({
                 }}
               >
                 <div className="doc-title">
-                  <span className={'dot ' + dotClass(doc.dot)}></span>
+                  <span className={'dot ' + dotClass(doc.dot || 'slate')}></span>
                   <div className="text">
                     {renaming === doc.id ? (
                       <input

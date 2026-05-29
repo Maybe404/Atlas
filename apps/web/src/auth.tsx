@@ -69,6 +69,8 @@ export function isDemoSession(session) {
 
 export function canRead(doc, user) {
   if (!doc) return true;
+  if (typeof doc.canRead === 'boolean') return doc.canRead;
+  if (doc.locked) return false;
   if (doc.visibility === 'public') return true;
   if (!user) return false;
   if (user.role === 'admin') return true;

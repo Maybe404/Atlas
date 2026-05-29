@@ -86,6 +86,15 @@ export function canManageDocumentShare(user: User | undefined, doc: DocumentRow)
   return isAdmin(user) || doc.authorId === user.id;
 }
 
+export async function requireDocumentShareManager(user: User | undefined, docId: string) {
+  const [doc] = await db
+    .select()
+    .from(documents)
+    .where(and(eq(documents.id, docId), isNull(documents.deletedAt)));
+  if (!doc || !canManageDocumentShare(user, doc)) throw notFound();
+  return doc;
+}
+
 export async function requireDocumentEditor(user: User, docId: string) {
   const doc = await requireDocumentRead(user, docId);
   if (!(await canEditDocument(user, doc)))

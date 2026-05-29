@@ -28,7 +28,13 @@
 
 ## P0：必须优先修复
 
-### TODO 1：保留匿名可见上锁目录，但修复目录响应字段过度暴露
+### TODO 1：保留匿名可见上锁目录，但修复目录响应字段过度暴露 ✅ 已解决
+
+**状态：已完成（2026-05-29）**
+
+**方案与现状：**
+
+`/spaces` 继续保留匿名可见所有未删除目录文档入口的产品体验，但对不可读文档改为返回 locked 最小 DTO：仅包含 `id`、`spaceId`、`title`、`locked: true`、`canRead: false`、`canEdit: false`。不可读文档不再返回 `html`、`desc`、`author`、`authorName`、`updated`、`visibility`、`tags`、`deletedAt` 等元信息；可读 public 文档仍返回正文。前端改为优先使用服务端 `canRead` / `locked` 渲染锁定态，Reader、空间卡片和 CmdK 均兼容 minimized locked 文档。API 测试已覆盖匿名 public/locked 响应字段边界。
 
 **严重程度：P0 / 权限边界与信息暴露风险**
 
@@ -94,7 +100,13 @@ export async function listDirectoryDocuments(user: User | undefined, space?: Spa
 
 ---
 
-### TODO 2：修复 `GET /documents/:id/share` 文档存在性泄漏
+### TODO 2：修复 `GET /documents/:id/share` 文档存在性泄漏 ✅ 已解决
+
+**状态：已完成（2026-05-29）**
+
+**方案与现状：**
+
+新增分享管理权限统一入口：只有 workspace admin 和文档作者可以读取或修改分享设置；文档不存在、已删除、未登录或已登录但无分享管理权限时，`GET /documents/:id/share` 与 `PATCH /documents/:id/share` 均统一返回 `404`，避免通过状态码或 empty share state 探测文档是否存在。作者和 admin 的分享读取/修改流程保持正常。测试已覆盖匿名、空间成员/可读非作者、作者、admin 的主要分支。
 
 **严重程度：P0 / 安全风险**
 

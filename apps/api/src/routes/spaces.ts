@@ -40,6 +40,18 @@ function toDoc(
     ...(options.includeHtml ? { html: doc.html } : {}),
     deletedAt: doc.deletedAt,
     canRead: options.canRead ?? false,
+    locked: false,
+  };
+}
+
+function toLockedDoc(doc: typeof documents.$inferSelect) {
+  return {
+    id: doc.id,
+    spaceId: doc.spaceId,
+    title: doc.title,
+    locked: true,
+    canRead: false,
+    canEdit: false,
   };
 }
 
@@ -50,10 +62,12 @@ async function childrenForSpace(
   const docs = await listDirectoryDocuments(user, space);
   return Promise.all(
     docs.map(async (doc) => {
-      const [author] = await db.select().from(members).where(eq(members.id, doc.authorId));
       const canRead = await canReadDocument(user, doc);
+      if (!canRead) return toLockedDoc(doc);
+
+      const [author] = await db.select().from(members).where(eq(members.id, doc.authorId));
       return {
-        ...toDoc(doc, author, { includeHtml: canRead, canRead }),
+        ...toDoc(doc, author, { includeHtml: true, canRead: true }),
         canEdit: await canEditDocument(user, doc),
       };
     }),

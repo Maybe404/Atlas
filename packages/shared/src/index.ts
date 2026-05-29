@@ -36,10 +36,32 @@ export const DocumentSchema = z.object({
   dot: AccentSchema.or(z.string()),
   tags: z.array(z.string()).default([]),
   html: z.string().optional(),
+  canRead: z.boolean().optional(),
   canEdit: z.boolean().optional(),
+  locked: z.boolean().optional(),
   deletedAt: z.string().nullable().optional(),
 });
 export type Document = z.infer<typeof DocumentSchema>;
+
+export const LockedDirectoryDocumentSchema = z.object({
+  id: z.string(),
+  spaceId: z.string(),
+  title: z.string(),
+  locked: z.literal(true),
+  canRead: z.literal(false),
+  canEdit: z.literal(false),
+});
+export type LockedDirectoryDocument = z.infer<typeof LockedDirectoryDocumentSchema>;
+
+export const DirectoryDocumentSchema = z.union([DocumentSchema, LockedDirectoryDocumentSchema]);
+export type DirectoryDocument = z.infer<typeof DirectoryDocumentSchema>;
+
+// Per-member, per-space role; null means "no access".
+export const SpaceMemberRoleSchema = z.enum(['viewer', 'editor']);
+export type SpaceMemberRole = z.infer<typeof SpaceMemberRoleSchema>;
+
+export const SpaceRoleSchema = SpaceMemberRoleSchema.nullable();
+export type SpaceRole = z.infer<typeof SpaceRoleSchema>;
 
 export const SpaceSchema = z.object({
   id: z.string(),
@@ -48,16 +70,10 @@ export const SpaceSchema = z.object({
   accent: AccentSchema.or(z.string()),
   count: z.number().int().nonnegative(),
   personal: z.boolean().optional(),
-  children: z.array(DocumentSchema),
+  role: SpaceRoleSchema.optional(),
+  children: z.array(DirectoryDocumentSchema),
 });
 export type Space = z.infer<typeof SpaceSchema>;
-
-// Per-member, per-space role; null means "no access".
-export const SpaceMemberRoleSchema = z.enum(['viewer', 'editor']);
-export type SpaceMemberRole = z.infer<typeof SpaceMemberRoleSchema>;
-
-export const SpaceRoleSchema = SpaceMemberRoleSchema.nullable();
-export type SpaceRole = z.infer<typeof SpaceRoleSchema>;
 
 // ── API request/response shapes ────────────────────────────────────────────
 export const CreateSpaceSchema = z.object({

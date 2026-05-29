@@ -60,14 +60,42 @@ describe('Atlas API', () => {
     expect(res.status).toBe(200);
     const spaces = (await res.json()) as ApiSpace[];
     const docs = spaces.flatMap(
-      (space) => space.children as { visibility: string; canRead: boolean; html?: string }[],
+      (space) =>
+        space.children as {
+          visibility?: string;
+          canRead: boolean;
+          canEdit?: boolean;
+          locked?: boolean;
+          html?: string;
+          desc?: string;
+          author?: string;
+          authorName?: string;
+          updated?: string;
+          tags?: string[];
+          deletedAt?: string | null;
+        }[],
     );
     expect(docs.length).toBeGreaterThan(0);
-    expect(docs.some((doc) => doc.visibility !== 'public')).toBe(true);
-    expect(docs.every((doc) => doc.visibility === 'public' || !doc.html)).toBe(true);
-    expect(docs.filter((doc) => doc.visibility === 'public').every((doc) => doc.canRead)).toBe(
-      true,
-    );
+
+    const publicDocs = docs.filter((doc) => doc.visibility === 'public');
+    const lockedDocs = docs.filter((doc) => doc.locked);
+    expect(publicDocs.length).toBeGreaterThan(0);
+    expect(lockedDocs.length).toBeGreaterThan(0);
+    expect(publicDocs.every((doc) => doc.canRead && doc.html)).toBe(true);
+
+    for (const doc of lockedDocs) {
+      expect(doc.locked).toBe(true);
+      expect(doc.canRead).toBe(false);
+      expect(doc.canEdit).toBe(false);
+      expect(doc.html).toBeUndefined();
+      expect(doc.desc).toBeUndefined();
+      expect(doc.author).toBeUndefined();
+      expect(doc.authorName).toBeUndefined();
+      expect(doc.updated).toBeUndefined();
+      expect(doc.visibility).toBeUndefined();
+      expect(doc.tags).toBeUndefined();
+      expect(doc.deletedAt).toBeUndefined();
+    }
   });
 
   test('uploads raw HTML and infers document metadata', async () => {
@@ -347,26 +375,37 @@ describe('Atlas API', () => {
     const readonlyShare = await request('/documents/d3/share', {
       headers: { cookie: viewer.cookie },
     });
-    expect(readonlyShare.status).toBe(200);
-    const readonlyBody = (await readonlyShare.json()) as {
-      canManage: boolean;
-      public: { token: string | null };
-      availableMembers: unknown[];
-    };
-    expect(readonlyBody.canManage).toBe(false);
-    expect(readonlyBody.public.token).toBeNull();
-    expect(readonlyBody.availableMembers).toEqual([]);
+    const readonlyMissingShare = await request('/documents/not-a-doc/share', {
+      headers: { cookie: viewer.cookie },
+    });
+    expect(readonlyShare.status).toBe(404);
+    expect(readonlyMissingShare.status).toBe(404);
+    expect(await readonlyShare.json()).toEqual(await readonlyMissingShare.json());
 
     const cannotPatch = await request('/documents/d3/share', {
       method: 'PATCH',
       body: JSON.stringify({ publicEnabled: true }),
       headers: { 'content-type': 'application/json', ...viewer.headers },
     });
-    expect(cannotPatch.status).toBe(403);
+    expect(cannotPatch.status).toBe(404);
 
     const guestShare = await request('/documents/d3/share');
-    expect(guestShare.status).toBe(200);
-    expect(((await guestShare.json()) as { canManage: boolean }).canManage).toBe(false);
+    const guestMissingShare = await request('/documents/not-a-doc/share');
+    expect(guestShare.status).toBe(404);
+    expect(guestMissingShare.status).toBe(404);
+    expect(await guestShare.json()).toEqual(await guestMissingShare.json());
+
+    const admin = await loginAs();
+    const adminShare = await request('/documents/d1/share', {
+      headers: { cookie: admin.cookie },
+    });
+    expect(adminShare.status).toBe(200);
+    const adminBody = (await adminShare.json()) as {
+      canManage: boolean;
+      public: { token: string | null };
+    };
+    expect(adminBody.canManage).toBe(true);
+    expect(adminBody.public.token).toBeTruthy();
 
     const author = await loginAs('chen@atlas.team');
     const authorShare = await request('/documents/d4/share', {

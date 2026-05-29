@@ -22,7 +22,7 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
         path: s.name + ' / ' + c.title,
         spaceId: s.id,
         docId: c.id,
-        dot: c.dot,
+        dot: c.dot || 'slate',
       })),
     );
     const cmds = [
@@ -315,13 +315,16 @@ function ShareDialog({
 
   const share = shareQuery.data;
   const roster = share?.members || [];
-  const availableMembers = share?.availableMembers?.length
-    ? share.availableMembers
-    : workspaceMembers;
+  const availableMembers = shareQuery.isError
+    ? []
+    : share?.availableMembers?.length
+      ? share.availableMembers
+      : workspaceMembers;
   const directViewers = roster.filter((mem) => mem.role === 'viewer');
   const directEditors = roster.filter((mem) => mem.role === 'editor');
   const canEditShare = Boolean(share?.canManage ?? share?.canEdit);
   const showPermissionNote = !shareQuery.isLoading && !canEditShare;
+  const shareUnavailable = shareQuery.isError;
   const publicOn = Boolean(share?.public?.enabled);
   const url = share?.public?.token ? publicShareUrl(share.public.token) : '';
   const docTitle = documentId ? `文档 ${documentId}` : '当前文档';
@@ -373,9 +376,11 @@ function ShareDialog({
           )}
           {showPermissionNote && (
             <div className="share-permission-note">
-              <strong>没有分享管理权限</strong>
+              <strong>{shareUnavailable ? '无法读取分享设置' : '没有分享管理权限'}</strong>
               <span>
-                只有管理员和文档作者可以邀请成员或修改公开链接。你仍然可以在阅读页复制当前文档地址。
+                {shareUnavailable
+                  ? '只有管理员和文档作者可以管理分享；文档也可能已被删除或不可用。'
+                  : '只有管理员和文档作者可以邀请成员或修改公开链接。你仍然可以在阅读页复制当前文档地址。'}
               </span>
             </div>
           )}

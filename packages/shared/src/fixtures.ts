@@ -5,6 +5,19 @@
 
 import type { Space } from './index';
 
+type FixtureDocument = {
+  id: string;
+  title: string;
+  desc: string;
+  author: string;
+  updated: string;
+  visibility: 'public' | 'invite' | 'private';
+  dot: string;
+  tags: string[];
+};
+
+type FixtureSpace = Omit<Space, 'children'> & { children: FixtureDocument[] };
+
 export const ATLAS_DATA = (() => {
   const members = [
     { id: 'u1', name: '林知远', initials: 'LZ', role: 'admin',  email: 'lin@atlas.team',  joined: '2024-02' },
@@ -132,7 +145,7 @@ export const ATLAS_DATA = (() => {
     { id: 'd2',  title: 'iframe 沙箱安全笔记' },
   ];
 
-  return { members, tree: tree as unknown as Space[], docContent, recent };
+  return { members, tree: tree as unknown as FixtureSpace[], docContent, recent };
 })();
 
 export type AtlasData = typeof ATLAS_DATA;
