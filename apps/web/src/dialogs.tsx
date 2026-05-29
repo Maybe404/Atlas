@@ -1,25 +1,26 @@
-// @ts-nocheck — migrated verbatim from JSX prototype; incrementally type later.
 // Atlas dialogs: CmdK, ShareDialog, ToastWrap
-import React, { useState, useEffect, useMemo } from 'react';
+
 import { useQuery } from '@tanstack/react-query';
-import { I, AnimatedItem, AnimatedScrollList } from './chrome';
+import { useEffect, useMemo, useState } from 'react';
 import { apiGet } from './api-client';
+import { AnimatedItem, AnimatedScrollList, I } from './chrome';
 import { atlasKeys } from './data-hooks';
+import type { Loose } from './loose-types';
 import { publicShareUrl } from './url-utils';
 
 const _I3 = I;
 
-function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTheme }) {
+function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTheme }: Loose) {
   const [q, setQ] = useState('');
   const [idx, setIdx] = useState(0);
 
   const items = useMemo(() => {
-    const docs = spaces.flatMap((s) =>
-      (s.children || []).map((c) => ({
+    const docs = spaces.flatMap((s: Loose) =>
+      (s.children || []).map((c: Loose) => ({
         type: 'doc',
         id: c.id,
         title: c.title,
-        path: s.name + ' / ' + c.title,
+        path: `${s.name} / ${c.title}`,
         spaceId: s.id,
         docId: c.id,
         dot: c.dot || 'slate',
@@ -78,7 +79,7 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
         go: { view: 'admin-settings' },
       },
     ];
-    const people = members.map((m) => ({
+    const people = members.map((m: Loose) => ({
       type: 'member',
       id: m.id,
       title: m.name,
@@ -88,7 +89,8 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
 
     const f = q.trim().toLowerCase();
     if (!f) return { docs: docs.slice(0, 8), cmds: cmds.slice(0, 6), members: people.slice(0, 4) };
-    const match = (x) => x.title.toLowerCase().includes(f) || x.path.toLowerCase().includes(f);
+    const match = (x: Loose) =>
+      x.title.toLowerCase().includes(f) || x.path.toLowerCase().includes(f);
     return { docs: docs.filter(match), cmds: cmds.filter(match), members: people.filter(match) };
   }, [members, q, spaces]);
 
@@ -96,21 +98,21 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
 
   useEffect(() => {
     setIdx(0);
-  }, [q]);
+  }, []);
   useEffect(() => {
     if (!open) return;
-    const onKey = (e) => {
+    const onKey = (e: Loose) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
       }
       if (e.key === 'ArrowDown') {
         e.preventDefault();
-        setIdx((i) => Math.min(flat.length - 1, i + 1));
+        setIdx((i: Loose) => Math.min(flat.length - 1, i + 1));
       }
       if (e.key === 'ArrowUp') {
         e.preventDefault();
-        setIdx((i) => Math.max(0, i - 1));
+        setIdx((i: Loose) => Math.max(0, i - 1));
       }
       if (e.key === 'Enter') {
         e.preventDefault();
@@ -134,16 +136,15 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="cmdk" onClick={(e) => e.stopPropagation()}>
+      <div className="cmdk" onClick={(e: Loose) => e.stopPropagation()}>
         <div className="cmdk-input-row">
           <span style={{ color: 'var(--ink-4)' }}>
             <_I3.search />
           </span>
           <input
-            autoFocus
             className="cmdk-input"
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e: Loose) => setQ(e.target.value)}
             placeholder="搜索文档、命令或成员…"
           />
           <span className="esc">ESC</span>
@@ -152,8 +153,8 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
           <div className="tree-scroll cmdk-scroll-wrap">
             <div
               className="scroll-list"
-              onScroll={(e) => {
-                const t = e.currentTarget;
+              onScroll={(e: Loose) => {
+                const t = e.currentTarget as Loose;
                 t.style.setProperty('--top-op', Math.min(t.scrollTop / 50, 1));
                 const bd = t.scrollHeight - (t.scrollTop + t.clientHeight);
                 t.style.setProperty(
@@ -165,12 +166,12 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
               {items.docs.length > 0 && (
                 <>
                   <div className="cmdk-group">{q ? '文档' : '最近 · DOCUMENTS'}</div>
-                  {items.docs.map((it) => {
+                  {items.docs.map((it: Loose) => {
                     const my = idxOf();
                     return (
                       <AnimatedItem index={my} key={it.id}>
                         <div
-                          className={'cmdk-item ' + (my === idx ? 'active' : '')}
+                          className={`cmdk-item ${my === idx ? 'active' : ''}`}
                           onMouseEnter={() => setIdx(my)}
                           onClick={() => {
                             onNavigate({ view: 'reader', spaceId: it.spaceId, docId: it.docId });
@@ -202,13 +203,13 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
               {items.cmds.length > 0 && (
                 <>
                   <div className="cmdk-group">命令 · COMMANDS</div>
-                  {items.cmds.map((c) => {
+                  {items.cmds.map((c: Loose) => {
                     const my = idxOf();
-                    const Ico = _I3[c.icon] || _I3.doc;
+                    const Ico = _I3[c.icon as keyof typeof _I3] || _I3.doc;
                     return (
                       <AnimatedItem index={my} key={c.id}>
                         <div
-                          className={'cmdk-item ' + (my === idx ? 'active' : '')}
+                          className={`cmdk-item ${my === idx ? 'active' : ''}`}
                           onMouseEnter={() => setIdx(my)}
                           onClick={() => {
                             if (c.action === 'theme') onToggleTheme();
@@ -230,12 +231,12 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
               {items.members.length > 0 && (
                 <>
                   <div className="cmdk-group">成员 · PEOPLE</div>
-                  {items.members.map((m) => {
+                  {items.members.map((m: Loose) => {
                     const my = idxOf();
                     return (
                       <AnimatedItem index={my} key={m.id}>
                         <div
-                          className={'cmdk-item ' + (my === idx ? 'active' : '')}
+                          className={`cmdk-item ${my === idx ? 'active' : ''}`}
                           onMouseEnter={() => setIdx(my)}
                         >
                           <span
@@ -289,6 +290,7 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
     </div>
   );
 }
+
 export { CmdK };
 
 // Share Dialog
@@ -300,7 +302,7 @@ function ShareDialog({
   onClose,
   pushToast,
   mutations,
-}) {
+}: Loose) {
   const [tab, setTab] = useState('invite');
   const [emailInput, setEmailInput] = useState('');
   const [copied, setCopied] = useState(false);
@@ -320,8 +322,8 @@ function ShareDialog({
     : share?.availableMembers?.length
       ? share.availableMembers
       : workspaceMembers;
-  const directViewers = roster.filter((mem) => mem.role === 'viewer');
-  const directEditors = roster.filter((mem) => mem.role === 'editor');
+  const directViewers = roster.filter((mem: Loose) => mem.role === 'viewer');
+  const directEditors = roster.filter((mem: Loose) => mem.role === 'editor');
   const canEditShare = Boolean(share?.canManage ?? share?.canEdit);
   const showPermissionNote = !shareQuery.isLoading && !canEditShare;
   const shareUnavailable = shareQuery.isError;
@@ -333,7 +335,7 @@ function ShareDialog({
     if (!emailInput) return;
     const input = emailInput.trim().toLowerCase();
     const m = availableMembers.find(
-      (x) => x.email?.toLowerCase() === input || x.name === emailInput.trim(),
+      (x: Loose) => x.email?.toLowerCase() === input || x.name === emailInput.trim(),
     );
     if (m) {
       mutations.updateShare(documentId, { members: [{ memberId: m.id, role: 'viewer' }] });
@@ -344,7 +346,7 @@ function ShareDialog({
 
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="dialog" onClick={(e) => e.stopPropagation()}>
+      <div className="dialog" onClick={(e: Loose) => e.stopPropagation()}>
         <div className="dialog-head">
           <div>
             <div className="dialog-title">分享 · {docTitle}</div>
@@ -357,13 +359,13 @@ function ShareDialog({
 
         <div className="dialog-tabs">
           <div
-            className={'tab ' + (tab === 'invite' ? 'active' : '')}
+            className={`tab ${tab === 'invite' ? 'active' : ''}`}
             onClick={() => setTab('invite')}
           >
             邀请成员
           </div>
           <div
-            className={'tab ' + (tab === 'public' ? 'active' : '')}
+            className={`tab ${tab === 'public' ? 'active' : ''}`}
             onClick={() => setTab('public')}
           >
             公开链接
@@ -394,14 +396,14 @@ function ShareDialog({
                   placeholder="按姓名或邮箱…"
                   value={emailInput}
                   disabled={!canEditShare}
-                  onChange={(e) => setEmailInput(e.target.value)}
-                  onKeyDown={(e) => {
+                  onChange={(e: Loose) => setEmailInput(e.target.value)}
+                  onKeyDown={(e: Loose) => {
                     if (e.key === 'Enter') addMember();
                   }}
                   list="atlas-members"
                 />
                 <datalist id="atlas-members">
-                  {availableMembers.map((m) => (
+                  {availableMembers.map((m: Loose) => (
                     <option key={m.id} value={m.email}>
                       {m.name}
                     </option>
@@ -436,7 +438,7 @@ function ShareDialog({
                       </div>
                     </div>
                   )}
-                  {roster.map((mem) => {
+                  {roster.map((mem: Loose) => {
                     return (
                       <div key={mem.id} className="share-row">
                         <span
@@ -453,7 +455,7 @@ function ShareDialog({
                           className="role-select"
                           value={mem.role}
                           disabled={!canEditShare}
-                          onChange={(e) =>
+                          onChange={(e: Loose) =>
                             mutations.updateShare(documentId, {
                               members: [{ memberId: mem.id, role: e.target.value || null }],
                             })
@@ -480,11 +482,12 @@ function ShareDialog({
                   </div>
                   {availableMembers
                     .filter(
-                      (mem) => !roster.some((r) => r.id === mem.id) && mem.id !== currentUser?.id,
+                      (mem: Loose) =>
+                        !roster.some((r: Loose) => r.id === mem.id) && mem.id !== currentUser?.id,
                     )
                     .slice(0, 6)
-                    .map((mem) => (
-                      <div key={'sg-' + mem.id} className="share-row" style={{ opacity: 0.78 }}>
+                    .map((mem: Loose) => (
+                      <div key={`sg-${mem.id}`} className="share-row" style={{ opacity: 0.78 }}>
                         <span
                           className="avatar"
                           style={{ background: 'var(--parchment)', color: 'var(--ink-3)' }}
@@ -518,7 +521,7 @@ function ShareDialog({
                 }}
               >
                 <button
-                  className={'toggle ' + (publicOn ? 'on' : '')}
+                  className={`toggle ${publicOn ? 'on' : ''}`}
                   disabled={!canEditShare}
                   onClick={() => mutations.updateShare(documentId, { publicEnabled: !publicOn })}
                 ></button>
@@ -580,21 +583,25 @@ function ShareDialog({
                   desc="在公开页面的脚注与索引中显示创建者"
                   value={share?.public?.showAuthor ?? true}
                   disabled={!publicOn || !canEditShare}
-                  onChange={(value) => mutations.updateShare(documentId, { showAuthor: value })}
+                  onChange={(value: Loose) =>
+                    mutations.updateShare(documentId, { showAuthor: value })
+                  }
                 />
                 <PublicToggle
                   label="允许搜索引擎索引"
                   desc="让公开文档出现在搜索结果中"
                   value={share?.public?.allowIndexing ?? false}
                   disabled={!publicOn || !canEditShare}
-                  onChange={(value) => mutations.updateShare(documentId, { allowIndexing: value })}
+                  onChange={(value: Loose) =>
+                    mutations.updateShare(documentId, { allowIndexing: value })
+                  }
                 />
                 <PublicToggle
                   label="30 天后自动失效"
                   desc="到期后链接自动停用，需手动重新启用"
                   value={Boolean(share?.public?.expiresAt)}
                   disabled={!publicOn || !canEditShare}
-                  onChange={(value) => {
+                  onChange={(value: Loose) => {
                     const expiresAt = value
                       ? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
                       : null;
@@ -638,14 +645,15 @@ function ShareDialog({
     </div>
   );
 }
+
 export { ShareDialog };
 
-function PublicToggle({ label, desc, value, disabled, onChange }) {
+function PublicToggle({ label, desc, value, disabled, onChange }: Loose) {
   const on = Boolean(value);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
       <button
-        className={'toggle ' + (on ? 'on' : '')}
+        className={`toggle ${on ? 'on' : ''}`}
         disabled={disabled}
         onClick={() => !disabled && onChange?.(!on)}
       ></button>
@@ -657,11 +665,11 @@ function PublicToggle({ label, desc, value, disabled, onChange }) {
   );
 }
 
-function ToastWrap({ toasts }) {
+function ToastWrap({ toasts }: Loose) {
   if (!toasts.length) return null;
   return (
     <div className="toast-wrap">
-      {toasts.map((t) => (
+      {toasts.map((t: Loose) => (
         <div key={t.id} className="toast">
           <span className="check">
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
@@ -681,6 +689,7 @@ function ToastWrap({ toasts }) {
     </div>
   );
 }
+
 export { ToastWrap };
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -695,7 +704,7 @@ const SPACE_COLORS = [
   { v: 'rose', color: '#ff2d55', label: '玫红' },
 ];
 
-function SpaceManagerDialog({ open, editing, onClose, onCreate, onUpdate, onDelete }) {
+function SpaceManagerDialog({ open, editing, onClose, onCreate, onUpdate, onDelete }: Loose) {
   const isEditing = editing && editing !== 'new';
   const isCreating = editing === 'new';
 
@@ -703,7 +712,7 @@ function SpaceManagerDialog({ open, editing, onClose, onCreate, onUpdate, onDele
   useEffect(() => {
     if (isEditing) setForm({ name: editing.name, accent: editing.accent });
     else if (isCreating) setForm({ name: '', accent: 'accent' });
-  }, [editing]);
+  }, [editing, isEditing, isCreating]);
 
   if (!open || !editing) return null;
 
@@ -719,12 +728,12 @@ function SpaceManagerDialog({ open, editing, onClose, onCreate, onUpdate, onDele
       <div
         className="dialog"
         style={{ width: 'min(560px, 92vw)' }}
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e: Loose) => e.stopPropagation()}
       >
         <div className="dialog-head">
           <div>
             <div className="dialog-title">
-              {isCreating ? '新建空间' : '编辑空间 · ' + editing.name}
+              {isCreating ? '新建空间' : `编辑空间 · ${editing.name}`}
             </div>
             <div className="dialog-sub">
               {isCreating && '新建一个空间，用来组织一组主题相关的文档。'}
@@ -740,12 +749,11 @@ function SpaceManagerDialog({ open, editing, onClose, onCreate, onUpdate, onDele
           <div className="field">
             <label className="field-label">空间名称</label>
             <input
-              autoFocus
               className="input"
               placeholder="例如：工程、产品、设计…"
               value={form.name}
-              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-              onKeyDown={(e) => {
+              onChange={(e: Loose) => setForm((f: Loose) => ({ ...f, name: e.target.value }))}
+              onKeyDown={(e: Loose) => {
                 if (e.key === 'Enter') submit();
               }}
             />
@@ -753,18 +761,18 @@ function SpaceManagerDialog({ open, editing, onClose, onCreate, onUpdate, onDele
           <div className="field">
             <label className="field-label">配色</label>
             <div className="color-swatches">
-              {SPACE_COLORS.map((c) => (
+              {SPACE_COLORS.map((c: Loose) => (
                 <div
                   key={c.v}
-                  className={'color-swatch ' + (form.accent === c.v ? 'active' : '')}
+                  className={`color-swatch ${form.accent === c.v ? 'active' : ''}`}
                   style={{ background: c.color }}
                   title={c.label}
-                  onClick={() => setForm((f) => ({ ...f, accent: c.v }))}
+                  onClick={() => setForm((f: Loose) => ({ ...f, accent: c.v }))}
                 ></div>
               ))}
             </div>
             <div style={{ fontSize: 12, color: 'var(--ink-4)', marginTop: 6 }}>
-              当前 · {SPACE_COLORS.find((c) => c.v === form.accent)?.label}
+              当前 · {SPACE_COLORS.find((c: Loose) => c.v === form.accent)?.label}
             </div>
           </div>
 
@@ -785,7 +793,7 @@ function SpaceManagerDialog({ open, editing, onClose, onCreate, onUpdate, onDele
                 width: 32,
                 height: 32,
                 borderRadius: 'var(--r-sm)',
-                background: SPACE_COLORS.find((c) => c.v === form.accent)?.color,
+                background: SPACE_COLORS.find((c: Loose) => c.v === form.accent)?.color,
                 display: 'inline-flex',
                 alignItems: 'center',
                 justifyContent: 'center',
@@ -808,7 +816,7 @@ function SpaceManagerDialog({ open, editing, onClose, onCreate, onUpdate, onDele
             <button
               className="btn danger ghost"
               onClick={() => {
-                if (confirm('删除空间「' + editing.name + '」？')) {
+                if (confirm(`删除空间「${editing.name}」？`)) {
                   onDelete(editing.id);
                   onClose();
                 }
@@ -832,4 +840,5 @@ function SpaceManagerDialog({ open, editing, onClose, onCreate, onUpdate, onDele
     </div>
   );
 }
+
 export { SpaceManagerDialog };

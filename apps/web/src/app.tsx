@@ -1,14 +1,14 @@
-// @ts-nocheck — migrated verbatim from JSX prototype; incrementally type later.
 // Atlas main app — warm default, collapsible sidebar, magnifying dock
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate as useRouterNavigate } from 'react-router';
-import { Topbar, Sidebar } from './chrome';
-import { ReaderView, PublicDocumentView, AdminDocsView } from './views';
-import { AdminUploadView, AdminSettingsView } from './views-admin';
-import { CmdK, ShareDialog, ToastWrap, SpaceManagerDialog } from './dialogs';
-import { useTweaks, TweaksPanel, TweakSection, TweakRadio, TweakToggle } from './tweaks-panel';
-import { useAtlasData, useAtlasMutations } from './data-hooks';
 import { firstPublicDoc, LoginView, useAuth } from './auth';
+import { Sidebar, Topbar } from './chrome';
+import { useAtlasData, useAtlasMutations } from './data-hooks';
+import { CmdK, ShareDialog, SpaceManagerDialog, ToastWrap } from './dialogs';
+import type { Loose, RouteState, Toast } from './loose-types';
+import { TweakRadio, TweakSection, TweaksPanel, TweakToggle, useTweaks } from './tweaks-panel';
+import { AdminDocsView, PublicDocumentView, ReaderView } from './views';
+import { AdminSettingsView, AdminUploadView } from './views-admin';
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/ {
   theme: 'warm',
@@ -19,7 +19,7 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/ {
 // Views that have a sidebar (only reader per spec — admin pages are full-width)
 const SIDEBAR_VIEWS = new Set(['reader']);
 
-function stateFromLocation(location) {
+function stateFromLocation(location: Loose): RouteState {
   const params = new URLSearchParams(location.search);
   const path = location.pathname;
   if (path.startsWith('/admin/upload'))
@@ -58,7 +58,7 @@ function stateFromLocation(location) {
   };
 }
 
-function urlForState(next) {
+function urlForState(next: RouteState) {
   if (next.view === 'admin-docs') return '/admin/docs';
   if (next.view === 'admin-upload') return '/admin/upload';
   if (next.view === 'admin-settings') return '/admin/settings';
@@ -69,18 +69,18 @@ function App() {
   const location = useLocation();
   const routerNavigate = useRouterNavigate();
   const routeState = stateFromLocation(location);
-  const view = routeState.view;
+  const view = routeState.view ?? 'reader';
   const spaceId = routeState.spaceId;
   const docId = routeState.docId;
   const [cmdkOpen, setCmdkOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
-  const [sharingDocId, setSharingDocId] = useState(null);
-  const [returnTo, setReturnTo] = useState(null);
+  const [sharingDocId, setSharingDocId] = useState<Loose>(null);
+  const [returnTo, setReturnTo] = useState<Loose>(null);
   const [spaceMgrOpen, setSpaceMgrOpen] = useState(false);
-  const [spaceEditing, setSpaceEditing] = useState(null); // null | space object | 'new'
+  const [spaceEditing, setSpaceEditing] = useState<Loose>(null); // null | space object | 'new'
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [chromeVisible, setChromeVisible] = useState(true);
-  const [toasts, setToasts] = useState([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
 
   useEffect(() => {
@@ -90,10 +90,10 @@ function App() {
     );
   }, [tweaks.theme]);
 
-  const pushToast = useCallback(({ msg, meta }) => {
+  const pushToast = useCallback(({ msg, meta }: Omit<Toast, 'id'>) => {
     const id = Math.random().toString(36).slice(2);
-    setToasts((ts) => [...ts, { id, msg, meta }]);
-    setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), 2200);
+    setToasts((ts: Loose) => [...ts, { id, msg, meta }]);
+    setTimeout(() => setToasts((ts: Loose) => ts.filter((t: Loose) => t.id !== id)), 2200);
   }, []);
 
   const { spaces, members, permissions, currentUser, session, isLoading, error } = useAtlasData();
@@ -102,8 +102,8 @@ function App() {
   const isGuest = !user;
 
   const navigate = useCallback(
-    ({ view: v, spaceId: s, docId: d }) => {
-      if (!user && ['admin-docs', 'admin-upload', 'admin-settings'].includes(v)) {
+    ({ view: v, spaceId: s, docId: d }: RouteState) => {
+      if (!user && ['admin-docs', 'admin-upload', 'admin-settings'].includes(v ?? '')) {
         setReturnTo({ view, spaceId, docId });
         routerNavigate('/login');
         return;
@@ -126,20 +126,20 @@ function App() {
 
   const continueAsGuest = useCallback(() => {
     const returnDoc = spaces
-      .flatMap((space) => space.children || [])
-      .find((candidate) => candidate.id === returnTo?.docId);
+      .flatMap((space: Loose) => space.children || [])
+      .find((candidate: Loose) => candidate.id === returnTo?.docId);
     const canReturnAsGuest =
       returnTo &&
       returnTo.view !== 'login' &&
       !['admin-docs', 'admin-upload', 'admin-settings'].includes(returnTo.view) &&
       (returnTo.view === 'public' || returnDoc?.visibility === 'public');
-    const target = canReturnAsGuest ? returnTo : firstPublicDoc(spaces);
+    const target = canReturnAsGuest ? returnTo : firstPublicDoc(spaces as never);
     setReturnTo(null);
     navigate(target);
   }, [navigate, returnTo, spaces]);
 
   const handleLogin = useCallback(
-    async (email, password) => {
+    async (email: string, password: string) => {
       const result = await login(email, password);
       if (result.ok) {
         const target =
@@ -155,19 +155,19 @@ function App() {
   const handleLogout = useCallback(async () => {
     await logout();
     if (!['reader', 'public'].includes(view)) {
-      routerNavigate(urlForState(firstPublicDoc(spaces)));
+      routerNavigate(urlForState(firstPublicDoc(spaces as never)));
     }
   }, [logout, routerNavigate, spaces, view]);
 
   const cycleTheme = useCallback(
-    (to) => {
+    (to: string) => {
       setTweak({ theme: to });
     },
     [setTweak],
   );
 
   useEffect(() => {
-    const onKey = (e) => {
+    const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
         setCmdkOpen(true);
@@ -180,9 +180,9 @@ function App() {
   // Unified chrome auto-hide: topbar + dock + reader meta bar all hide
   // after 3s of stillness. Scroll hides immediately. Click on blank area
   // (NOT on buttons / interactive elements) wakes. Mouse near edges wakes.
-  const mainRef = useRef(null);
+  const mainRef = useRef<Loose>(null);
   useEffect(() => {
-    let hideTimer = null;
+    let hideTimer: ReturnType<typeof setTimeout> | null = null;
     const HIDE_DELAY = 3000;
     const wake = () => {
       setChromeVisible(true);
@@ -200,13 +200,13 @@ function App() {
     const INTERACTIVE =
       'button, a[href], input, select, textarea, .toggle, .doc-card, .doc-row, .radio-card, .tree-node, .dock-item, .tab, .cmdk-item, .share-row, .member-row, .skill-row, .trash-row, .file-line, .step, .space-mgr-row, .icon-btn, .color-swatch, .pill-btn, .role-select, .sidebar-collapse-btn, .sidebar-fab';
 
-    const onClick = (e) => {
+    const onClick = (e: MouseEvent) => {
       // ignore clicks on actual interactive controls — only "blank space" wakes
-      if (e.target.closest(INTERACTIVE)) return;
+      if ((e.target as Element | null)?.closest(INTERACTIVE)) return;
       wake();
     };
     const onScroll = () => hide();
-    const onMouseMove = (e) => {
+    const onMouseMove = (e: MouseEvent) => {
       if (e.clientY < 70 || window.innerHeight - e.clientY < 90) wake();
     };
 
@@ -215,18 +215,18 @@ function App() {
         .querySelectorAll(
           '.main-scroll, .scroll-list, .settings-pane, .reader-iframe-wrap, .cmdk-results, .dialog-body, .upload-wrap',
         )
-        .forEach((el) => {
+        .forEach((el: Loose) => {
           el.removeEventListener('scroll', onScroll);
           el.addEventListener('scroll', onScroll, { passive: true });
         });
-      document.querySelectorAll('iframe.reader-iframe').forEach((ifr) => {
+      document.querySelectorAll('iframe.reader-iframe').forEach((ifr: Loose) => {
         try {
           ifr.contentWindow?.addEventListener('scroll', onScroll, { passive: true });
-        } catch (e) {}
+        } catch (_e) {}
         ifr.addEventListener('load', () => {
           try {
             ifr.contentWindow.addEventListener('scroll', onScroll, { passive: true });
-          } catch (e) {}
+          } catch (_e) {}
         });
       });
     };
@@ -244,7 +244,7 @@ function App() {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('wheel', onScroll);
     };
-  }, [view]);
+  }, []);
 
   const ctx = { view, spaceId, docId };
   const isLogin = view === 'login';
@@ -253,10 +253,12 @@ function App() {
   const hasSidebar = SIDEBAR_VIEWS.has(view) && !isLogin;
   const isPublicView = view === 'public';
 
-  const activeDoc = spaces.flatMap((s) => s.children || []).find((d) => d.id === docId);
+  const activeDoc = spaces
+    .flatMap((s: Loose) => s.children || [])
+    .find((d: Loose) => d.id === docId);
   const shareDocId = sharingDocId || activeDoc?.id || docId;
   const openShare = useCallback(
-    (targetDocId) => {
+    (targetDocId: string) => {
       setSharingDocId(targetDocId || activeDoc?.id || docId);
       setShareOpen(true);
     },
@@ -296,7 +298,7 @@ function App() {
           onTheme={cycleTheme}
           theme={tweaks.theme}
           onNavigate={navigate}
-          onShare={() => openShare()}
+          onShare={() => openShare(shareDocId)}
           spaces={spaces}
           user={user}
           onLogin={openLogin}
@@ -310,7 +312,7 @@ function App() {
           spaces={spaces}
           user={user}
           collapsed={sidebarCollapsed}
-          onToggleCollapse={() => setSidebarCollapsed((v) => !v)}
+          onToggleCollapse={() => setSidebarCollapsed((v: boolean) => !v)}
           onNavigate={navigate}
         />
       )}
@@ -358,7 +360,7 @@ function App() {
             framedDoc={tweaks.framedDoc}
             chromeVisible={chromeVisible}
             onNavigate={navigate}
-            onShare={(id) => openShare(id)}
+            onShare={(id: string) => openShare(id)}
             onLogin={openLogin}
           />
         )}
@@ -370,7 +372,7 @@ function App() {
             spaces={spaces}
             members={members}
             onNavigate={navigate}
-            onShare={(id) => openShare(id)}
+            onShare={(id: string) => openShare(id)}
             pushToast={pushToast}
             mutations={mutations}
           />
@@ -394,7 +396,7 @@ function App() {
             permissions={permissions}
             currentUser={currentUser}
             mutations={mutations}
-            onEditSpace={(sp) => {
+            onEditSpace={(sp: Loose) => {
               setSpaceEditing(sp);
               setSpaceMgrOpen(true);
             }}
@@ -456,7 +458,7 @@ function App() {
           <TweakRadio
             label="模式"
             value={tweaks.theme}
-            onChange={(v) => setTweak({ theme: v })}
+            onChange={(v: Loose) => setTweak({ theme: v })}
             options={[
               { label: '浅', value: 'light' },
               { label: '暖', value: 'warm' },
@@ -468,14 +470,14 @@ function App() {
           <TweakToggle
             label="iframe 边框"
             value={tweaks.framedDoc}
-            onChange={(v) => setTweak({ framedDoc: v })}
+            onChange={(v: boolean) => setTweak({ framedDoc: v })}
           />
         </TweakSection>
         <TweakSection label="底部 Dock">
           <TweakToggle
             label="Dock 放大效果"
             value={tweaks.dockMagnify}
-            onChange={(v) => setTweak({ dockMagnify: v })}
+            onChange={(v: boolean) => setTweak({ dockMagnify: v })}
           />
         </TweakSection>
         <TweakSection label="跳转视图">
@@ -485,7 +487,7 @@ function App() {
               { l: '团队 · 文档列表', v: { view: 'admin-docs' } },
               { l: '团队 · 上传', v: { view: 'admin-upload' } },
               { l: '管理员 · 设置', v: { view: 'admin-settings' } },
-            ].map((x) => (
+            ].map((x: Loose) => (
               <div key={x.l} className="tweak-link" onClick={() => navigate(x.v)}>
                 <span>{x.l}</span>
                 <span style={{ color: 'var(--ink-4)' }}>→</span>
@@ -501,7 +503,7 @@ function App() {
 // ─────────────────────────────────────────────────────────────────────────
 // DOCK — macOS-style magnification, replaces view-switcher
 // ─────────────────────────────────────────────────────────────────────────
-function Dock({ view, onNavigate, visible, magnify, isGuest }) {
+function Dock({ view, onNavigate, visible, magnify, isGuest }: Loose) {
   const allItems = [
     {
       id: 'reader',
@@ -514,15 +516,15 @@ function Dock({ view, onNavigate, visible, magnify, isGuest }) {
     { id: 'admin-upload', label: '上传', icon: 'upload', go: { view: 'admin-upload' } },
     { id: 'admin-settings', label: '设置', icon: 'settings', go: { view: 'admin-settings' } },
   ];
-  const items = isGuest ? allItems.filter((item) => item.guest) : allItems;
+  const items = isGuest ? allItems.filter((item: Loose) => item.guest) : allItems;
 
   const BASE = 34;
   const MAG = 48;
   const DISTANCE = 120;
-  const [mouseX, setMouseX] = useState(null);
-  const dockRef = useRef(null);
+  const [mouseX, setMouseX] = useState<Loose>(null);
+  const dockRef = useRef<Loose>(null);
 
-  const getSize = (idx, el) => {
+  const getSize = (_idx: Loose, el: Loose) => {
     if (!magnify || mouseX == null || !el) return BASE;
     const r = el.getBoundingClientRect();
     const center = r.left + r.width / 2;
@@ -533,14 +535,14 @@ function Dock({ view, onNavigate, visible, magnify, isGuest }) {
   };
 
   return (
-    <div className={'dock-anchor ' + (visible ? '' : 'hidden')}>
+    <div className={`dock-anchor ${visible ? '' : 'hidden'}`}>
       <div
         ref={dockRef}
         className="dock-panel"
-        onMouseMove={(e) => setMouseX(e.clientX)}
+        onMouseMove={(e: Loose) => setMouseX(e.clientX)}
         onMouseLeave={() => setMouseX(null)}
       >
-        {items.map((it) => (
+        {items.map((it: Loose) => (
           <DockItem
             key={it.id}
             item={it}
@@ -554,15 +556,15 @@ function Dock({ view, onNavigate, visible, magnify, isGuest }) {
   );
 }
 
-function DockItem({ item, active, onClick, getSize }) {
-  const ref = useRef(null);
+function DockItem({ item, active, onClick, getSize }: Loose) {
+  const ref = useRef<Loose>(null);
   const [size, setSize] = useState(34);
   useEffect(() => {
-    let raf;
+    let raf = 0;
     const tick = () => {
       const target = getSize(0, ref.current);
       // simple spring
-      setSize((prev) => prev + (target - prev) * 0.35);
+      setSize((prev: Loose) => prev + (target - prev) * 0.35);
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
@@ -573,7 +575,7 @@ function DockItem({ item, active, onClick, getSize }) {
   return (
     <div
       ref={ref}
-      className={'dock-item ' + (active ? 'active' : '')}
+      className={`dock-item ${active ? 'active' : ''}`}
       style={{ width: size, height: size }}
       onClick={onClick}
     >
@@ -586,7 +588,7 @@ function DockItem({ item, active, onClick, getSize }) {
   );
 }
 
-function DockGlyph({ kind, size = 18 }) {
+function DockGlyph({ kind, size = 18 }: Loose) {
   const s = size,
     sw = 1.5;
   if (kind === 'book')
@@ -661,7 +663,7 @@ function DockGlyph({ kind, size = 18 }) {
 
 export { App, Dock };
 
-function AdminAccessDenied({ user, onNavigate }) {
+function AdminAccessDenied({ user, onNavigate }: Loose) {
   return (
     <div className="main-card">
       <div className="admin-denied">

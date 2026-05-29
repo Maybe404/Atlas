@@ -1,16 +1,17 @@
-// @ts-nocheck — migrated verbatim from JSX prototype; incrementally type later.
 // Atlas admin views: Upload flow + Settings
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useQuery } from '@tanstack/react-query';
+
 import { extractHtmlMetadata } from '@atlas/shared';
-import { I, AnimatedScrollList } from './chrome';
+import { useQuery } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { apiGet } from './api-client';
+import { AnimatedScrollList, I } from './chrome';
 import { atlasKeys } from './data-hooks';
 import { visibilityLabel } from './labels';
+import type { Loose } from './loose-types';
 
 const _I2 = I;
 
-function dotClass2(d) {
+function _dotClass2(d: Loose) {
   return d === 'accent'
     ? 'dot-blue'
     : d === 'moss'
@@ -27,10 +28,16 @@ function dotClass2(d) {
 // ─────────────────────────────────────────────────────────────────────────
 // ADMIN · upload
 // ─────────────────────────────────────────────────────────────────────────
-function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations }) {
+function AdminUploadView({
+  ctx: _ctx,
+  spaces = [],
+  onNavigate,
+  pushToast: _pushToast,
+  mutations,
+}: Loose) {
   const [step, setStep] = useState(0);
-  const [files, setFiles] = useState([]);
-  const [selectedFile, setSelectedFile] = useState(null);
+  const [files, setFiles] = useState<Loose[]>([]);
+  const [selectedFile, setSelectedFile] = useState<Loose>(null);
   const [selectedHtml, setSelectedHtml] = useState('');
   const [over, setOver] = useState(false);
   const [meta, setMeta] = useState({
@@ -42,20 +49,21 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
 
   useEffect(() => {
     if (!spaces.length) return;
-    setMeta((m) => ({
+    setMeta((m: Loose) => ({
       ...m,
-      spaceId: spaces.some((s) => s.id === m.spaceId) ? m.spaceId : spaces[0].id,
+      spaceId: spaces.some((s: Loose) => s.id === m.spaceId) ? m.spaceId : spaces[0].id,
     }));
   }, [spaces]);
 
-  const acceptFiles = useCallback((incoming) => {
-    const file = Array.from(incoming || []).find((f) => /\.html?$/i.test(f.name)) || incoming?.[0];
+  const acceptFiles = useCallback((incoming: Loose) => {
+    const file =
+      Array.from(incoming || []).find((f: Loose) => /\.html?$/i.test(f.name)) || incoming?.[0];
     if (!file) return;
     setSelectedFile(file);
-    file.text().then((html) => {
+    file.text().then((html: Loose) => {
       const metadata = extractHtmlMetadata(html, { fallbackTitle: file.name });
       setSelectedHtml(html);
-      setMeta((m) => ({
+      setMeta((m: Loose) => ({
         ...m,
         title: metadata.title || file.name.replace(/\.html?$/i, ''),
         desc: metadata.summary || '',
@@ -65,17 +73,19 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
       { name: file.name, size: `${Math.max(1, Math.round(file.size / 1024))} KB`, progress: 0 },
     ];
     setFiles(ns);
-    ns.forEach((f, i) => {
+    ns.forEach((_f: Loose, i: Loose) => {
       let p = 0;
       const tick = () => {
         p += 14 + Math.random() * 18;
-        setFiles((fs) => fs.map((x, ix) => (ix === i ? { ...x, progress: Math.min(100, p) } : x)));
+        setFiles((fs: Loose) =>
+          fs.map((x: Loose, ix: Loose) => (ix === i ? { ...x, progress: Math.min(100, p) } : x)),
+        );
         if (p < 100) setTimeout(tick, 100 + i * 40 + Math.random() * 80);
       };
       setTimeout(tick, 100 + i * 60);
     });
   }, []);
-  const allDone = files.length > 0 && files.every((f) => f.progress >= 100);
+  const allDone = files.length > 0 && files.every((f: Loose) => f.progress >= 100);
 
   return (
     <div className="main-card">
@@ -100,8 +110,8 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
             </p>
 
             <div className="steps">
-              {['选择文件', '填写信息', '审阅与发布'].map((s, i) => (
-                <div key={i} className={'step ' + (step === i ? 'active' : step > i ? 'done' : '')}>
+              {['选择文件', '填写信息', '审阅与发布'].map((s: Loose, i: Loose) => (
+                <div key={s} className={`step ${step === i ? 'active' : step > i ? 'done' : ''}`}>
                   <span className="num">{step > i ? <_I2.check /> : String(i + 1)}</span>
                   <span>{s}</span>
                 </div>
@@ -113,13 +123,13 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
             {step === 0 && (
               <>
                 <div
-                  className={'dropzone ' + (over ? 'over' : '')}
-                  onDragOver={(e) => {
+                  className={`dropzone ${over ? 'over' : ''}`}
+                  onDragOver={(e: Loose) => {
                     e.preventDefault();
                     setOver(true);
                   }}
                   onDragLeave={() => setOver(false)}
-                  onDrop={(e) => {
+                  onDrop={(e: Loose) => {
                     e.preventDefault();
                     setOver(false);
                     acceptFiles(e.dataTransfer.files);
@@ -130,7 +140,7 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
                     accept=".html,.htm,text/html"
                     style={{ display: 'none' }}
                     id="atlas-upload-file"
-                    onChange={(e) => acceptFiles(e.target.files)}
+                    onChange={(e: Loose) => acceptFiles(e.target.files)}
                   />
                   <div className="big">把 HTML 拖到这里</div>
                   <div className="small">支持单个 .html 文件</div>
@@ -156,15 +166,15 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
                     >
                       已选文件 · {files.length}
                     </div>
-                    {files.map((f, i) => (
-                      <div key={i} className="file-line">
+                    {files.map((f: Loose) => (
+                      <div key={f.name} className="file-line">
                         <div className="icon-tile">
                           <_I2.doc />
                         </div>
                         <span className="name">{f.name}</span>
                         <span className="meta">{f.size}</span>
                         <div className="bar">
-                          <span style={{ width: f.progress + '%' }}></span>
+                          <span style={{ width: `${f.progress}%` }}></span>
                         </div>
                         <span className="meta" style={{ minWidth: 36, textAlign: 'right' }}>
                           {Math.round(f.progress)}%
@@ -193,7 +203,9 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
                   <input
                     className="input"
                     value={meta.title}
-                    onChange={(e) => setMeta((m) => ({ ...m, title: e.target.value }))}
+                    onChange={(e: Loose) =>
+                      setMeta((m: Loose) => ({ ...m, title: e.target.value }))
+                    }
                   />
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
@@ -202,9 +214,11 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
                     <select
                       className="input"
                       value={meta.spaceId}
-                      onChange={(e) => setMeta((m) => ({ ...m, spaceId: e.target.value }))}
+                      onChange={(e: Loose) =>
+                        setMeta((m: Loose) => ({ ...m, spaceId: e.target.value }))
+                      }
                     >
-                      {spaces.map((s) => (
+                      {spaces.map((s: Loose) => (
                         <option key={s.id} value={s.id}>
                           {s.name}
                         </option>
@@ -216,7 +230,9 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
                     <select
                       className="input"
                       value={meta.visibility}
-                      onChange={(e) => setMeta((m) => ({ ...m, visibility: e.target.value }))}
+                      onChange={(e: Loose) =>
+                        setMeta((m: Loose) => ({ ...m, visibility: e.target.value }))
+                      }
                     >
                       <option value="private">私密</option>
                       <option value="invite">受邀</option>
@@ -229,7 +245,7 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
                   <textarea
                     className="input textarea"
                     value={meta.desc}
-                    onChange={(e) => setMeta((m) => ({ ...m, desc: e.target.value }))}
+                    onChange={(e: Loose) => setMeta((m: Loose) => ({ ...m, desc: e.target.value }))}
                   />
                 </div>
                 <div className="field">
@@ -382,11 +398,11 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
                       分享设置
                     </div>
                     <div style={{ fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span className={'vis-chip ' + meta.visibility}>
+                      <span className={`vis-chip ${meta.visibility}`}>
                         {visibilityLabel(meta.visibility)}
                       </span>
                       <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-                        {spaces.find((s) => s.id === meta.spaceId)?.name}
+                        {spaces.find((s: Loose) => s.id === meta.spaceId)?.name}
                       </span>
                     </div>
                   </div>
@@ -472,14 +488,15 @@ function AdminUploadView({ ctx, spaces = [], onNavigate, pushToast, mutations })
     </div>
   );
 }
+
 export { AdminUploadView };
 
 // ─────────────────────────────────────────────────────────────────────────
 // ADMIN · settings
 // ─────────────────────────────────────────────────────────────────────────
 function AdminSettingsView({
-  ctx,
-  onNavigate,
+  ctx: _ctx,
+  onNavigate: _onNavigate,
   pushToast,
   spaces = [],
   members = [],
@@ -488,25 +505,27 @@ function AdminSettingsView({
   mutations,
   onEditSpace,
   onNewSpace,
-}) {
+}: Loose) {
   const [pane, setPane] = useState('spaces');
 
   const perms = useMemo(() => {
-    const p = {};
-    members.forEach((m) => {
-      p[m.id] = {};
-      spaces.forEach((s) => {
-        p[m.id][s.id] = null;
+    const p: Record<string, Record<string, Loose>> = {};
+    members.forEach((m: Loose) => {
+      const row: Record<string, Loose> = {};
+      spaces.forEach((s: Loose) => {
+        row[s.id] = null;
       });
+      p[m.id] = row;
     });
-    permissions.forEach((perm) => {
-      p[perm.memberId] = p[perm.memberId] || {};
-      p[perm.memberId][perm.spaceId] = perm.role;
+    permissions.forEach((perm: Loose) => {
+      const row = p[perm.memberId] || {};
+      row[perm.spaceId] = perm.role;
+      p[perm.memberId] = row;
     });
     return p;
   }, [members, permissions, spaces]);
 
-  const setMemberSpaceRole = (memberId, spaceId, role, options) => {
+  const setMemberSpaceRole = (memberId: Loose, spaceId: Loose, role: Loose, options: Loose) => {
     mutations.setSpaceRole(spaceId, memberId, role, options);
   };
 
@@ -516,28 +535,28 @@ function AdminSettingsView({
         <nav className="settings-nav">
           <div className="settings-nav-group">工作区</div>
           <div
-            className={'settings-nav-item ' + (pane === 'general' ? 'active' : '')}
+            className={`settings-nav-item ${pane === 'general' ? 'active' : ''}`}
             onClick={() => setPane('general')}
           >
             <_I2.settings />
             <span>常规</span>
           </div>
           <div
-            className={'settings-nav-item ' + (pane === 'spaces' ? 'active' : '')}
+            className={`settings-nav-item ${pane === 'spaces' ? 'active' : ''}`}
             onClick={() => setPane('spaces')}
           >
             <_I2.folder />
             <span>空间</span>
           </div>
           <div
-            className={'settings-nav-item ' + (pane === 'members' ? 'active' : '')}
+            className={`settings-nav-item ${pane === 'members' ? 'active' : ''}`}
             onClick={() => setPane('members')}
           >
             <_I2.members />
             <span>成员</span>
           </div>
           <div
-            className={'settings-nav-item ' + (pane === 'permissions' ? 'active' : '')}
+            className={`settings-nav-item ${pane === 'permissions' ? 'active' : ''}`}
             onClick={() => setPane('permissions')}
           >
             <_I2.lock />
@@ -545,7 +564,7 @@ function AdminSettingsView({
           </div>
           <div className="settings-nav-group">维护</div>
           <div
-            className={'settings-nav-item ' + (pane === 'trash' ? 'active' : '')}
+            className={`settings-nav-item ${pane === 'trash' ? 'active' : ''}`}
             onClick={() => setPane('trash')}
           >
             <_I2.trash />
@@ -561,7 +580,7 @@ function AdminSettingsView({
               perms={perms}
               onEditSpace={onEditSpace}
               onNewSpace={onNewSpace}
-              onDeleteSpace={(id) => {
+              onDeleteSpace={(id: Loose) => {
                 if (confirm('确认删除该空间？其下文档会一起删除。')) {
                   mutations.deleteSpace(id);
                 }
@@ -594,6 +613,7 @@ function AdminSettingsView({
     </div>
   );
 }
+
 export { AdminSettingsView };
 
 function GeneralPane() {
@@ -664,7 +684,7 @@ function GeneralPane() {
 // ─────────────────────────────────────────────────────────────────────────
 // SPACES PANE — CRUD on spaces; replaces the old reader-side mini dialog
 // ─────────────────────────────────────────────────────────────────────────
-const SPACE_COLOR_MAP = {
+const SPACE_COLOR_MAP: Record<string, string> = {
   accent: '#cc785c',
   moss: '#34c759',
   slate: '#0066cc',
@@ -672,7 +692,7 @@ const SPACE_COLOR_MAP = {
   ink: '#6e6e73',
   rose: '#ff2d55',
 };
-const SPACE_COLOR_LABEL = {
+const SPACE_COLOR_LABEL: Record<string, string> = {
   accent: '珊瑚',
   moss: '苔藓',
   slate: '靛蓝',
@@ -681,9 +701,9 @@ const SPACE_COLOR_LABEL = {
   rose: '玫红',
 };
 
-function SpacesPane({ spaces, perms, onEditSpace, onNewSpace, onDeleteSpace }) {
-  const memberCountFor = (spaceId) => {
-    return Object.values(perms).filter((p) => p?.[spaceId]).length;
+function SpacesPane({ spaces, perms, onEditSpace, onNewSpace, onDeleteSpace }: Loose) {
+  const memberCountFor = (spaceId: Loose) => {
+    return Object.values(perms).filter((p: Loose) => p?.[spaceId]).length;
   };
   return (
     <>
@@ -711,7 +731,7 @@ function SpacesPane({ spaces, perms, onEditSpace, onNewSpace, onDeleteSpace }) {
         </div>
         <div className="card-body card-body-scroll">
           <AnimatedScrollList className="rows-scroll">
-            {spaces.map((sp) => {
+            {spaces.map((sp: Loose) => {
               const color = SPACE_COLOR_MAP[sp.accent] || SPACE_COLOR_MAP.accent;
               const label = SPACE_COLOR_LABEL[sp.accent] || '珊瑚';
               return (
@@ -731,7 +751,7 @@ function SpacesPane({ spaces, perms, onEditSpace, onNewSpace, onDeleteSpace }) {
                     </div>
                   </div>
                   <div className="sm-count">{sp.count || sp.children?.length || 0}</div>
-                  <div className="sm-actions" onClick={(e) => e.stopPropagation()}>
+                  <div className="sm-actions" onClick={(e: Loose) => e.stopPropagation()}>
                     <button className="icon-btn" title="编辑" onClick={() => onEditSpace(sp)}>
                       <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
                         <path
@@ -764,10 +784,10 @@ function MembersPane({
   setMemberSpaceRole,
   pushToast,
   mutations,
-}) {
-  const [editingMember, setEditingMember] = useState(null); // member id whose space-access menu is open
-  const [menuOpenId, setMenuOpenId] = useState(null);
-  const [passwordMember, setPasswordMember] = useState(null);
+}: Loose) {
+  const [editingMember, setEditingMember] = useState<Loose>(null); // member id whose space-access menu is open
+  const [menuOpenId, setMenuOpenId] = useState<Loose>(null);
+  const [passwordMember, setPasswordMember] = useState<Loose>(null);
   const [showNewMember, setShowNewMember] = useState(false);
   const [newMember, setNewMember] = useState({ name: '', email: '', password: '', role: 'viewer' });
   const [passwordDraft, setPasswordDraft] = useState('');
@@ -784,7 +804,7 @@ function MembersPane({
 
   useEffect(() => {
     if (!editingMember) return;
-    const onDocClick = (e) => {
+    const onDocClick = (e: Loose) => {
       if (e.target.closest('.access-pop') || e.target.closest('[data-access-trigger]')) return;
       setEditingMember(null);
     };
@@ -794,7 +814,7 @@ function MembersPane({
 
   useEffect(() => {
     if (!menuOpenId) return;
-    const onDocClick = (e) => {
+    const onDocClick = (e: Loose) => {
       if (e.target.closest('.row-menu') || e.target.closest('[data-member-more]')) return;
       setMenuOpenId(null);
     };
@@ -802,7 +822,7 @@ function MembersPane({
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [menuOpenId]);
 
-  const submitNewMember = (e) => {
+  const submitNewMember = (e: Loose) => {
     e.preventDefault();
     const payload = {
       name: newMember.name.trim(),
@@ -819,11 +839,11 @@ function MembersPane({
         setNewMember({ name: '', email: '', password: '', role: 'viewer' });
         setShowNewMember(false);
       },
-      onError: (error) => pushToast?.({ msg: '新增成员失败', meta: error?.message }),
+      onError: (error: Loose) => pushToast?.({ msg: '新增成员失败', meta: error?.message }),
     });
   };
 
-  const savePassword = (member) => {
+  const savePassword = (member: Loose) => {
     if (passwordDraft.length < 8) {
       pushToast?.({ msg: '密码至少 8 位', meta: member.name });
       return;
@@ -836,12 +856,12 @@ function MembersPane({
           setPasswordMember(null);
           setPasswordDraft('');
         },
-        onError: (error) => pushToast?.({ msg: '密码更新失败', meta: error?.message }),
+        onError: (error: Loose) => pushToast?.({ msg: '密码更新失败', meta: error?.message }),
       },
     );
   };
 
-  const deleteMember = (member) => {
+  const deleteMember = (member: Loose) => {
     if (member.id === currentUser?.id) {
       pushToast?.({ msg: '不能删除当前登录成员' });
       return;
@@ -855,7 +875,7 @@ function MembersPane({
         }
         setMenuOpenId(null);
       },
-      onError: (error) => pushToast?.({ msg: '删除成员失败', meta: error?.message }),
+      onError: (error: Loose) => pushToast?.({ msg: '删除成员失败', meta: error?.message }),
     });
   };
 
@@ -878,7 +898,7 @@ function MembersPane({
             <h3>团队成员</h3>
             <div className="sub">所有成员对此列表可见</div>
           </div>
-          <button className="btn primary" onClick={() => setShowNewMember((v) => !v)}>
+          <button className="btn primary" onClick={() => setShowNewMember((v: Loose) => !v)}>
             <_I2.plus />
             <span>新增成员</span>
           </button>
@@ -890,9 +910,10 @@ function MembersPane({
               <input
                 className="input"
                 value={newMember.name}
-                onChange={(e) => setNewMember((m) => ({ ...m, name: e.target.value }))}
+                onChange={(e: Loose) =>
+                  setNewMember((m: Loose) => ({ ...m, name: e.target.value }))
+                }
                 placeholder="成员姓名"
-                autoFocus
               />
             </div>
             <div className="field compact">
@@ -901,7 +922,9 @@ function MembersPane({
                 className="input"
                 type="email"
                 value={newMember.email}
-                onChange={(e) => setNewMember((m) => ({ ...m, email: e.target.value }))}
+                onChange={(e: Loose) =>
+                  setNewMember((m: Loose) => ({ ...m, email: e.target.value }))
+                }
                 placeholder="name@atlas.team"
               />
             </div>
@@ -911,7 +934,9 @@ function MembersPane({
                 className="input"
                 type="password"
                 value={newMember.password}
-                onChange={(e) => setNewMember((m) => ({ ...m, password: e.target.value }))}
+                onChange={(e: Loose) =>
+                  setNewMember((m: Loose) => ({ ...m, password: e.target.value }))
+                }
                 placeholder="至少 8 位"
                 autoComplete="new-password"
               />
@@ -921,7 +946,9 @@ function MembersPane({
               <select
                 className="input"
                 value={newMember.role}
-                onChange={(e) => setNewMember((m) => ({ ...m, role: e.target.value }))}
+                onChange={(e: Loose) =>
+                  setNewMember((m: Loose) => ({ ...m, role: e.target.value }))
+                }
               >
                 <option value="admin">管理员</option>
                 <option value="editor">编辑</option>
@@ -940,9 +967,9 @@ function MembersPane({
         )}
         <div className="card-body card-body-scroll">
           <AnimatedScrollList className="rows-scroll">
-            {members.map((m, i) => {
+            {members.map((m: Loose, i: Loose) => {
               const memberPerms = perms[m.id] || {};
-              const accessSpaces = spaces.filter((s) => memberPerms[s.id]);
+              const accessSpaces = spaces.filter((s: Loose) => memberPerms[s.id]);
               return (
                 <div key={m.id} className="member-row-wrap">
                   <div className="member-row member-row-grid">
@@ -959,7 +986,7 @@ function MembersPane({
                     <select
                       className="input"
                       value={m.role}
-                      onChange={(e) => {
+                      onChange={(e: Loose) => {
                         mutations.updateMember(m.id, { role: e.target.value });
                       }}
                       style={{ padding: '6px 32px 6px 10px', fontSize: 13 }}
@@ -978,7 +1005,7 @@ function MembersPane({
                         {accessSpaces.length === 0 && (
                           <span className="access-empty">未分配空间</span>
                         )}
-                        {accessSpaces.slice(0, 3).map((s) => (
+                        {accessSpaces.slice(0, 3).map((s: Loose) => (
                           <span key={s.id} className="access-pill">
                             <span
                               className="dot"
@@ -1010,7 +1037,7 @@ function MembersPane({
                         </svg>
                       </button>
                       {editingMember === m.id && (
-                        <div className="access-pop" onMouseDown={(e) => e.stopPropagation()}>
+                        <div className="access-pop" onMouseDown={(e: Loose) => e.stopPropagation()}>
                           <div className="access-pop-head">
                             <span>{m.name} · 空间访问</span>
                             <button className="icon-btn" onClick={() => setEditingMember(null)}>
@@ -1018,7 +1045,7 @@ function MembersPane({
                             </button>
                           </div>
                           <div className="access-pop-body">
-                            {spaces.map((s) => {
+                            {spaces.map((s: Loose) => {
                               const role = memberPerms[s.id] || null;
                               return (
                                 <div key={s.id} className="access-pop-row">
@@ -1068,7 +1095,7 @@ function MembersPane({
                         className="icon-btn"
                         data-member-more
                         title="成员操作"
-                        onClick={(e) => {
+                        onClick={(e: Loose) => {
                           e.stopPropagation();
                           setMenuOpenId(menuOpenId === m.id ? null : m.id);
                         }}
@@ -1078,7 +1105,7 @@ function MembersPane({
                       {menuOpenId === m.id && (
                         <div
                           className="row-menu member-row-menu"
-                          onClick={(e) => e.stopPropagation()}
+                          onClick={(e: Loose) => e.stopPropagation()}
                         >
                           <button
                             className="row-menu-item"
@@ -1112,8 +1139,8 @@ function MembersPane({
                         className="input"
                         type="password"
                         value={passwordDraft}
-                        onChange={(e) => setPasswordDraft(e.target.value)}
-                        onKeyDown={(e) => {
+                        onChange={(e: Loose) => setPasswordDraft(e.target.value)}
+                        onKeyDown={(e: Loose) => {
                           if (e.key === 'Enter') savePassword(m);
                           if (e.key === 'Escape') {
                             setPasswordMember(null);
@@ -1122,7 +1149,6 @@ function MembersPane({
                         }}
                         placeholder="输入新密码"
                         autoComplete="new-password"
-                        autoFocus
                       />
                       <button
                         className="btn ghost"
@@ -1148,17 +1174,17 @@ function MembersPane({
   );
 }
 
-function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, pushToast }) {
+function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, pushToast }: Loose) {
   const [activeSpace, setActiveSpace] = useState(spaces[0]?.id || '');
   const [showUnassigned, setShowUnassigned] = useState(false);
   useEffect(() => {
     if (!spaces.length) return;
-    if (!spaces.some((s) => s.id === activeSpace)) {
+    if (!spaces.some((s: Loose) => s.id === activeSpace)) {
       setActiveSpace(spaces[0].id);
     }
   }, [activeSpace, spaces]);
 
-  const space = spaces.find((s) => s.id === activeSpace) || spaces[0];
+  const space = spaces.find((s: Loose) => s.id === activeSpace) || spaces[0];
   const spaceMembersQuery = useQuery({
     queryKey: space?.id ? atlasKeys.spaceMembers(space.id) : ['space-members', 'empty'],
     queryFn: () => apiGet(`/spaces/${space.id}/members`),
@@ -1166,9 +1192,12 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
   });
 
   const assignedMembers = spaceMembersQuery.data || [];
-  const assignedIds = useMemo(() => new Set(assignedMembers.map((m) => m.id)), [assignedMembers]);
+  const assignedIds = useMemo(
+    () => new Set(assignedMembers.map((m: Loose) => m.id)),
+    [assignedMembers],
+  );
   const unassignedMembers = useMemo(
-    () => members.filter((member) => !assignedIds.has(member.id)),
+    () => members.filter((member: Loose) => !assignedIds.has(member.id)),
     [assignedIds, members],
   );
   const activeCount = assignedMembers.length;
@@ -1183,20 +1212,22 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
 
   const spaceColor = SPACE_COLOR_MAP[space.accent] || SPACE_COLOR_MAP.accent;
 
-  const setAll = (role) => {
+  const setAll = (role: Loose) => {
     const targets = assignedMembers;
     if (!targets.length) {
       pushToast?.({ msg: role ? '没有可更新的成员' : '当前空间已清空', meta: space.name });
       return;
     }
-    targets.forEach((m) => setMemberSpaceRole(m.id, space.id, role, { silent: true }));
+    targets.forEach((m: Loose) => {
+      setMemberSpaceRole(m.id, space.id, role, { silent: true });
+    });
     pushToast?.({
       msg: role ? '已批量更新空间权限' : '已清空空间权限',
       meta: `${space.name} · ${targets.length} 位成员`,
     });
   };
 
-  const setSpaceWithMotion = (spaceId) => {
+  const setSpaceWithMotion = (spaceId: Loose) => {
     setActiveSpace(spaceId);
     setShowUnassigned(false);
   };
@@ -1214,16 +1245,16 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
       </div>
 
       <div className="space-tabs">
-        {spaces.map((s) => (
+        {spaces.map((s: Loose) => (
           <button
             key={s.id}
-            className={'space-tab ' + (activeSpace === s.id ? 'active' : '')}
+            className={`space-tab ${activeSpace === s.id ? 'active' : ''}`}
             onClick={() => setSpaceWithMotion(s.id)}
           >
             <span className="dot" style={{ background: SPACE_COLOR_MAP[s.accent] }}></span>
             <span>{s.name}</span>
             <span className="count mono">
-              {Object.values(perms).filter((p) => p?.[s.id]).length}
+              {Object.values(perms).filter((p: Loose) => p?.[s.id]).length}
             </span>
           </button>
         ))}
@@ -1272,7 +1303,7 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
               <div className="perm-empty">当前空间还没有成员访问权限。</div>
             )}
             {!spaceMembersQuery.isLoading &&
-              assignedMembers.map((m) => {
+              assignedMembers.map((m: Loose) => {
                 const role = m.spaceRole || perms[m.id]?.[space.id] || null;
                 return (
                   <PermissionMemberRow
@@ -1288,17 +1319,16 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
               <div className="perm-unassigned">
                 <button
                   className="perm-unassigned-trigger"
-                  onClick={() => setShowUnassigned((v) => !v)}
+                  onClick={() => setShowUnassigned((v: Loose) => !v)}
                 >
                   <span>{showUnassigned ? '收起未分配成员' : '添加未分配成员'}</span>
                   <span className="mono">{unassignedMembers.length}</span>
                 </button>
                 {showUnassigned &&
-                  unassignedMembers.map((m) => (
+                  unassignedMembers.map((m: Loose) => (
                     <PermissionMemberRow
                       key={m.id}
                       member={m}
-                      role={null}
                       spaceId={space.id}
                       muted
                       setMemberSpaceRole={setMemberSpaceRole}
@@ -1313,9 +1343,9 @@ function PermissionsPane({ spaces, members = [], perms, setMemberSpaceRole, push
   );
 }
 
-function PermissionMemberRow({ member, role, spaceId, muted = false, setMemberSpaceRole }) {
+function PermissionMemberRow({ member, role, spaceId, muted = false, setMemberSpaceRole }: Loose) {
   return (
-    <div className={'perm-matrix-row ' + (muted ? 'muted' : '')}>
+    <div className={`perm-matrix-row ${muted ? 'muted' : ''}`}>
       <span className="avatar small">{member.initials}</span>
       <div className="perm-matrix-meta">
         <div className="name">{member.name}</div>
@@ -1345,24 +1375,7 @@ function PermissionMemberRow({ member, role, spaceId, muted = false, setMemberSp
   );
 }
 
-function PermRow({ label, desc, def }) {
-  const [on, setOn] = useState(def);
-  return (
-    <div className="perm-row">
-      <div className="text">
-        <div className="label">{label}</div>
-        <div className="desc">{desc}</div>
-      </div>
-      <button
-        className={'toggle ' + (on ? 'on' : '')}
-        onClick={() => setOn((o) => !o)}
-        aria-label={label}
-      ></button>
-    </div>
-  );
-}
-
-function TrashPane({ pushToast, mutations }) {
+function TrashPane({ pushToast: _pushToast, mutations }: Loose) {
   const trashQuery = useQuery({
     queryKey: atlasKeys.trash,
     queryFn: () => apiGet('/documents/trash'),
@@ -1390,7 +1403,7 @@ function TrashPane({ pushToast, mutations }) {
         </div>
         <div className="card-body card-body-scroll">
           <AnimatedScrollList className="rows-scroll">
-            {items.map((it) => (
+            {items.map((it: Loose) => (
               <div key={it.id} className="trash-row">
                 <div>
                   <div className="doc-name">{it.title}</div>
@@ -1420,4 +1433,3 @@ function TrashPane({ pushToast, mutations }) {
     </>
   );
 }
-

@@ -1,18 +1,19 @@
-// @ts-nocheck — migrated verbatim from JSX prototype; incrementally type later.
 // Atlas reader views: Reader (full iframe), SpaceIndex (card grid)
-import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+
 import { extractHtmlMetadata } from '@atlas/shared';
-import { I, AnimatedScrollList } from './chrome';
+import { useQuery } from '@tanstack/react-query';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet } from './api-client';
 import { canRead, firstPublicDoc } from './auth';
+import { AnimatedScrollList, I } from './chrome';
 import { visibilityLabel } from './labels';
+import type { Loose } from './loose-types';
 import { documentReaderUrl } from './url-utils';
 
 const _I = I;
 
 // dot color mapping helper
-function dotClass(d) {
+function dotClass(d: Loose) {
   return d === 'accent'
     ? 'dot-blue'
     : d === 'moss'
@@ -39,15 +40,15 @@ function ReaderView({
   onNavigate,
   onShare,
   onLogin,
-}) {
-  const requestedSpace = spaces.find((s) => s.id === ctx.spaceId);
+}: Loose) {
+  const requestedSpace = spaces.find((s: Loose) => s.id === ctx.spaceId);
   const space = requestedSpace || spaces[0];
-  const requestedDoc = requestedSpace?.children?.find((c) => c.id === ctx.docId);
+  const requestedDoc = requestedSpace?.children?.find((c: Loose) => c.id === ctx.docId);
   const doc =
     requestedDoc || (requestedSpace ? requestedSpace.children?.[0] : space?.children?.[0]);
   const denied = Boolean(user && ctx.spaceId && ctx.docId && (!requestedSpace || !requestedDoc));
   const allowed = !denied && canRead(doc, user);
-  const author = allowed && doc?.author ? members.find((m) => m.id === doc.author) : null;
+  const author = allowed && doc?.author ? members.find((m: Loose) => m.id === doc.author) : null;
   const [copied, setCopied] = useState(false);
   const readerLink = window.location.href;
   const copyReaderLink = () => {
@@ -56,16 +57,16 @@ function ReaderView({
     setTimeout(() => setCopied(false), 1400);
   };
 
-  const iframeRef = useRef(null);
+  const iframeRef = useRef<Loose>(null);
 
   if (denied || !space || !doc) {
     const earlyDocId = doc?.id || ctx.docId;
     return (
       <div className="main-card reader-card">
-        <div className={'reader-meta-bar ' + (chromeVisible ? '' : 'meta-bar-hidden')}>
+        <div className={`reader-meta-bar ${chromeVisible ? '' : 'meta-bar-hidden'}`}>
           {doc && (
             <>
-              <span className={'dot ' + dotClass(doc.dot || 'slate')}></span>
+              <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
               <span className="doc-title">{doc.title}</span>
             </>
           )}
@@ -154,8 +155,8 @@ function ReaderView({
 
   return (
     <div className="main-card reader-card">
-      <div className={'reader-meta-bar ' + (chromeVisible ? '' : 'meta-bar-hidden')}>
-        <span className={'dot ' + dotClass(doc.dot || 'slate')}></span>
+      <div className={`reader-meta-bar ${chromeVisible ? '' : 'meta-bar-hidden'}`}>
+        <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
         <span className="doc-title">{doc.title}</span>
         {allowed ? (
           <>
@@ -182,7 +183,7 @@ function ReaderView({
           </>
         ) : null}
         {!allowed ? (
-          <span className={'vis-chip reader-lock-chip ' + (doc.visibility || 'locked')}>
+          <span className={`vis-chip reader-lock-chip ${doc.visibility || 'locked'}`}>
             {doc.visibility === 'invite'
               ? '需登录 · 邀请制'
               : doc.visibility === 'private'
@@ -192,7 +193,7 @@ function ReaderView({
         ) : null}
       </div>
 
-      <div className={'reader-iframe-wrap ' + (framedDoc ? 'framed' : '')}>
+      <div className={`reader-iframe-wrap ${framedDoc ? 'framed' : ''}`}>
         {allowed ? (
           <iframe
             ref={iframeRef}
@@ -275,9 +276,10 @@ function ReaderView({
     </div>
   );
 }
+
 export { ReaderView };
 
-function PublicDocumentView({ token }) {
+function PublicDocumentView({ token }: Loose) {
   const publicQuery = useQuery({
     queryKey: ['public-document', token],
     queryFn: () => apiGet(`/documents/public/${token}`),
@@ -304,7 +306,7 @@ function PublicDocumentView({ token }) {
   return (
     <div className="main-card reader-card">
       <div className="reader-meta-bar">
-        <span className={'dot ' + dotClass(doc.dot || 'slate')}></span>
+        <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
         <span className="doc-title">{doc.title}</span>
         <span className="sep">·</span>
         <span className="author">{doc.authorName || '公开文档'}</span>
@@ -324,27 +326,30 @@ function PublicDocumentView({ token }) {
     </div>
   );
 }
+
 export { PublicDocumentView };
 
 // ─────────────────────────────────────────────────────────────────────────
 // SPACE INDEX · card grid
 // ─────────────────────────────────────────────────────────────────────────
-function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }) {
-  const space = spaces.find((s) => s.id === ctx.spaceId) || spaces[0];
+function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }: Loose) {
+  const space = spaces.find((s: Loose) => s.id === ctx.spaceId) || spaces[0];
   const [filter, setFilter] = useState('all');
 
   const docs = useMemo(() => {
     let r = [...(space?.children || [])];
-    if (filter !== 'all') r = r.filter((d) => d.visibility === filter);
+    if (filter !== 'all') r = r.filter((d: Loose) => d.visibility === filter);
     return r;
   }, [space, filter]);
 
-  const desc = {
-    s1: '面向工程团队的部署手册、RFC、架构笔记与事故复盘。所有公开链接保留作者署名。',
-    s2: '产品决策的素材库：用户访谈、可用性测试、优先级讨论与跨团队同步。',
-    s3: '视觉系统、版式实验、文案规范——一切关于「Atlas 看起来是什么样」的来源。',
-    s4: '个人草稿与笔记，默认仅自己可见。',
-  }[space?.id];
+  const desc = (
+    {
+      s1: '面向工程团队的部署手册、RFC、架构笔记与事故复盘。所有公开链接保留作者署名。',
+      s2: '产品决策的素材库：用户访谈、可用性测试、优先级讨论与跨团队同步。',
+      s3: '视觉系统、版式实验、文案规范——一切关于「Atlas 看起来是什么样」的来源。',
+      s4: '个人草稿与笔记，默认仅自己可见。',
+    } as Record<string, string>
+  )[space?.id];
 
   if (!space) {
     return (
@@ -392,7 +397,7 @@ function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }) {
               { v: 'public', l: '公开' },
               { v: 'invite', l: '受邀' },
               { v: 'private', l: '私密' },
-            ].map((t) => (
+            ].map((t: Loose) => (
               <button
                 key={t.v}
                 className={filter === t.v ? 'active' : ''}
@@ -414,9 +419,10 @@ function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }) {
         </div>
 
         <div className="doc-grid">
-          {docs.map((doc) => {
+          {docs.map((doc: Loose) => {
             const locked = !canRead(doc);
-            const author = !locked && doc.author ? members.find((m) => m.id === doc.author) : null;
+            const author =
+              !locked && doc.author ? members.find((m: Loose) => m.id === doc.author) : null;
             return (
               <div
                 key={doc.id}
@@ -424,8 +430,8 @@ function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }) {
                 onClick={() => onNavigate({ view: 'reader', spaceId: space.id, docId: doc.id })}
               >
                 <div className="card-head">
-                  <div className={'dot ' + dotClass(doc.dot || 'slate')}></div>
-                  <span className={'vis-chip ' + (locked ? 'locked' : doc.visibility)}>
+                  <div className={`dot ${dotClass(doc.dot || 'slate')}`}></div>
+                  <span className={`vis-chip ${locked ? 'locked' : doc.visibility}`}>
                     {locked ? '需登录' : visibilityLabel(doc.visibility)}
                   </span>
                 </div>
@@ -446,23 +452,24 @@ function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }) {
     </div>
   );
 }
+
 export { SpaceIndexView };
 
 // ─────────────────────────────────────────────────────────────────────────
 // ADMIN · doc list (rows in cards, not table)
 // ─────────────────────────────────────────────────────────────────────────
-function SpaceChipPicker({ doc, spaces, onPick }) {
+function SpaceChipPicker({ doc, spaces, onPick }: Loose) {
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef(null);
+  const wrapRef = useRef<Loose>(null);
   useEffect(() => {
     if (!open) return;
-    const onDoc = (e) => {
+    const onDoc = (e: Loose) => {
       if (!wrapRef.current?.contains(e.target)) setOpen(false);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
-  const accentDot = (a) =>
+  const accentDot = (a: Loose) =>
     a === 'moss'
       ? 'dot-green'
       : a === 'plum'
@@ -476,13 +483,13 @@ function SpaceChipPicker({ doc, spaces, onPick }) {
     <span
       ref={wrapRef}
       className="space-chip space-chip-edit"
-      onClick={(e) => {
+      onClick={(e: Loose) => {
         e.stopPropagation();
-        setOpen((o) => !o);
+        setOpen((o: Loose) => !o);
       }}
       style={{ position: 'relative' }}
     >
-      <span className={'dot ' + accentDot(doc.spaceAccent)}></span>
+      <span className={`dot ${accentDot(doc.spaceAccent)}`}></span>
       {doc.spaceName}
       <svg className="chev" width="9" height="9" viewBox="0 0 10 10" fill="none">
         <path
@@ -494,19 +501,19 @@ function SpaceChipPicker({ doc, spaces, onPick }) {
         />
       </svg>
       {open && (
-        <div className="space-picker-pop" onClick={(e) => e.stopPropagation()}>
-          {spaces.map((s) => {
+        <div className="space-picker-pop" onClick={(e: Loose) => e.stopPropagation()}>
+          {spaces.map((s: Loose) => {
             const active = s.id === doc.spaceId;
             return (
               <div
                 key={s.id}
-                className={'space-picker-row ' + (active ? 'active' : '')}
+                className={`space-picker-row ${active ? 'active' : ''}`}
                 onClick={() => {
                   onPick(s);
                   setOpen(false);
                 }}
               >
-                <span className={'dot ' + accentDot(s.accent)}></span>
+                <span className={`dot ${accentDot(s.accent)}`}></span>
                 <span>{s.name}</span>
                 {active && (
                   <span className="check">
@@ -521,21 +528,22 @@ function SpaceChipPicker({ doc, spaces, onPick }) {
     </span>
   );
 }
+
 export { SpaceChipPicker };
 
 function AdminDocsView({
-  ctx,
+  ctx: _ctx,
   spaces = [],
   members = [],
   onNavigate,
   onShare,
   pushToast,
   mutations,
-}) {
+}: Loose) {
   const docs = useMemo(
     () =>
-      spaces.flatMap((s) =>
-        (s.children || []).map((c) => ({
+      spaces.flatMap((s: Loose) =>
+        (s.children || []).map((c: Loose) => ({
           ...c,
           spaceId: s.id,
           spaceName: s.name,
@@ -544,10 +552,10 @@ function AdminDocsView({
       ),
     [spaces],
   );
-  const [renaming, setRenaming] = useState(null);
+  const [renaming, setRenaming] = useState<Loose>(null);
   const [renameVal, setRenameVal] = useState('');
-  const [menuOpenId, setMenuOpenId] = useState(null);
-  const [editing, setEditing] = useState(null); // doc being edited
+  const [menuOpenId, setMenuOpenId] = useState<Loose>(null);
+  const [editing, setEditing] = useState<Loose>(null); // doc being edited
 
   // filter state
   const [status, setStatus] = useState('all'); // all | published | draft
@@ -557,7 +565,7 @@ function AdminDocsView({
 
   const spaceOptions = useMemo(() => {
     const seen = new Map();
-    docs.forEach((d) => {
+    docs.forEach((d: Loose) => {
       if (!seen.has(d.spaceId))
         seen.set(d.spaceId, { id: d.spaceId, name: d.spaceName, accent: d.spaceAccent });
     });
@@ -566,44 +574,44 @@ function AdminDocsView({
 
   const filtered = useMemo(() => {
     let r = docs;
-    if (status === 'published') r = r.filter((d) => !(d.tags || []).includes('draft'));
-    if (status === 'draft') r = r.filter((d) => (d.tags || []).includes('draft'));
-    if (spaceFilter !== 'all') r = r.filter((d) => d.spaceId === spaceFilter);
-    if (visFilter !== 'all') r = r.filter((d) => d.visibility === visFilter);
+    if (status === 'published') r = r.filter((d: Loose) => !(d.tags || []).includes('draft'));
+    if (status === 'draft') r = r.filter((d: Loose) => (d.tags || []).includes('draft'));
+    if (spaceFilter !== 'all') r = r.filter((d: Loose) => d.spaceId === spaceFilter);
+    if (visFilter !== 'all') r = r.filter((d: Loose) => d.visibility === visFilter);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       r = r.filter(
-        (d) => d.title.toLowerCase().includes(q) || (d.desc || '').toLowerCase().includes(q),
+        (d: Loose) => d.title.toLowerCase().includes(q) || (d.desc || '').toLowerCase().includes(q),
       );
     }
     return r;
   }, [docs, status, spaceFilter, visFilter, search]);
 
-  const startRename = (doc) => {
+  const startRename = (doc: Loose) => {
     setRenaming(doc.id);
     setRenameVal(doc.title);
   };
   const commitRename = () => {
     if (!renaming) return;
     mutations.updateDocument(renaming, {
-      title: renameVal || docs.find((d) => d.id === renaming)?.title,
+      title: renameVal || docs.find((d: Loose) => d.id === renaming)?.title,
     });
     setRenaming(null);
   };
 
-  const deleteDoc = (doc) => {
+  const deleteDoc = (doc: Loose) => {
     mutations.deleteDocument(doc.id);
     setMenuOpenId(null);
   };
 
-  const openEditor = (doc) => {
+  const openEditor = (doc: Loose) => {
     setEditing(doc);
     setMenuOpenId(null);
   };
 
   const createNew = () => {
     const defaultSpace =
-      spaceOptions.find((s) => s.id === (spaceFilter !== 'all' ? spaceFilter : 's1')) ||
+      spaceOptions.find((s: Loose) => s.id === (spaceFilter !== 'all' ? spaceFilter : 's1')) ||
       spaceOptions[0];
     setEditing({
       id: 'new',
@@ -622,7 +630,7 @@ function AdminDocsView({
     });
   };
 
-  const saveDoc = (html, patch = {}) => {
+  const saveDoc = (html: Loose, patch: Loose = {}) => {
     if (!editing) return;
     const metadata = extractHtmlMetadata(html, { fallbackTitle: patch.title || editing.title });
     const nextTitle = patch.title || metadata.title || editing.title || '未命名文章';
@@ -646,7 +654,7 @@ function AdminDocsView({
   // close popover when clicking elsewhere
   useEffect(() => {
     if (!menuOpenId) return;
-    const onDocClick = (e) => {
+    const onDocClick = (e: Loose) => {
       if (e.target.closest('.row-menu') || e.target.closest('[data-row-more]')) return;
       setMenuOpenId(null);
     };
@@ -685,7 +693,7 @@ function AdminDocsView({
               type="text"
               placeholder="按标题或摘要搜索…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e: Loose) => setSearch(e.target.value)}
             />
             {search && (
               <button className="filter-search-clear" onClick={() => setSearch('')} title="清除">
@@ -700,7 +708,7 @@ function AdminDocsView({
                 { v: 'all', l: '全部' },
                 { v: 'published', l: '已发布' },
                 { v: 'draft', l: '草稿' },
-              ].map((o) => (
+              ].map((o: Loose) => (
                 <button
                   key={o.v}
                   className={status === o.v ? 'active' : ''}
@@ -716,10 +724,10 @@ function AdminDocsView({
             <select
               className="filter-select"
               value={spaceFilter}
-              onChange={(e) => setSpaceFilter(e.target.value)}
+              onChange={(e: Loose) => setSpaceFilter(e.target.value)}
             >
               <option value="all">全部空间</option>
-              {spaceOptions.map((s) => (
+              {spaceOptions.map((s: Loose) => (
                 <option key={s.id} value={s.id}>
                   {s.name}
                 </option>
@@ -734,7 +742,7 @@ function AdminDocsView({
                 { v: 'public', l: '公开' },
                 { v: 'invite', l: '受邀' },
                 { v: 'private', l: '私密' },
-              ].map((o) => (
+              ].map((o: Loose) => (
                 <button
                   key={o.v}
                   className={visFilter === o.v ? 'active' : ''}
@@ -751,13 +759,13 @@ function AdminDocsView({
         </div>
 
         <AnimatedScrollList className="doc-list-scroll">
-          {filtered.map((doc) => {
-            const author = members.find((m) => m.id === doc.author);
+          {filtered.map((doc: Loose) => {
+            const author = members.find((m: Loose) => m.id === doc.author);
             return (
               <div
                 key={doc.id}
                 className="doc-row"
-                onClick={(e) => {
+                onClick={(e: Loose) => {
                   if (renaming === doc.id) return;
                   if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
                   if (e.target.closest('.row-menu')) return;
@@ -765,17 +773,16 @@ function AdminDocsView({
                 }}
               >
                 <div className="doc-title">
-                  <span className={'dot ' + dotClass(doc.dot || 'slate')}></span>
+                  <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
                   <div className="text">
                     {renaming === doc.id ? (
                       <input
-                        autoFocus
                         className="input"
                         value={renameVal}
-                        onChange={(e) => setRenameVal(e.target.value)}
-                        onClick={(e) => e.stopPropagation()}
+                        onChange={(e: Loose) => setRenameVal(e.target.value)}
+                        onClick={(e: Loose) => e.stopPropagation()}
                         onBlur={commitRename}
-                        onKeyDown={(e) => {
+                        onKeyDown={(e: Loose) => {
                           if (e.key === 'Enter') commitRename();
                           if (e.key === 'Escape') setRenaming(null);
                         }}
@@ -783,7 +790,7 @@ function AdminDocsView({
                       />
                     ) : (
                       <h4
-                        onDoubleClick={(e) => {
+                        onDoubleClick={(e: Loose) => {
                           e.stopPropagation();
                           startRename(doc);
                         }}
@@ -799,7 +806,7 @@ function AdminDocsView({
                 <SpaceChipPicker
                   doc={doc}
                   spaces={spaces}
-                  onPick={(s) => {
+                  onPick={(s: Loose) => {
                     mutations.updateDocument(doc.id, { spaceId: s.id });
                   }}
                 />
@@ -808,14 +815,14 @@ function AdminDocsView({
                   <span>{author?.name}</span>
                 </div>
                 <div className="updated">{doc.updated}</div>
-                <span className={'vis-chip ' + doc.visibility}>
+                <span className={`vis-chip ${doc.visibility}`}>
                   {visibilityLabel(doc.visibility)}
                 </span>
                 <div className="row-actions" style={{ position: 'relative' }}>
                   <button
                     className="icon-btn"
                     title="编辑内容"
-                    onClick={(e) => {
+                    onClick={(e: Loose) => {
                       e.stopPropagation();
                       openEditor(doc);
                     }}
@@ -832,7 +839,7 @@ function AdminDocsView({
                   <button
                     className="icon-btn"
                     title="预览"
-                    onClick={(e) => {
+                    onClick={(e: Loose) => {
                       e.stopPropagation();
                       onNavigate({ view: 'reader', spaceId: doc.spaceId, docId: doc.id });
                     }}
@@ -851,7 +858,7 @@ function AdminDocsView({
                     className="icon-btn"
                     title="更多"
                     data-row-more
-                    onClick={(e) => {
+                    onClick={(e: Loose) => {
                       e.stopPropagation();
                       setMenuOpenId(menuOpenId === doc.id ? null : doc.id);
                     }}
@@ -859,7 +866,7 @@ function AdminDocsView({
                     <_I.more />
                   </button>
                   {menuOpenId === doc.id && (
-                    <div className="row-menu" onClick={(e) => e.stopPropagation()}>
+                    <div className="row-menu" onClick={(e: Loose) => e.stopPropagation()}>
                       <button
                         className="row-menu-item"
                         onClick={() => {
@@ -932,18 +939,19 @@ function AdminDocsView({
           doc={editing}
           spaces={spaces}
           onClose={() => setEditing(null)}
-          onSave={(html, patch) => saveDoc(html, patch)}
+          onSave={(html: Loose, patch: Loose) => saveDoc(html, patch)}
         />
       )}
     </div>
   );
 }
+
 export { AdminDocsView };
 
 // ─────────────────────────────────────────────────────────────────────────
 // HTML EDITOR DIALOG — edit doc content, save
 // ─────────────────────────────────────────────────────────────────────────
-function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
+function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }: Loose) {
   const defaultHTML =
     doc.html ||
     (doc.isNew
@@ -990,27 +998,27 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
   const [title, setTitle] = useState(doc.title);
   const [desc, setDesc] = useState(doc.desc || '');
   const [titleTouched, setTitleTouched] = useState(Boolean(doc.title));
-  const [descTouched, setDescTouched] = useState(Boolean(doc.desc));
+  const [descTouched, _setDescTouched] = useState(Boolean(doc.desc));
   const [spaceId, setSpaceId] = useState(doc.spaceId || (doc.isNew ? '' : 's1'));
   const [showSpacePicker, setShowSpacePicker] = useState(false);
   const [showSpaceRequired, setShowSpaceRequired] = useState(false);
   const [tab, setTab] = useState(doc.isNew ? 'source' : 'source'); // 'source' | 'preview'
   const [dirty, setDirty] = useState(false);
-  const taRef = useRef(null);
-  const spaceWrapRef = useRef(null);
+  const taRef = useRef<Loose>(null);
+  const spaceWrapRef = useRef<Loose>(null);
 
   useEffect(() => {
     if (!showSpacePicker) return;
-    const onDoc = (e) => {
+    const onDoc = (e: Loose) => {
       if (!spaceWrapRef.current?.contains(e.target)) setShowSpacePicker(false);
     };
     document.addEventListener('mousedown', onDoc);
     return () => document.removeEventListener('mousedown', onDoc);
   }, [showSpacePicker]);
 
-  const selectedSpace = spaces.find((s) => s.id === spaceId);
+  const selectedSpace = spaces.find((s: Loose) => s.id === spaceId);
 
-  const applyMetadata = (nextHtml) => {
+  const applyMetadata = (nextHtml: Loose) => {
     const metadata = extractHtmlMetadata(nextHtml, { fallbackTitle: title || doc.title });
     if (metadata.title && !titleTouched) setTitle(metadata.title);
     if (metadata.summary && !descTouched) setDesc(metadata.summary);
@@ -1022,7 +1030,7 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
       setShowSpacePicker(true);
       return;
     }
-    const patch = {};
+    const patch: Loose = {};
     const metadata = extractHtmlMetadata(html, { fallbackTitle: title || doc.title });
     const finalTitle = title.trim() || metadata.title || doc.title || '未命名文章';
     const finalDesc = desc.trim() || metadata.summary || doc.desc || '';
@@ -1035,8 +1043,11 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
     }
     onSave(html, patch);
   };
+  // keydown handler binds once; ref keeps it calling the latest save closure
+  const saveRef = useRef(save);
+  saveRef.current = save;
 
-  const accentDot = (a) =>
+  const accentDot = (a: Loose) =>
     a === 'moss'
       ? 'dot-green'
       : a === 'plum'
@@ -1048,18 +1059,18 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
             : 'dot-blue';
 
   useEffect(() => {
-    const onKey = (e) => {
+    const onKey = (e: Loose) => {
       if (e.key === 'Escape') onClose();
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
-        save();
+        saveRef.current();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [html, title, onSave, onClose]);
+  }, [onClose]);
 
-  const handlePaste = (e) => {
+  const handlePaste = (e: Loose) => {
     setDirty(true);
     const pasted = e.clipboardData?.getData('text/html') || e.clipboardData?.getData('text/plain');
     if (pasted) {
@@ -1077,15 +1088,15 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
   return (
     <div
       className="overlay editor-overlay"
-      onMouseDown={(e) => {
+      onMouseDown={(e: Loose) => {
         if (e.target.classList.contains('editor-overlay')) onClose();
       }}
     >
-      <div className="editor-dialog" onMouseDown={(e) => e.stopPropagation()}>
+      <div className="editor-dialog" onMouseDown={(e: Loose) => e.stopPropagation()}>
         <div className="editor-head">
           <div className="editor-title-wrap">
             <span
-              className={'dot ' + dotClass(doc.dot)}
+              className={`dot ${dotClass(doc.dot)}`}
               style={{ width: 8, height: 8, borderRadius: '50%' }}
             ></span>
             <div style={{ minWidth: 0, flex: 1 }}>
@@ -1096,7 +1107,7 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
                 <input
                   className="editor-title-input"
                   value={title}
-                  onChange={(e) => {
+                  onChange={(e: Loose) => {
                     setTitle(e.target.value);
                     setTitleTouched(true);
                     setDirty(true);
@@ -1111,23 +1122,21 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
               </div>
               <div
                 ref={spaceWrapRef}
-                className={
-                  'editor-space-field ' + (showSpaceRequired && !spaceId ? 'required-empty' : '')
-                }
+                className={`editor-space-field ${showSpaceRequired && !spaceId ? 'required-empty' : ''}`}
                 style={{ marginTop: 8, position: 'relative', maxWidth: 320 }}
               >
                 <span className="label">空间</span>
                 <button
                   className="editor-space-trigger"
-                  onClick={(e) => {
+                  onClick={(e: Loose) => {
                     e.stopPropagation();
-                    setShowSpacePicker((o) => !o);
+                    setShowSpacePicker((o: Loose) => !o);
                     setShowSpaceRequired(false);
                   }}
                 >
                   {selectedSpace ? (
                     <>
-                      <span className={'dot ' + accentDot(selectedSpace.accent)}></span>
+                      <span className={`dot ${accentDot(selectedSpace.accent)}`}></span>
                       <span>{selectedSpace.name}</span>
                     </>
                   ) : (
@@ -1156,12 +1165,12 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
                 )}
                 {showSpacePicker && (
                   <div className="space-picker-pop" style={{ top: 'calc(100% + 4px)', left: 0 }}>
-                    {spaces.map((s) => {
+                    {spaces.map((s: Loose) => {
                       const active = s.id === spaceId;
                       return (
                         <div
                           key={s.id}
-                          className={'space-picker-row ' + (active ? 'active' : '')}
+                          className={`space-picker-row ${active ? 'active' : ''}`}
                           onClick={() => {
                             setSpaceId(s.id);
                             setDirty(true);
@@ -1169,7 +1178,7 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
                             setShowSpaceRequired(false);
                           }}
                         >
-                          <span className={'dot ' + accentDot(s.accent)}></span>
+                          <span className={`dot ${accentDot(s.accent)}`}></span>
                           <span>{s.name}</span>
                           {active && (
                             <span className="check">
@@ -1186,7 +1195,7 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
           </div>
           <div className="editor-tabs">
             <button
-              className={'editor-tab ' + (tab === 'source' ? 'active' : '')}
+              className={`editor-tab ${tab === 'source' ? 'active' : ''}`}
               onClick={() => setTab('source')}
             >
               <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
@@ -1201,7 +1210,7 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
               <span>HTML</span>
             </button>
             <button
-              className={'editor-tab ' + (tab === 'preview' ? 'active' : '')}
+              className={`editor-tab ${tab === 'preview' ? 'active' : ''}`}
               onClick={() => setTab('preview')}
             >
               <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
@@ -1224,7 +1233,8 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
           {tab === 'source' ? (
             <div className="editor-source-wrap">
               <div className="editor-gutter" aria-hidden="true">
-                {html.split('\n').map((_, i) => (
+                {html.split('\n').map((_: Loose, i: Loose) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: gutter rows are line numbers — index is the identity
                   <div key={i}>{i + 1}</div>
                 ))}
               </div>
@@ -1232,7 +1242,7 @@ function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }) {
                 ref={taRef}
                 className="editor-source"
                 value={html}
-                onChange={(e) => {
+                onChange={(e: Loose) => {
                   setHTML(e.target.value);
                   applyMetadata(e.target.value);
                   setDirty(true);

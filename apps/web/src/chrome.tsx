@@ -1,11 +1,12 @@
-// @ts-nocheck — migrated verbatim from JSX prototype; incrementally type later.
 // Atlas chrome — coral warm-default, folder theme switch, animated tree
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { canRead, UserMenu } from './auth';
+import type { Loose } from './loose-types';
 
 // Icons (SF-style: hairlines, rounded caps)
+type IconProps = React.SVGProps<SVGSVGElement>;
 const I = {
-  chev: (p = {}) => (
+  chev: (p: IconProps = {}) => (
     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" {...p}>
       <path
         d="M3.5 2 7 5 3.5 8"
@@ -16,7 +17,7 @@ const I = {
       />
     </svg>
   ),
-  chevDn: (p = {}) => (
+  chevDn: (p: IconProps = {}) => (
     <svg width="10" height="10" viewBox="0 0 10 10" fill="none" {...p}>
       <path
         d="M2 3.5 5 7 8 3.5"
@@ -27,25 +28,25 @@ const I = {
       />
     </svg>
   ),
-  search: (p = {}) => (
+  search: (p: IconProps = {}) => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
       <circle cx="6" cy="6" r="4.2" stroke="currentColor" strokeWidth="1.4" />
       <path d="M9.3 9.3 12 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   ),
-  plus: (p = {}) => (
+  plus: (p: IconProps = {}) => (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" {...p}>
       <path d="M6 2v8M2 6h8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   ),
-  more: (p = {}) => (
+  more: (p: IconProps = {}) => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
       <circle cx="3" cy="7" r="1.2" fill="currentColor" />
       <circle cx="7" cy="7" r="1.2" fill="currentColor" />
       <circle cx="11" cy="7" r="1.2" fill="currentColor" />
     </svg>
   ),
-  close: (p = {}) => (
+  close: (p: IconProps = {}) => (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" {...p}>
       <path
         d="m2.8 2.8 6.4 6.4M9.2 2.8l-6.4 6.4"
@@ -55,7 +56,7 @@ const I = {
       />
     </svg>
   ),
-  share: (p = {}) => (
+  share: (p: IconProps = {}) => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
       <path
         d="M7 1.5v7M7 1.5 4.7 3.8M7 1.5 9.3 3.8M2.5 7v4a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V7"
@@ -66,7 +67,7 @@ const I = {
       />
     </svg>
   ),
-  link: (p = {}) => (
+  link: (p: IconProps = {}) => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
       <path
         d="M6 8a2.5 2.5 0 0 0 3.5 0l2-2a2.5 2.5 0 0 0-3.5-3.5L7 3.5M8 6a2.5 2.5 0 0 0-3.5 0l-2 2a2.5 2.5 0 0 0 3.5 3.5L7 10.5"
@@ -77,7 +78,7 @@ const I = {
       />
     </svg>
   ),
-  moon: (p = {}) => (
+  moon: (p: IconProps = {}) => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
       <path
         d="M11 8.5A4.5 4.5 0 1 1 5.5 3a4 4 0 0 0 5.5 5.5z"
@@ -87,7 +88,7 @@ const I = {
       />
     </svg>
   ),
-  sun: (p = {}) => (
+  sun: (p: IconProps = {}) => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
       <circle cx="7" cy="7" r="2.5" stroke="currentColor" strokeWidth="1.4" />
       <path
@@ -98,7 +99,7 @@ const I = {
       />
     </svg>
   ),
-  upload: (p = {}) => (
+  upload: (p: IconProps = {}) => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
       <path
         d="M7 9.5V2.5M7 2.5 4.5 5M7 2.5 9.5 5M2.5 9.5V11a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V9.5"
@@ -109,13 +110,13 @@ const I = {
       />
     </svg>
   ),
-  doc: (p = {}) => (
+  doc: (p: IconProps = {}) => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
       <path d="M3 2h5l3 3v7H3z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
       <path d="M8 2v3h3" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />
     </svg>
   ),
-  folder: (p = {}) => (
+  folder: (p: IconProps = {}) => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
       <path
         d="M2 4a1 1 0 0 1 1-1h2.5l1 1.2H11a1 1 0 0 1 1 1V11a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1z"
@@ -125,7 +126,7 @@ const I = {
       />
     </svg>
   ),
-  trash: (p = {}) => (
+  trash: (p: IconProps = {}) => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
       <path
         d="M3 4h8M5.5 4V2.5h3V4M4 4l.5 7.5h5L10 4M6 6.5v4M8 6.5v4"
@@ -136,7 +137,7 @@ const I = {
       />
     </svg>
   ),
-  settings: (p = {}) => (
+  settings: (p: IconProps = {}) => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
       <circle cx="7" cy="7" r="2" stroke="currentColor" strokeWidth="1.4" />
       <path
@@ -147,7 +148,7 @@ const I = {
       />
     </svg>
   ),
-  arrow: (p = {}) => (
+  arrow: (p: IconProps = {}) => (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" {...p}>
       <path
         d="M3 6h6M6.5 3.5 9 6l-2.5 2.5"
@@ -158,19 +159,19 @@ const I = {
       />
     </svg>
   ),
-  globe: (p = {}) => (
+  globe: (p: IconProps = {}) => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
       <circle cx="7" cy="7" r="5" stroke="currentColor" strokeWidth="1.3" />
       <path d="M2 7h10M7 2a7 7 0 0 1 0 10A7 7 0 0 1 7 2z" stroke="currentColor" strokeWidth="1.3" />
     </svg>
   ),
-  lock: (p = {}) => (
+  lock: (p: IconProps = {}) => (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" {...p}>
       <rect x="2.5" y="5.5" width="7" height="5.5" stroke="currentColor" strokeWidth="1.3" rx="1" />
       <path d="M4 5.5V4a2 2 0 0 1 4 0v1.5" stroke="currentColor" strokeWidth="1.3" />
     </svg>
   ),
-  check: (p = {}) => (
+  check: (p: IconProps = {}) => (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" {...p}>
       <path
         d="m2.5 6.5 2.5 2.5L9.5 4"
@@ -181,7 +182,7 @@ const I = {
       />
     </svg>
   ),
-  refresh: (p = {}) => (
+  refresh: (p: IconProps = {}) => (
     <svg width="12" height="12" viewBox="0 0 12 12" fill="none" {...p}>
       <path
         d="M2 6a4 4 0 0 1 7-2.6M10 6a4 4 0 0 1-7 2.6"
@@ -198,7 +199,7 @@ const I = {
       />
     </svg>
   ),
-  layers: (p = {}) => (
+  layers: (p: IconProps = {}) => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
       <path
         d="M7 2l5 2.5L7 7 2 4.5 7 2zM2 7l5 2.5L12 7M2 9.5 7 12l5-2.5"
@@ -208,7 +209,7 @@ const I = {
       />
     </svg>
   ),
-  members: (p = {}) => (
+  members: (p: IconProps = {}) => (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
       <circle cx="5" cy="5" r="2.2" stroke="currentColor" strokeWidth="1.3" />
       <path
@@ -227,7 +228,9 @@ const I = {
     </svg>
   ),
 };
+
 export { I };
+export type IconName = keyof typeof I;
 
 function BrandGlyph() {
   return (
@@ -247,7 +250,7 @@ function BrandGlyph() {
 function Topbar({
   ctx,
   spaces = [],
-  visible = true,
+  visible: _visible = true,
   onSearch,
   onTheme,
   theme,
@@ -257,10 +260,10 @@ function Topbar({
   onLogin,
   onLogout,
   onSwitchUser,
-}) {
+}: Loose) {
   const isReader = ctx.view === 'reader';
-  const space = spaces.find((s) => s.id === ctx.spaceId) || spaces[0] || { name: '空间' };
-  const doc = spaces.flatMap((s) => s.children || []).find((d) => d.id === ctx.docId);
+  const space = spaces.find((s: Loose) => s.id === ctx.spaceId) || spaces[0] || { name: '空间' };
+  const doc = spaces.flatMap((s: Loose) => s.children || []).find((d: Loose) => d.id === ctx.docId);
   return (
     <header className="topbar">
       <div className="brand">
@@ -330,25 +333,26 @@ function Topbar({
     </header>
   );
 }
+
 export { Topbar };
 
 // ─────────────────────────────────────────────────────────────────────────
 // THEME PICKER — sun/moon trigger; 3 papers fan out with the same animation
 // ─────────────────────────────────────────────────────────────────────────
-function ThemePicker({ theme, onTheme }) {
+function ThemePicker({ theme, onTheme }: Loose) {
   const [open, setOpen] = useState(false);
-  const wrapRef = useRef(null);
+  const wrapRef = useRef<Loose>(null);
 
   useEffect(() => {
     if (!open) return;
-    const onDocClick = (e) => {
+    const onDocClick = (e: Loose) => {
       if (!wrapRef.current?.contains(e.target)) setOpen(false);
     };
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [open]);
 
-  const pick = (which) => (e) => {
+  const pick = (which: Loose) => (e: Loose) => {
     e.stopPropagation();
     onTheme(which);
     setTimeout(() => setOpen(false), 240);
@@ -373,10 +377,10 @@ function ThemePicker({ theme, onTheme }) {
   };
 
   return (
-    <div className={'theme-picker-wrap ' + (open ? 'open' : '')} ref={wrapRef}>
+    <div className={`theme-picker-wrap ${open ? 'open' : ''}`} ref={wrapRef}>
       {/* fanning papers — same animation as the old folder */}
       <div
-        className={'tf-paper p1 ' + (theme === 'light' ? 'active' : '')}
+        className={`tf-paper p1 ${theme === 'light' ? 'active' : ''}`}
         onClick={pick('light')}
         title="浅色"
       >
@@ -385,7 +389,7 @@ function ThemePicker({ theme, onTheme }) {
         </span>
       </div>
       <div
-        className={'tf-paper p2 ' + (theme === 'warm' ? 'active' : '')}
+        className={`tf-paper p2 ${theme === 'warm' ? 'active' : ''}`}
         onClick={pick('warm')}
         title="暖色"
       >
@@ -402,7 +406,7 @@ function ThemePicker({ theme, onTheme }) {
         </span>
       </div>
       <div
-        className={'tf-paper p3 ' + (theme === 'dark' ? 'active' : '')}
+        className={`tf-paper p3 ${theme === 'dark' ? 'active' : ''}`}
         onClick={pick('dark')}
         title="深色"
       >
@@ -413,10 +417,10 @@ function ThemePicker({ theme, onTheme }) {
 
       {/* trigger — sun/moon glyph */}
       <span
-        className={'theme-picker-trigger ' + (open ? 'open' : '')}
-        onClick={(e) => {
+        className={`theme-picker-trigger ${open ? 'open' : ''}`}
+        onClick={(e: Loose) => {
           e.stopPropagation();
-          setOpen((o) => !o);
+          setOpen((o: Loose) => !o);
         }}
       >
         <ActiveIcon />
@@ -425,23 +429,23 @@ function ThemePicker({ theme, onTheme }) {
   );
 }
 
-function Sidebar({ ctx, spaces, user, collapsed, onToggleCollapse, onNavigate }) {
+function Sidebar({ ctx, spaces, user, collapsed, onToggleCollapse, onNavigate }: Loose) {
   // Open every space by default so the directory reads as a single list
   const initialExpanded = useMemo(() => {
-    const m = {};
-    spaces.forEach((s) => {
+    const m: Record<string, boolean> = {};
+    spaces.forEach((s: Loose) => {
       m[s.id] = true;
     });
     return m;
-  }, [spaces.length]);
+  }, [spaces.forEach]);
   const [expanded, setExpanded] = useState(initialExpanded);
-  const toggle = (id) => setExpanded((e) => ({ ...e, [id]: !e[id] }));
+  const toggle = (id: Loose) => setExpanded((e: Loose) => ({ ...e, [id]: !e[id] }));
 
   // re-key the inner animated wrappers on (un)collapse so items stagger in again
   const collapseEpoch = collapsed ? 'c' : 'o';
 
   return (
-    <aside className={'sidebar ' + (collapsed ? 'sidebar-out' : '')}>
+    <aside className={`sidebar ${collapsed ? 'sidebar-out' : ''}`}>
       <button
         className="sidebar-collapse-btn"
         title={collapsed ? '展开目录' : '收起目录'}
@@ -459,7 +463,7 @@ function Sidebar({ ctx, spaces, user, collapsed, onToggleCollapse, onNavigate })
         </svg>
       </button>
 
-      <div className="side-card tree tree-only" key={'spaces-' + collapseEpoch}>
+      <div className="side-card tree tree-only" key={`spaces-${collapseEpoch}`}>
         <div className="tree-section-head">
           <span>目录</span>
         </div>
@@ -484,6 +488,7 @@ function Sidebar({ ctx, spaces, user, collapsed, onToggleCollapse, onNavigate })
     </aside>
   );
 }
+
 export { Sidebar };
 
 // Sample TOC for the current reader doc — many items so stagger is visible
@@ -542,11 +547,11 @@ const READER_TOC = [
   },
 ];
 
-function TocList({ toc, active, onPick }) {
+function TocList({ toc, active, onPick }: Loose) {
   const [topOpacity, setTopOpacity] = useState(0);
   const [botOpacity, setBotOpacity] = useState(1);
-  const onScroll = (e) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.target;
+  const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
     setTopOpacity(Math.min(scrollTop / 50, 1));
     const bd = scrollHeight - (scrollTop + clientHeight);
     setBotOpacity(scrollHeight <= clientHeight ? 0 : Math.min(bd / 50, 1));
@@ -556,21 +561,21 @@ function TocList({ toc, active, onPick }) {
   return (
     <div className="tree-scroll toc-scroll">
       <div className="scroll-list" onScroll={onScroll}>
-        {toc.map((sec) => (
+        {toc.map((sec: Loose) => (
           <div key={sec.id}>
             <AnimatedItem index={i++}>
               <div
-                className={'toc-sec ' + (active === sec.id ? 'active' : '')}
+                className={`toc-sec ${active === sec.id ? 'active' : ''}`}
                 onClick={() => onPick(sec.id)}
               >
                 <span className="toc-num">{sec.num}</span>
                 <span className="toc-sec-title">{sec.title}</span>
               </div>
             </AnimatedItem>
-            {sec.subs.map((sub) => (
+            {sec.subs.map((sub: Loose) => (
               <AnimatedItem key={sub.id} index={i++}>
                 <div
-                  className={'toc-sub ' + (active === sub.id ? 'active' : '')}
+                  className={`toc-sub ${active === sub.id ? 'active' : ''}`}
                   onClick={() => onPick(sub.id)}
                 >
                   <span className="toc-dot"></span>
@@ -586,31 +591,34 @@ function TocList({ toc, active, onPick }) {
     </div>
   );
 }
-export { TocList, READER_TOC };
+
+export { READER_TOC, TocList };
 
 // ─────────────────────────────────────────────────────────────────────────
 // ANIMATED TREE LIST — items fade+scale in on scroll into view, with
 // fading top/bottom gradient masks (inspired by React Bits AnimatedList)
 // ─────────────────────────────────────────────────────────────────────────
-function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNavigate }) {
-  const listRef = useRef(null);
+function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNavigate }: Loose) {
+  const listRef = useRef<Loose>(null);
   const [topOpacity, setTopOpacity] = useState(0);
   const [botOpacity, setBotOpacity] = useState(1);
 
-  const onScroll = (e) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.target;
+  const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
     setTopOpacity(Math.min(scrollTop / 50, 1));
     const bd = scrollHeight - (scrollTop + clientHeight);
     setBotOpacity(scrollHeight <= clientHeight ? 0 : Math.min(bd / 50, 1));
   };
 
   // build a flat sequence of nodes for stagger animation
-  const flat = useMemo(() => {
-    const out = [];
-    spaces.forEach((space) => {
+  const _flat = useMemo(() => {
+    const out: Loose[] = [];
+    spaces.forEach((space: Loose) => {
       out.push({ kind: 'space', space });
       if (expanded[space.id] && !collapsed) {
-        space.children.forEach((doc) => out.push({ kind: 'doc', space, doc }));
+        space.children.forEach((doc: Loose) => {
+          out.push({ kind: 'doc', space, doc });
+        });
       }
     });
     return out;
@@ -619,7 +627,7 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
   return (
     <div className="tree-scroll">
       <div ref={listRef} className="scroll-list" onScroll={onScroll}>
-        {spaces.map((space, sIdx) => {
+        {spaces.map((space: Loose, sIdx: number) => {
           const open = expanded[space.id];
           const activeSpace = ctx.spaceId === space.id && !ctx.docId;
           const dotCls =
@@ -637,9 +645,7 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
               <AnimatedItem index={sIdx}>
                 <div className="tree-space-head" style={{ position: 'relative' }}>
                   <div
-                    className={
-                      'tree-node ' + (open ? 'expanded ' : '') + (activeSpace ? 'active' : '')
-                    }
+                    className={`tree-node ${open ? 'expanded ' : ''}${activeSpace ? 'active' : ''}`}
                     onClick={() => {
                       toggle(space.id);
                       onNavigate({
@@ -652,7 +658,7 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
                     <span className="chev">
                       <I.chev />
                     </span>
-                    <span className={'dot ' + dotCls}></span>
+                    <span className={`dot ${dotCls}`}></span>
                     {!collapsed && <span className="name">{space.name}</span>}
                     {!collapsed && <span className="count">{space.count}</span>}
                   </div>
@@ -660,7 +666,7 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
               </AnimatedItem>
               {open && !collapsed && (
                 <div className="tree-children">
-                  {space.children.map((doc, dIdx) => {
+                  {space.children.map((doc: Loose, dIdx: number) => {
                     const locked = !canRead(doc, user);
                     return (
                       <AnimatedItem key={doc.id} index={sIdx + dIdx + 1}>
@@ -670,7 +676,7 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
                             (ctx.docId === doc.id ? 'active ' : '') +
                             (locked ? 'locked' : '')
                           }
-                          onClick={(e) => {
+                          onClick={(e: Loose) => {
                             e.stopPropagation();
                             onNavigate({ view: 'reader', spaceId: space.id, docId: doc.id });
                           }}
@@ -697,8 +703,8 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
   );
 }
 
-function AnimatedItem({ children, index = 0 }) {
-  const ref = useRef(null);
+function AnimatedItem({ children, index = 0 }: Loose) {
+  const ref = useRef<Loose>(null);
   const [inView, setInView] = useState(false);
   useEffect(() => {
     const el = ref.current;
@@ -711,8 +717,10 @@ function AnimatedItem({ children, index = 0 }) {
       root = root.parentElement;
     }
     const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((en) => setInView(en.isIntersecting));
+      (entries: Loose) => {
+        entries.forEach((en: Loose) => {
+          setInView(en.isIntersecting);
+        });
       },
       { root: root === document.body ? null : root, threshold: 0.2 },
     );
@@ -733,29 +741,30 @@ function AnimatedItem({ children, index = 0 }) {
   return (
     <div
       ref={ref}
-      className={'tree-anim-item ' + (inView ? 'in' : '')}
-      style={{ '--anim-delay': index * 30 + 'ms' }}
+      className={`tree-anim-item ${inView ? 'in' : ''}`}
+      style={{ '--anim-delay': `${index * 30}ms` } as React.CSSProperties}
     >
       {children}
     </div>
   );
 }
+
 export { AnimatedItem };
 
 // Reusable animated-scroll wrapper for any list: stagger entrance + gradient masks
-function AnimatedScrollList({ children, className = '' }) {
+function AnimatedScrollList({ children, className = '' }: Loose) {
   const [topOpacity, setTopOpacity] = useState(0);
   const [botOpacity, setBotOpacity] = useState(1);
-  const onScroll = (e) => {
-    const { scrollTop, scrollHeight, clientHeight } = e.target;
+  const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
     setTopOpacity(Math.min(scrollTop / 50, 1));
     const bd = scrollHeight - (scrollTop + clientHeight);
     setBotOpacity(scrollHeight <= clientHeight ? 0 : Math.min(bd / 50, 1));
   };
   return (
-    <div className={'tree-scroll ' + className}>
+    <div className={`tree-scroll ${className}`}>
       <div className="scroll-list" onScroll={onScroll}>
-        {React.Children.map(children, (child, idx) => (
+        {React.Children.map(children, (child: Loose, idx: Loose) => (
           <AnimatedItem index={idx}>{child}</AnimatedItem>
         ))}
       </div>
@@ -764,4 +773,5 @@ function AnimatedScrollList({ children, className = '' }) {
     </div>
   );
 }
+
 export { AnimatedScrollList };
