@@ -181,21 +181,19 @@ function App() {
   // after 3s of stillness. Scroll hides immediately. Click on blank area
   // (NOT on buttons / interactive elements) wakes. Mouse near edges wakes.
   const mainRef = useRef<Loose>(null);
+  const chromeHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const HIDE_DELAY = 3000;
+  const wakeChrome = useCallback(() => {
+    setChromeVisible(true);
+    if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
+    chromeHideTimer.current = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
+  }, []);
+  const hideChrome = useCallback(() => {
+    if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
+    setChromeVisible(false);
+  }, []);
   useEffect(() => {
-    let hideTimer: ReturnType<typeof setTimeout> | null = null;
-    const HIDE_DELAY = 3000;
-    const wake = () => {
-      setChromeVisible(true);
-      if (hideTimer) clearTimeout(hideTimer);
-      hideTimer = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
-    };
-    const hide = () => {
-      if (hideTimer) clearTimeout(hideTimer);
-      setChromeVisible(false);
-    };
-
-    // arm initial timer so chrome auto-hides on first idle
-    hideTimer = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
+    chromeHideTimer.current = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
 
     const INTERACTIVE =
       'button, a[href], input, select, textarea, .toggle, .doc-card, .doc-row, .radio-card, .tree-node, .dock-item, .tab, .cmdk-item, .share-row, .member-row, .skill-row, .trash-row, .file-line, .step, .space-mgr-row, .icon-btn, .color-swatch, .pill-btn, .role-select, .sidebar-collapse-btn, .sidebar-fab';
@@ -203,48 +201,22 @@ function App() {
     const onClick = (e: MouseEvent) => {
       // ignore clicks on actual interactive controls — only "blank space" wakes
       if ((e.target as Element | null)?.closest(INTERACTIVE)) return;
-      wake();
+      wakeChrome();
     };
-    const onScroll = () => hide();
     const onMouseMove = (e: MouseEvent) => {
-      if (e.clientY < 70 || window.innerHeight - e.clientY < 90) wake();
+      if (e.clientY < 70 || window.innerHeight - e.clientY < 90) wakeChrome();
     };
-
-    const attachScroll = () => {
-      document
-        .querySelectorAll(
-          '.main-scroll, .scroll-list, .settings-pane, .reader-iframe-wrap, .cmdk-results, .dialog-body, .upload-wrap',
-        )
-        .forEach((el: Loose) => {
-          el.removeEventListener('scroll', onScroll);
-          el.addEventListener('scroll', onScroll, { passive: true });
-        });
-      document.querySelectorAll('iframe.reader-iframe').forEach((ifr: Loose) => {
-        try {
-          ifr.contentWindow?.addEventListener('scroll', onScroll, { passive: true });
-        } catch (_e) {}
-        ifr.addEventListener('load', () => {
-          try {
-            ifr.contentWindow.addEventListener('scroll', onScroll, { passive: true });
-          } catch (_e) {}
-        });
-      });
-    };
-    // re-attach across renders / view switches
-    const attachTimer = setInterval(attachScroll, 500);
-    setTimeout(attachScroll, 80);
 
     document.addEventListener('click', onClick);
     document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('wheel', onScroll, { passive: true });
+    document.addEventListener('wheel', hideChrome, { passive: true });
     return () => {
-      if (hideTimer) clearTimeout(hideTimer);
-      clearInterval(attachTimer);
+      if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
       document.removeEventListener('click', onClick);
       document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('wheel', onScroll);
+      document.removeEventListener('wheel', hideChrome);
     };
-  }, []);
+  }, [hideChrome, wakeChrome]);
 
   const ctx = { view, spaceId, docId };
   const isLogin = view === 'login';
@@ -337,6 +309,7 @@ function App() {
       <main
         className="main"
         ref={mainRef}
+        onScroll={hideChrome}
         data-screen-label={
           view === 'reader'
             ? '01 Reader · Doc (iframe)'
@@ -362,9 +335,12 @@ function App() {
             onNavigate={navigate}
             onShare={(id: string) => openShare(id)}
             onLogin={openLogin}
+            onChromeScroll={hideChrome}
           />
         )}
-        {view === 'public' && <PublicDocumentView token={routeState.token} />}
+        {view === 'public' && (
+          <PublicDocumentView token={routeState.token} onChromeScroll={hideChrome} />
+        )}
         {lacksAdminAccess && <AdminAccessDenied user={user} onNavigate={navigate} />}
         {!lacksAdminAccess && view === 'admin-docs' && (
           <AdminDocsView
@@ -525,9 +501,9 @@ function Dock({ view, onNavigate, visible, magnify, isGuest }: Loose) {
   const dockRef = useRef<Loose>(null);
 
   const getSize = (_idx: Loose, el: Loose) => {
-    if (!magnify || mouseX == null || !el) return BASE;
-    const r = el.getBoundingClientRect();
-    const center = r.left + r.width / 2;
+    if (!magnify || mouseX == null || !el || !dockRef.current) return BASE;
+    const dockRect = dockRef.current.getBoundingClientRect();
+    const center = dockRect.left + el.offsetLeft + el.offsetWidth / 2;
     const dist = Math.abs(mouseX - center);
     if (dist > DISTANCE) return BASE;
     const t = 1 - dist / DISTANCE;
@@ -558,25 +534,21 @@ function Dock({ view, onNavigate, visible, magnify, isGuest }: Loose) {
 
 function DockItem({ item, active, onClick, getSize }: Loose) {
   const ref = useRef<Loose>(null);
-  const [size, setSize] = useState(34);
-  useEffect(() => {
-    let raf = 0;
-    const tick = () => {
-      const target = getSize(0, ref.current);
-      // simple spring
-      setSize((prev: Loose) => prev + (target - prev) * 0.35);
-      raf = requestAnimationFrame(tick);
-    };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
-  }, [getSize]);
-
-  const iconSize = Math.round(size * 0.42);
+  const size = getSize(0, ref.current);
+  const scale = size / 34;
+  const iconSize = 14;
   return (
     <div
       ref={ref}
       className={`dock-item ${active ? 'active' : ''}`}
-      style={{ width: size, height: size }}
+      style={{
+        width: 34,
+        height: 34,
+        transform: `scale(${scale})`,
+        transformOrigin: 'center bottom',
+        transition: 'transform 110ms ease-out',
+        willChange: 'transform',
+      }}
       onClick={onClick}
     >
       <div className="dock-glyph">

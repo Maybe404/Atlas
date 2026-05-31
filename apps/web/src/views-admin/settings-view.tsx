@@ -43,6 +43,9 @@ export function AdminSettingsView({
   const setMemberSpaceRole = (memberId: Loose, spaceId: Loose, role: Loose, options: Loose) => {
     mutations.setSpaceRole(spaceId, memberId, role, options);
   };
+  const setMemberSpaceRoles = (spaceId: Loose, updates: Loose, options: Loose) => {
+    mutations.setSpaceRoles(spaceId, updates, options);
+  };
 
   return (
     <div className="main-card">
@@ -119,6 +122,7 @@ export function AdminSettingsView({
               members={members}
               perms={perms}
               setMemberSpaceRole={setMemberSpaceRole}
+              setMemberSpaceRoles={setMemberSpaceRoles}
               pushToast={pushToast}
             />
           )}

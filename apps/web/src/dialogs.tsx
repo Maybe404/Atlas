@@ -6,6 +6,7 @@ import { apiGet } from './api-client';
 import { AnimatedItem, AnimatedScrollList, I } from './chrome';
 import { atlasKeys } from './data-hooks';
 import type { Loose } from './loose-types';
+import { SPACE_COLORS } from './theme-tokens';
 import { publicShareUrl } from './url-utils';
 
 const _I3 = I;
@@ -289,7 +290,7 @@ export { CmdK };
 function ShareDialog({
   open,
   documentId,
-  members: workspaceMembers = [],
+  members: _workspaceMembers = [],
   currentUser,
   onClose,
   pushToast,
@@ -305,36 +306,42 @@ function ShareDialog({
     retry: false,
   });
 
-  if (!open) return null;
-
   const share = shareQuery.data;
   const roster = share?.members || [];
-  const availableMembers = shareQuery.isError
-    ? []
-    : share?.availableMembers?.length
-      ? share.availableMembers
-      : workspaceMembers;
+  const canEditShare = Boolean(share?.canManage ?? share?.canEdit);
+  const memberSearchQuery = useQuery({
+    queryKey: atlasKeys.shareMemberSearch(documentId, emailInput.trim()),
+    queryFn: () =>
+      apiGet(
+        `/documents/${documentId}/share/members?q=${encodeURIComponent(emailInput.trim())}&limit=8`,
+      ),
+    enabled: open && Boolean(documentId) && canEditShare,
+    retry: false,
+  });
+  const availableMembers = memberSearchQuery.data || [];
   const directViewers = roster.filter((mem: Loose) => mem.role === 'viewer');
   const directEditors = roster.filter((mem: Loose) => mem.role === 'editor');
-  const canEditShare = Boolean(share?.canManage ?? share?.canEdit);
   const showPermissionNote = !shareQuery.isLoading && !canEditShare;
   const shareUnavailable = shareQuery.isError;
   const publicOn = Boolean(share?.public?.enabled);
-  const url = share?.public?.token ? publicShareUrl(share.public.token) : '';
+  const url = share?.public?.url || publicShareUrl(share?.public?.token || '');
   const docTitle = documentId ? `文档 ${documentId}` : '当前文档';
 
   const addMember = () => {
     if (!emailInput) return;
     const input = emailInput.trim().toLowerCase();
-    const m = availableMembers.find(
-      (x: Loose) => x.email?.toLowerCase() === input || x.name === emailInput.trim(),
-    );
+    const m =
+      availableMembers.find(
+        (x: Loose) => x.email?.toLowerCase() === input || x.name === emailInput.trim(),
+      ) || availableMembers[0];
     if (m) {
       mutations.updateShare(documentId, { members: [{ memberId: m.id, role: 'viewer' }] });
       setEmailInput('');
       pushToast({ msg: '已邀请', meta: m.name });
     }
   };
+
+  if (!open) return null;
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -385,14 +392,13 @@ function ShareDialog({
                 <input
                   className="input"
                   style={{ flex: 1 }}
-                  placeholder="按姓名或邮箱…"
+                  placeholder="按姓名或邮箱搜索…"
                   value={emailInput}
                   disabled={!canEditShare}
                   onChange={(e: Loose) => setEmailInput(e.target.value)}
                   onKeyDown={(e: Loose) => {
                     if (e.key === 'Enter') addMember();
                   }}
-                  list="atlas-members"
                 />
                 <datalist id="atlas-members">
                   {availableMembers.map((m: Loose) => (
@@ -401,7 +407,11 @@ function ShareDialog({
                     </option>
                   ))}
                 </datalist>
-                <button className="btn primary" disabled={!canEditShare} onClick={addMember}>
+                <button
+                  className="btn primary"
+                  disabled={!canEditShare || !emailInput.trim()}
+                  onClick={addMember}
+                >
                   邀请
                 </button>
               </div>
@@ -491,7 +501,7 @@ function ShareDialog({
                           <div className="email mono">{mem.email}</div>
                         </div>
                         <span className="dim" style={{ marginLeft: 'auto', fontSize: 12 }}>
-                          建议邀请
+                          搜索结果
                         </span>
                       </div>
                     ))}
@@ -687,15 +697,6 @@ export { ToastWrap };
 // ─────────────────────────────────────────────────────────────────────────
 // SPACE MANAGER DIALOG — create / edit / delete spaces
 // ─────────────────────────────────────────────────────────────────────────
-const SPACE_COLORS = [
-  { v: 'accent', color: '#cc785c', label: '珊瑚' },
-  { v: 'moss', color: '#34c759', label: '苔藓' },
-  { v: 'slate', color: '#0066cc', label: '靛蓝' },
-  { v: 'plum', color: '#af52de', label: '紫梅' },
-  { v: 'ink', color: '#6e6e73', label: '墨灰' },
-  { v: 'rose', color: '#ff2d55', label: '玫红' },
-];
-
 function SpaceManagerDialog({ open, editing, onClose, onCreate, onUpdate, onDelete }: Loose) {
   const isEditing = editing && editing !== 'new';
   const isCreating = editing === 'new';

@@ -1,8 +1,13 @@
-import { CreateSpaceSchema, SetSpaceMemberRoleSchema, UpdateSpaceSchema } from '@atlas/shared';
+import {
+  BatchSetSpaceMemberRolesSchema,
+  CreateSpaceSchema,
+  SetSpaceMemberRoleSchema,
+  UpdateSpaceSchema,
+} from '@atlas/shared';
 import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
-import { type documents, members, spaceMembers, spaces } from '../db/schema';
+import { auditLogs, type documents, members, spaceMembers, spaces } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
@@ -206,6 +211,51 @@ export const spacesRouter = new Hono<AppEnv>()
         spaceRole: row.membership.role,
       })),
     );
+  })
+  .put('/:id/members', async (c) => {
+    const user = requireUser(c.get('user'));
+    if (!isAdmin(user)) throw forbidden('Only workspace admins can change space permissions.');
+
+    const spaceId = c.req.param('id');
+    await requireSpaceAccess(user, spaceId);
+    const body = BatchSetSpaceMemberRolesSchema.parse(await c.req.json());
+    const updates = [...new Map(body.updates.map((item) => [item.memberId, item])).values()];
+    const memberIds = updates.map((item) => item.memberId);
+    const existingMembers = await db
+      .select({ id: members.id })
+      .from(members)
+      .where(inArray(members.id, memberIds));
+    const existingMemberIds = new Set(existingMembers.map((member) => member.id));
+    const missingMemberId = memberIds.find((memberId) => !existingMemberIds.has(memberId));
+    if (missingMemberId) throw notFound('Member not found.');
+
+    await db.transaction(async (tx) => {
+      for (const update of updates) {
+        await tx
+          .delete(spaceMembers)
+          .where(
+            and(eq(spaceMembers.spaceId, spaceId), eq(spaceMembers.memberId, update.memberId)),
+          );
+
+        if (update.role) {
+          await tx.insert(spaceMembers).values({
+            spaceId,
+            memberId: update.memberId,
+            role: update.role,
+          });
+        }
+        await tx.insert(auditLogs).values({
+          id: makeId('audit'),
+          actorId: user.id,
+          action: 'space.member_update',
+          targetType: 'space',
+          targetId: spaceId,
+          details: { memberId: update.memberId, role: update.role },
+        });
+      }
+    });
+
+    return c.json({ ok: true, updated: updates.length });
   })
   .put('/:id/members/:memberId', async (c) => {
     const user = requireUser(c.get('user'));

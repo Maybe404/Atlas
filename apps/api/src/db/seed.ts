@@ -1,4 +1,3 @@
-import { ATLAS_DATA } from '@atlas/shared/fixtures';
 import { db } from './client';
 import {
   documentMembers,
@@ -9,6 +8,7 @@ import {
   spaceMembers,
   spaces,
 } from './schema';
+import { ATLAS_DATA } from './seed-data';
 
 const DEMO_PASSWORD_HASH = '$2b$04$RhYUNqiT505iO9sAwUaXGO/9c55aKJYZtRSazB2H0mHtPbH.m5eF.';
 

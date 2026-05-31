@@ -599,7 +599,13 @@ TODO 3 已选择选项 2：删除整套 skill/sanitize 版本概念。当前源�
 
 ## P2：中期优化
 
-### TODO 13：增加空间成员批量权限更新接口
+### TODO 13：增加空间成员批量权限更新接口 ✅ 已解决
+
+**状态：已完成（2026-05-31）**
+
+**方案与现状：**
+
+新增共享 schema `BatchSetSpaceMemberRolesSchema` 和后端 `PUT /spaces/:id/members` 批量接口，接收 `{ updates: [{ memberId, role }] }`，先统一校验空间、成员和请求体，再在一个事务中完成 delete/insert 与审计写入；重复 memberId 以后者为准。前端“全部设为仅读”“清空”已从逐个 `PUT /spaces/:id/members/:memberId` 改为一次批量 mutation，并只刷新当前空间成员、权限和空间目录相关 query。API 测试覆盖批量更新、清空、重复项归并和无效成员不产生部分写入。
 
 **严重程度：P2 / 性能与一致性风险**
 
@@ -666,7 +672,13 @@ targets.forEach(m => setMemberSpaceRole(m.id, space.id, role, { silent: true }))
 
 ---
 
-### TODO 15：统一前端颜色、dot、accent 映射
+### TODO 15：统一前端颜色、dot、accent 映射 ✅ 已解决
+
+**状态：已完成（2026-05-31）**
+
+**方案与现状：**
+
+新增 `apps/web/src/theme-tokens.ts` 作为唯一视觉 token 来源，集中维护 `SPACE_COLOR_MAP`、`SPACE_COLOR_LABEL`、`SPACE_COLORS`、`dotClass()`、`accentDot()`、`spaceColor()` 和 `spaceColorLabel()`。原 `views/shared.ts` 与 `views-admin/shared.ts` 改为 re-export facade，SpaceManagerDialog 删除本地 `SPACE_COLORS` 数组并复用统一 token。解决了拆分后 dot/accent/color/label 多处定义、后续改色容易漂移的问题。
 
 **严重程度：P2 / 一致性与冗余问题**
 
@@ -727,7 +739,13 @@ TODO 3 已选择选项 2：彻底删除 skill/sanitize 版本概念。因此不�
 
 ## P3：低优先级清理与体验优化
 
-### TODO 17：移除 chrome 自动隐藏逻辑中的持续 DOM 扫描
+### TODO 17：移除 chrome 自动隐藏逻辑中的持续 DOM 扫描 ✅ 已解决
+
+**状态：已完成（2026-05-31）**
+
+**方案与现状：**
+
+`App` 中已删除 500ms `setInterval(attachScroll)` 和全局 `document.querySelectorAll(...)` 重绑逻辑，改为集中保留 `wakeChrome()` / `hideChrome()`，通过主区域 `onScroll`、全局 wheel 以及 Reader/Public iframe 组件自己的 `onLoad` 绑定来触发隐藏；iframe 滚动监听由渲染 iframe 的组件负责，不再扫描 DOM 查找 `.reader-iframe`。解决了长期运行时持续 DOM 扫描和重复绑定滚动监听的问题。
 
 **严重程度：P3 / 前端效率与可维护性问题**
 
@@ -754,7 +772,13 @@ const attachTimer = setInterval(attachScroll, 500);
 
 ---
 
-### TODO 18：优化 `DockItem` 的持续 `requestAnimationFrame`
+### TODO 18：优化 `DockItem` 的持续 `requestAnimationFrame` ✅ 已解决
+
+**状态：已完成（2026-05-31）**
+
+**方案与现状：**
+
+Dock 复用父组件已有的 `mouseX` hover 状态生成 `isAnimating` 信号传给 `DockItem`；`DockItem` 只在 hover 放大或离开后回弹未完成时继续 rAF，尺寸接近目标值后主动取消循环并固定到目标尺寸。保留原有 spring 放大手感，同时解决 dock idle 时每个 item 都持续占用动画帧的问题。
 
 **严重程度：P3 / 前端效率问题**
 
@@ -773,7 +797,13 @@ const attachTimer = setInterval(attachScroll, 500);
 
 ---
 
-### TODO 19：分享弹窗成员列表的扩展性
+### TODO 19：分享弹窗成员列表的扩展性 ✅ 已解决
+
+**状态：已完成（2026-05-31）**
+
+**方案与现状：**
+
+`GET /documents/:id/share` 不再随分享弹窗返回全量 `availableMembers`，只保留公开链接状态和已单独邀请 roster。新增受分享管理权限保护的 `GET /documents/:id/share/members?q=&limit=` 搜索接口，按姓名/邮箱做有上限的候选成员查询，并排除当前用户和已在 roster 中的成员。前端 ShareDialog 改为根据输入实时读取小批量搜索结果，邀请时使用精确匹配或首个候选，解决大团队打开弹窗即加载/渲染全部成员的问题。
 
 **严重程度：P3 / 扩展性问题**
 
@@ -828,7 +858,13 @@ TODO 4 恢复前端 TSX lint/typecheck 覆盖时，已经同步删除 `biome.jso
 
 ---
 
-### TODO 21：统一 public share URL 来源
+### TODO 21：统一 public share URL 来源 ✅ 已解决
+
+**状态：已完成（2026-05-31）**
+
+**方案与现状：**
+
+确认浏览器对外分享路径统一为现有前端路由 `/share/:token`。后端分享管理响应中的 `public.url` 已从 `/public/:token` 改为 `/share/:token`，前端 ShareDialog 优先直接使用 API 返回的 `public.url`，仅保留 `publicShareUrl(token)` 作为兜底构造；`/documents/public/:token` 继续作为公开文档数据读取接口，不再被当作对外分享 URL。解决了 API 与前端各自维护不同 public URL 规范的问题。
 
 **严重程度：P3 / 一致性问题**
 
@@ -850,7 +886,13 @@ API 给出的分享 URL 是 `/public/:token`，前端实际使用并路由匹配
 
 ---
 
-### TODO 22：清理旧原型 fixture 数据与误导性注释
+### TODO 22：清理旧原型 fixture 数据与误导性注释 ✅ 已解决
+
+**状态：已完成（2026-05-31）**
+
+**方案与现状：**
+
+seed 数据已从跨端运行时包 `packages/shared/src/fixtures.ts` 迁移到 API 专属的 `apps/api/src/db/seed-data.ts`，`apps/api/src/db/seed.ts` 改为本地导入；`@atlas/shared` 不再导出 `./fixtures`，前端 tsconfig 也移除了 `@atlas/shared/fixtures` alias。旧 shared fixture 文件删除后，`biome.json` 不再需要 `!packages/shared/src/fixtures.ts` 单独排除。`seed-data.ts` 顶部注释明确其仅供 API seed 使用，并同步清理了 `tweaks-panel.tsx` 中关于旧 deck-stage 副本的过时说明。解决了 seed-only 数据混在 shared runtime 包、注释误导和 Biome 特例排除的问题。
 
 **严重程度：P3 / 冗余与工程卫生问题**
 

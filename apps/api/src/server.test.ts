@@ -14,7 +14,9 @@ await import('./db/seed');
 
 const { default: server } = await import('./server');
 const { db } = await import('./db/client');
-const { documentMembers, documents, members, sessions, shareLinks } = await import('./db/schema');
+const { documentMembers, documents, members, sessions, shareLinks, spaceMembers } = await import(
+  './db/schema'
+);
 
 afterAll(() => {
   rmSync(testDb, { force: true });
@@ -327,6 +329,56 @@ describe('Atlas API', () => {
     expect(roster.map((member) => member.id)).not.toContain('u3');
   });
 
+  test('batch updates space member roles atomically', async () => {
+    const admin = await loginAs();
+
+    const update = await request('/spaces/s1/members', {
+      method: 'PUT',
+      body: JSON.stringify({
+        updates: [
+          { memberId: 'u2', role: 'viewer' },
+          { memberId: 'u3', role: 'editor' },
+          { memberId: 'u2', role: 'editor' },
+        ],
+      }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(update.status).toBe(200);
+    expect(await update.json()).toEqual({ ok: true, updated: 2 });
+
+    const rows = await db.select().from(spaceMembers).where(eq(spaceMembers.spaceId, 's1'));
+    expect(rows.find((row) => row.memberId === 'u2')?.role).toBe('editor');
+    expect(rows.find((row) => row.memberId === 'u3')?.role).toBe('editor');
+
+    const clear = await request('/spaces/s1/members', {
+      method: 'PUT',
+      body: JSON.stringify({ updates: [{ memberId: 'u3', role: null }] }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(clear.status).toBe(200);
+    const afterClear = await db.select().from(spaceMembers).where(eq(spaceMembers.spaceId, 's1'));
+    expect(afterClear.find((row) => row.memberId === 'u3')).toBeUndefined();
+
+    const beforeInvalid = afterClear.filter(
+      (row) => row.memberId === 'u2' || row.memberId === 'u4',
+    );
+    const invalid = await request('/spaces/s1/members', {
+      method: 'PUT',
+      body: JSON.stringify({
+        updates: [
+          { memberId: 'u2', role: 'viewer' },
+          { memberId: 'not-a-member', role: 'editor' },
+        ],
+      }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(invalid.status).toBe(404);
+    const afterInvalid = await db.select().from(spaceMembers).where(eq(spaceMembers.spaceId, 's1'));
+    expect(afterInvalid.filter((row) => row.memberId === 'u2' || row.memberId === 'u4')).toEqual(
+      beforeInvalid,
+    );
+  });
+
   test('enforces document read and edit permission boundaries', async () => {
     const viewer = await loginAs('he@atlas.team');
 
@@ -458,8 +510,9 @@ describe('Atlas API', () => {
     expect(rotate.status).toBe(200);
 
     const share = await request('/documents/d1/share', { headers: { cookie: admin.cookie } });
-    const shareBody = (await share.json()) as { public: { token: string } };
+    const shareBody = (await share.json()) as { public: { token: string; url: string } };
     expect(shareBody.public.token).not.toBe('demo-d1-public-link');
+    expect(shareBody.public.url).toBe(`/share/${shareBody.public.token}`);
     expect((await request(`/documents/public/${shareBody.public.token}`)).status).toBe(200);
   });
 
@@ -495,10 +548,13 @@ describe('Atlas API', () => {
     expect(adminShare.status).toBe(200);
     const adminBody = (await adminShare.json()) as {
       canManage: boolean;
-      public: { token: string | null };
+      public: { token: string | null; url: string | null };
+      availableMembers?: unknown[];
     };
     expect(adminBody.canManage).toBe(true);
     expect(adminBody.public.token).toBeTruthy();
+    expect(adminBody.public.url).toBe(`/share/${adminBody.public.token}`);
+    expect(adminBody.availableMembers).toBeUndefined();
 
     const author = await loginAs('chen@atlas.team');
     const authorShare = await request('/documents/d4/share', {
@@ -507,10 +563,25 @@ describe('Atlas API', () => {
     expect(authorShare.status).toBe(200);
     const authorBody = (await authorShare.json()) as {
       canManage: boolean;
-      availableMembers: unknown[];
+      availableMembers?: unknown[];
     };
     expect(authorBody.canManage).toBe(true);
-    expect(authorBody.availableMembers.length).toBeGreaterThan(0);
+    expect(authorBody.availableMembers).toBeUndefined();
+
+    const suggestions = await request('/documents/d4/share/members?q=he&limit=3', {
+      headers: { cookie: author.cookie },
+    });
+    expect(suggestions.status).toBe(200);
+    const suggestionBody = (await suggestions.json()) as { id: string; email: string }[];
+    expect(suggestionBody.length).toBeGreaterThan(0);
+    expect(suggestionBody.length).toBeLessThanOrEqual(3);
+    expect(suggestionBody.some((member) => member.email === 'he@atlas.team')).toBe(true);
+    expect(suggestionBody.map((member) => member.id)).not.toContain('u2');
+
+    const readonlySearch = await request('/documents/d3/share/members?q=lin', {
+      headers: { cookie: viewer.cookie },
+    });
+    expect(readonlySearch.status).toBe(404);
 
     const authorPatch = await request('/documents/d4/share', {
       method: 'PATCH',

@@ -1,9 +1,18 @@
 import { useQuery } from '@tanstack/react-query';
+import { useCallback, useRef } from 'react';
 import { apiGet } from '../api-client';
 import type { Loose } from '../loose-types';
 import { dotClass } from './shared';
 
-export function PublicDocumentView({ token }: Loose) {
+export function PublicDocumentView({ token, onChromeScroll }: Loose) {
+  const iframeRef = useRef<Loose>(null);
+  const bindIframeScroll = useCallback(() => {
+    try {
+      iframeRef.current?.contentWindow?.addEventListener('scroll', onChromeScroll, {
+        passive: true,
+      });
+    } catch (_e) {}
+  }, [onChromeScroll]);
   const publicQuery = useQuery({
     queryKey: ['public-document', token],
     queryFn: () => apiGet(`/documents/public/${token}`),
@@ -39,12 +48,14 @@ export function PublicDocumentView({ token }: Loose) {
           {doc.updated}
         </span>
       </div>
-      <div className="reader-iframe-wrap">
+      <div className="reader-iframe-wrap" onScroll={onChromeScroll}>
         <iframe
+          ref={iframeRef}
           className="reader-iframe"
           srcDoc={doc.html || '<!doctype html><html><body><p>暂无内容</p></body></html>'}
           title={doc.title}
           sandbox="allow-scripts allow-forms allow-popups"
+          onLoad={bindIframeScroll}
         />
       </div>
     </div>

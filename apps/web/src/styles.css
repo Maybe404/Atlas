@@ -1681,8 +1681,8 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   pointer-events: auto;
   display: flex;
   align-items: flex-end;
-  gap: 8px;
-  padding: 5px 10px;
+  gap: 12px;
+  padding: 5px 14px;
   margin-bottom: 14px;
   background: var(--glass-strong);
   backdrop-filter: var(--glass-blur);

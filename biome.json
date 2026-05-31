@@ -10,8 +10,7 @@
       "!.turbo",
       "!**/*.html",
       "!apps/web/src/styles.css",
-      "!apps/api/src/db/migrations/meta",
-      "!packages/shared/src/fixtures.ts"
+      "!apps/api/src/db/migrations/meta"
     ]
   },
   "formatter": {

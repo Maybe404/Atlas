@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { canRead, firstPublicDoc } from '../auth';
 import { I } from '../chrome';
 import { useDocument } from '../data-hooks';
@@ -17,6 +17,7 @@ export function ReaderView({
   onNavigate,
   onShare,
   onLogin,
+  onChromeScroll,
 }: Loose) {
   const requestedSpace = spaces.find((s: Loose) => s.id === ctx.spaceId);
   const space = requestedSpace || spaces[0];
@@ -39,6 +40,13 @@ export function ReaderView({
   };
 
   const iframeRef = useRef<Loose>(null);
+  const bindIframeScroll = useCallback(() => {
+    try {
+      iframeRef.current?.contentWindow?.addEventListener('scroll', onChromeScroll, {
+        passive: true,
+      });
+    } catch (_e) {}
+  }, [onChromeScroll]);
 
   if (denied || detailDenied || !space || !doc) {
     const earlyDocId = detailDoc?.id || doc?.id || ctx.docId;
@@ -174,7 +182,7 @@ export function ReaderView({
         ) : null}
       </div>
 
-      <div className={`reader-iframe-wrap ${framedDoc ? 'framed' : ''}`}>
+      <div className={`reader-iframe-wrap ${framedDoc ? 'framed' : ''}`} onScroll={onChromeScroll}>
         {allowed ? (
           detailQuery.isLoading ? (
             <div className="app-state-banner">正在加载正文…</div>
@@ -185,6 +193,7 @@ export function ReaderView({
               srcDoc={detailDoc.html || '<!doctype html><html><body><p>暂无内容</p></body></html>'}
               title={detailDoc.title}
               sandbox="allow-scripts allow-forms allow-popups"
+              onLoad={bindIframeScroll}
             />
           )
         ) : (

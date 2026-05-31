@@ -1,4 +1,5 @@
 import type {
+  BatchSetSpaceMemberRolesSchema,
   CreateDocumentSchema,
   CreateMemberSchema,
   CreateSpaceSchema,
@@ -11,6 +12,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { z } from 'zod';
 import { apiForm, apiGet, apiJson } from './api-client';
 
+type BatchSetSpaceMemberRolesInput = z.infer<typeof BatchSetSpaceMemberRolesSchema>;
 type CreateSpaceInput = z.infer<typeof CreateSpaceSchema>;
 type UpdateSpaceInput = z.infer<typeof UpdateSpaceSchema>;
 type CreateDocumentInput = z.infer<typeof CreateDocumentSchema>;
@@ -32,6 +34,8 @@ export const atlasKeys = {
   spaceMembers: (spaceId: string) => ['space-members', spaceId] as const,
   trash: ['trash'] as const,
   share: (documentId: string) => ['share', documentId] as const,
+  shareMemberSearch: (documentId: string, query: string) =>
+    ['share-members', documentId, query] as const,
 };
 
 export function useAtlasData() {
@@ -194,13 +198,35 @@ export function useAtlasMutations(pushToast?: PushToast) {
     role: string | null;
     silent?: boolean;
   };
+  const refreshSpacePermissionQueries = async (spaceId: string) => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: atlasKeys.spaceMembers(spaceId) }),
+      queryClient.invalidateQueries({ queryKey: atlasKeys.permissions }),
+      queryClient.invalidateQueries({ queryKey: atlasKeys.spaces }),
+    ]);
+  };
   const setSpaceRole = useMutation({
     mutationFn: ({ spaceId, memberId, role }: SetSpaceRoleVars) =>
       apiJson(`/spaces/${spaceId}/members/${memberId}`, 'PUT', { role }),
     onSuccess: async (_data: unknown, variables: SetSpaceRoleVars) => {
-      await invalidateCore();
+      await refreshSpacePermissionQueries(variables.spaceId);
       if (!variables?.silent) {
         pushToast?.({ msg: '空间权限已更新' });
+      }
+    },
+  });
+
+  type SetSpaceRolesVars = BatchSetSpaceMemberRolesInput & {
+    spaceId: string;
+    silent?: boolean;
+  };
+  const setSpaceRoles = useMutation({
+    mutationFn: ({ spaceId, updates }: SetSpaceRolesVars) =>
+      apiJson(`/spaces/${spaceId}/members`, 'PUT', { updates }),
+    onSuccess: async (_data: unknown, variables: SetSpaceRolesVars) => {
+      await refreshSpacePermissionQueries(variables.spaceId);
+      if (!variables?.silent) {
+        pushToast?.({ msg: '空间权限已批量更新' });
       }
     },
   });
@@ -275,6 +301,14 @@ export function useAtlasMutations(pushToast?: PushToast) {
     ) => {
       const { silent, ...mutationOptions } = options;
       setSpaceRole.mutate({ spaceId, memberId, role, silent }, mutationOptions);
+    },
+    setSpaceRoles: (
+      spaceId: string,
+      updates: BatchSetSpaceMemberRolesInput['updates'],
+      options: { silent?: boolean } & Parameters<typeof setSpaceRoles.mutate>[1] = {},
+    ) => {
+      const { silent, ...mutationOptions } = options;
+      setSpaceRoles.mutate({ spaceId, updates, silent }, mutationOptions);
     },
     createMember: (data: CreateMemberInput, options?: Parameters<typeof createMember.mutate>[1]) =>
       createMember.mutate(data, options),

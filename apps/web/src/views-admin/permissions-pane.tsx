@@ -11,6 +11,7 @@ export function PermissionsPane({
   members = [],
   perms,
   setMemberSpaceRole,
+  setMemberSpaceRoles,
   pushToast,
 }: Loose) {
   const [activeSpace, setActiveSpace] = useState(spaces[0]?.id || '');
@@ -56,9 +57,11 @@ export function PermissionsPane({
       pushToast?.({ msg: role ? '没有可更新的成员' : '当前空间已清空', meta: space.name });
       return;
     }
-    targets.forEach((m: Loose) => {
-      setMemberSpaceRole(m.id, space.id, role, { silent: true });
-    });
+    setMemberSpaceRoles?.(
+      space.id,
+      targets.map((m: Loose) => ({ memberId: m.id, role })),
+      { silent: true },
+    );
     pushToast?.({
       msg: role ? '已批量更新空间权限' : '已清空空间权限',
       meta: `${space.name} · ${targets.length} 位成员`,

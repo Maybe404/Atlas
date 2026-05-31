@@ -5,7 +5,7 @@ import {
   UpdateDocumentSchema,
   UpdateDocumentShareSchema,
 } from '@atlas/shared';
-import { and, desc, eq, inArray, isNotNull, lte } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, like, lte, ne, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
 import { documentMembers, documents, members, shareLinks, spaces } from '../db/schema';
@@ -103,6 +103,10 @@ async function hydrateDoc(
 ) {
   const [hydrated] = await hydrateDocs([doc], options);
   return hydrated;
+}
+
+function publicShareUrl(token: string | null | undefined) {
+  return token ? `/share/${token}` : null;
 }
 
 export const documentsRouter = new Hono<AppEnv>()
@@ -361,7 +365,6 @@ export const documentsRouter = new Hono<AppEnv>()
       .from(documentMembers)
       .innerJoin(members, eq(documentMembers.memberId, members.id))
       .where(eq(documentMembers.documentId, doc.id));
-    const memberRows = await db.select().from(members);
 
     return c.json({
       documentId: doc.id,
@@ -371,7 +374,7 @@ export const documentsRouter = new Hono<AppEnv>()
         ? {
             enabled: link.enabled,
             token: link.token,
-            url: `/public/${link.token}`,
+            url: publicShareUrl(link.token),
             showAuthor: link.showAuthor,
             allowIndexing: link.allowIndexing,
             expiresAt: link.expiresAt,
@@ -394,8 +397,29 @@ export const documentsRouter = new Hono<AppEnv>()
         ...toPublicMember(row.member),
         role: row.membership.role,
       })),
-      availableMembers: memberRows.map(toPublicMember),
     });
+  })
+  .get('/:id/share/members', async (c) => {
+    const user = requireUser(c.get('user'));
+    const doc = await requireDocumentShareManager(user, c.req.param('id'));
+    const q = (c.req.query('q') ?? '').trim();
+    const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 8) || 8, 1), 20);
+    const roster = await db
+      .select({ memberId: documentMembers.memberId })
+      .from(documentMembers)
+      .where(eq(documentMembers.documentId, doc.id));
+    const excludedIds = new Set([user.id, ...roster.map((row) => row.memberId)]);
+    const filters = q
+      ? [or(like(members.name, `%${q}%`), like(members.email, `%${q.toLowerCase()}%`))]
+      : [];
+    const rows = await db
+      .select()
+      .from(members)
+      .where(and(...filters, ne(members.id, user.id)))
+      .limit(limit + excludedIds.size);
+    const candidates = rows.filter((member) => !excludedIds.has(member.id)).slice(0, limit);
+
+    return c.json(candidates.map(toPublicMember));
   })
   .patch('/:id/share', async (c) => {
     const user = requireUser(c.get('user'));

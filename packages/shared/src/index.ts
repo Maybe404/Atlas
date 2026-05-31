@@ -119,6 +119,10 @@ export const SetSpaceMemberRoleSchema = z.object({
   role: SpaceRoleSchema,
 });
 
+export const BatchSetSpaceMemberRolesSchema = z.object({
+  updates: z.array(SetSpaceMemberRoleSchema).min(1),
+});
+
 export const SetDocumentMemberRoleSchema = z.object({
   memberId: z.string(),
   role: SpaceRoleSchema,

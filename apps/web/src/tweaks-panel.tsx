@@ -198,21 +198,19 @@ function TweaksPanel({
 }) {
   const [open, setOpen] = React.useState(false);
   const dragRef = React.useRef<Loose>(null);
-  // Auto-inject a rail toggle when a <deck-stage> is on the page. The
+  // Auto-inject a rail toggle when a <deck-stage> preview is on the page. The
   // toggle drives the deck's per-viewer _railVisible via window message;
   // state is mirrored from the same localStorage key the deck reads so
-  // the control reflects reality across reloads. The mechanism is the
-  // message — authors who want custom placement can post it directly
-  // and pass noDeckControls to suppress this one.
+  // the control reflects reality across reloads. Authors who want custom
+  // placement can post the same message directly and pass noDeckControls to
+  // suppress this one.
   const hasDeckStage = React.useMemo(
     () => typeof document !== 'undefined' && !!document.querySelector('deck-stage'),
     [],
   );
   // deck-stage enables its rail in connectedCallback, but this panel can
   // mount before that element has upgraded. The initial read catches the
-  // common case; the listener covers mounting first. (Older deck-stage.js
-  // copies still wait for the host's __omelette_rail_enabled postMessage —
-  // same listener handles those.)
+  // common case; the listener covers mounting first.
   const [railEnabled, setRailEnabled] = React.useState(
     () => hasDeckStage && !!(document.querySelector('deck-stage') as Loose)?._railEnabled,
   );
