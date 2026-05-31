@@ -21,6 +21,10 @@ export function unauthorized(message = 'Please sign in first.') {
   return new HttpError(401, 'unauthorized', message);
 }
 
+export function tooManyRequests(message = 'Too many requests.') {
+  return new HttpError(429, 'too_many_requests', message);
+}
+
 export function forbidden(message = 'You do not have access to this resource.') {
   return new HttpError(403, 'forbidden', message);
 }

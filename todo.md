@@ -556,7 +556,13 @@ TODO 3 已选择选项 2：删除整套 skill/sanitize 版本概念。当前源�
 
 ---
 
-### TODO 12：补齐认证生产化安全边界
+### TODO 12：补齐认证生产化安全边界 ✅ 已解决
+
+**状态：已完成（2026-05-31）**
+
+**方案与现状：**
+
+登录失败现在统一返回 `401 Email or password is incorrect.`，不存在邮箱、无密码账号、漏填/错误密码不再可区分；前端也只展示统一的“邮箱或密码不正确”。后端新增内存短窗口限速，按客户端 IP + email 聚合失败次数，默认 10 分钟内 5 次失败后返回 `429`；只有显式设置 `ATLAS_TRUST_PROXY=true` 时才信任 `X-Forwarded-For` / `X-Real-IP` / `CF-Connecting-IP`。登录 cookie 的 `Secure` 改为生产环境默认开启（`ATLAS_ENV` / `NODE_ENV` / `BUN_ENV=production|prod`），本地仍可开发；并新增管理员接口 `POST /auth/sessions/purge-expired` 清理过期 session 行。README 已补充相关环境变量与安全边界，API 测试覆盖统一登录错误、限速、生产 Secure cookie 和过期 session 清理。
 
 **严重程度：P1 / 安全与生产配置风险**
 
@@ -626,39 +632,37 @@ targets.forEach(m => setMemberSpaceRole(m.id, space.id, role, { silent: true }))
 
 ---
 
-### TODO 14：拆分前端大文件，降低维护成本
+### TODO 14：拆分前端大文件，降低维护成本 ✅ 已解决
+
+**状态：已完成（2026-05-31）**
+
+**方案与现状：**
+
+已按职责拆分两个最重的前端视图入口：`apps/web/src/views.tsx` 与 `apps/web/src/views-admin.tsx` 现在仅保留 named-export facade，实际实现迁移到 `apps/web/src/views/*` 与 `apps/web/src/views-admin/*`。Reader / Public / SpaceIndex / AdminDocs / HTML 编辑器、上传流程、设置页 shell、空间/成员/权限/回收站面板都拆成独立模块；`app.tsx` 的导入路径保持不变。本次只做行为保持不变的物理拆分和 import 重接，不合并 TODO 15 的视觉 token 统一，解决了原先单文件职责过重、后续维护和继续拆分成本高的问题。
 
 **严重程度：P2 / 可维护性风险**
 
-**相关文件（实际行数）：**
+**相关文件（拆分后）：**
 
-- `apps/web/src/views-admin.tsx`：983 行
-- `apps/web/src/views.tsx`：861 行
-- `apps/web/src/tweaks-panel.tsx`：579 行
-- `apps/web/src/dialogs.tsx`：548 行
-- `apps/web/src/auth.tsx`：518 行
-- `apps/web/src/app.tsx`：482 行
-- `apps/web/src/chrome.tsx`：431 行
-
-**问题说明：**
-
-`views-admin.tsx` 同时包含上传流程、文档管理、空间权限管理、成员行渲染、设置 UI、批量权限操作；`views.tsx` 同时包含 Reader、SpaceIndex、Public 三种视图与编辑器逻辑。
-
-**整改建议：**
-
-优先拆 `views-admin.tsx`：
-
+- `apps/web/src/views.tsx`：Reader/admin view facade
+- `apps/web/src/views/reader-view.tsx`
+- `apps/web/src/views/public-document-view.tsx`
+- `apps/web/src/views/space-index-view.tsx`
+- `apps/web/src/views/admin-docs-view.tsx`
+- `apps/web/src/views/html-editor-dialog.tsx`
+- `apps/web/src/views-admin.tsx`：admin view facade
 - `apps/web/src/views-admin/upload-view.tsx`
-- `apps/web/src/views-admin/documents-view.tsx`
 - `apps/web/src/views-admin/settings-view.tsx`
-- `apps/web/src/views-admin/space-permissions.tsx`
-- `apps/web/src/views-admin/components/*`
+- `apps/web/src/views-admin/spaces-pane.tsx`
+- `apps/web/src/views-admin/members-pane.tsx`
+- `apps/web/src/views-admin/permissions-pane.tsx`
+- `apps/web/src/views-admin/trash-pane.tsx`
 
-拆分原则：
+**验收结果：**
 
-- 不为了行数强行拆。
-- 优先拆职责清晰、props 边界明确的区域。
-- 配合 TODO 4 移除 `@ts-nocheck`，拆一个 typed 一个。
+- `bun run typecheck` 通过。
+- `bun run lint` 通过（仅保留既有 a11y warnings）。
+- `bun run test` 通过（17 pass）。
 
 ---
 
@@ -885,7 +889,7 @@ API 给出的分享 URL 是 `/public/:token`，前端实际使用并路由匹配
 ---
 
 1. P0：收紧 `/spaces` 对未登录用户的字段（TODO 1）、修复 `share` 存在性泄漏（TODO 2）、决定 sanitize-html / skill 模块的去留（TODO 3）。
-2. P1 安全/一致性：客户端 `canRead` 与服务端对齐（TODO 9）、移除 demo 一键切换 (TODO 10)、补齐认证生产化安全边界（TODO 12）。
+2. P1 安全/一致性：客户端 `canRead` 与服务端对齐（TODO 9）、移除 demo 一键切换（TODO 10）、补齐认证生产化安全边界（TODO 12）均已完成。
 3. P1 性能：瘦身 `/spaces`（TODO 5）、治理 N+1（TODO 6）、补索引（TODO 7）、`purge-expired` 改为 SQL 过滤（TODO 8）。
 4. P1 质量：恢复前端 lint/typecheck 覆盖（TODO 4）。
 5. P2：批量空间成员更新（TODO 13）、拆分大文件（TODO 14）、统一颜色映射（TODO 15）。
@@ -897,7 +901,7 @@ API 给出的分享 URL 是 `/public/:token`，前端实际使用并路由匹配
 
 ## 后续执行建议
 
-- 安全修复（TODO 1、2、3、9、10、11、12）单独提交，方便回滚。
+- 安全修复（TODO 1、2、3、9、10、11、12）均已完成；后续安全类改动仍建议单独提交，方便回滚。
 - `/spaces` 响应结构变更（TODO 1、5、6）尽量在一个 PR 内一起改，并同步更新前端。
 - 类型检查恢复（TODO 4）按文件分批提交。
 - DB 索引与迁移（TODO 7）单独提交。

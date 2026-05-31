@@ -39,7 +39,7 @@ app.onError((err, c) => {
   if (err instanceof HttpError) {
     return c.json(
       { code: err.code, message: err.message },
-      err.status as 400 | 401 | 403 | 404 | 409 | 500,
+      err.status as 400 | 401 | 403 | 404 | 409 | 429 | 500,
     );
   }
 

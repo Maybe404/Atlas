@@ -104,10 +104,15 @@ Seed 后示例账号如下，所有账号使用同一个演示密码。**这些�
 |---|---|---|
 | `PORT` | `3000` | API 监听端口 |
 | `DATABASE_URL` | `apps/api/data/atlas.sqlite` | SQLite 文件路径。测试会覆盖到 `apps/api/data/test-atlas.sqlite` |
+| `ATLAS_ENV` / `NODE_ENV` / `BUN_ENV` | 未设置 | 任一值为 `production` / `prod` 时，登录 cookie 默认带 `Secure` |
+| `ATLAS_COOKIE_SECURE` | `false` | 非生产环境下手动开启 `Secure` cookie；生产环境始终开启 |
+| `ATLAS_TRUST_PROXY` | `false` | 仅在可信反向代理后设为 `true`，登录限速才会读取 `X-Forwarded-For` / `X-Real-IP` / `CF-Connecting-IP` |
+| `ATLAS_LOGIN_RATE_LIMIT_MAX_FAILURES` | `5` | 同一客户端 IP + email 在窗口内允许的登录失败次数 |
+| `ATLAS_LOGIN_RATE_LIMIT_WINDOW_MS` | `600000` | 登录失败限速窗口，默认 10 分钟 |
 
 > `db:seed` 会写入公开演示账号与固定演示密码，方便本地体验和测试权限矩阵；它不是生产初始化脚本。
 
-生产部署前建议显式设置 `DATABASE_URL`，并把 `secure` cookie、可信 origin、HTTPS、CSP、静态资源策略一起梳理。
+生产部署前建议显式设置 `DATABASE_URL` 和生产环境变量，并把可信 origin、HTTPS、CSP、静态资源策略一起梳理。
 
 ## 目录
 
@@ -207,16 +212,19 @@ bun run --filter @atlas/api db:seed
 已实现：
 
 - 密码登录使用 `Bun.password` 校验 bcrypt hash。
-- session cookie 为 `HttpOnly`、`SameSite=Lax`，有效期 30 天。
+- 登录失败统一返回 `401 Email or password is incorrect.`，不会区分邮箱不存在、无密码账号或密码错误。
+- 登录失败按客户端 IP + email 做短窗口限速；只有显式设置 `ATLAS_TRUST_PROXY=true` 时才信任代理转发的客户端 IP 头。
+- session cookie 为 `HttpOnly`、`SameSite=Lax`，有效期 30 天；生产运行环境默认带 `Secure`。
 - 真实 session 写请求要求 `X-Atlas-CSRF` header；前端 `api-client.ts` 自动从 `atlas_csrf` cookie 注入。
 - 成员响应会剔除 `passwordHash`。
 - **HTML 不做服务端清洗（no server-side sanitization）**：上传的 HTML 原样入库（仅做 8 MB 大小校验，见 `apps/api/src/lib/html-limits.ts`），阅读页与预览页用 iframe `sandbox="allow-scripts allow-forms allow-popups"` 隔离原始 HTML。由于沙箱**不含** `allow-same-origin`，文档脚本拿不到父页的 cookie/localStorage——**这个 sandbox iframe 是唯一的隔离边界**。文档脚本被有意允许在沙箱内运行以保持原始交互效果，因此切勿移除 sandbox，也不要给文档来源以 same-origin 信任。
 - 公开链接支持禁用、撤销、到期、token 轮换、访问统计；已删除或过期文档不可公开访问。
+- 管理员可调用 `POST /auth/sessions/purge-expired` 清理过期 session 行。
 - 关键写操作会写入 `audit_logs`。
 
 仍需上线前处理：
 
-- HTTPS 下把 cookie `secure` 打开，并把 CORS origin 从 localhost 改成部署域名白名单。
+- 把 CORS origin 从 localhost 改成部署域名白名单。
 - 增加 CSP、iframe sandbox 策略评审、外链资源代理/下载策略、HTML 恶意样本回归集。
 - 加邮箱验证、找回密码、邀请流、SSO/OIDC 或接入成熟 auth 服务。
 - 给审计日志做筛选、分页和前端查看 UI。

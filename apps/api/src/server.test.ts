@@ -14,7 +14,7 @@ await import('./db/seed');
 
 const { default: server } = await import('./server');
 const { db } = await import('./db/client');
-const { documentMembers, documents, members, shareLinks } = await import('./db/schema');
+const { documentMembers, documents, members, sessions, shareLinks } = await import('./db/schema');
 
 afterAll(() => {
   rmSync(testDb, { force: true });
@@ -126,13 +126,45 @@ describe('Atlas API', () => {
     expect(body.canEdit).toBe(true);
   });
 
-  test('rejects password logins without the correct password and issues csrf token on success', async () => {
+  test('returns the same login error for unknown, passwordless and incorrect accounts', async () => {
+    const genericLoginError = {
+      code: 'unauthorized',
+      message: 'Email or password is incorrect.',
+    };
+
+    const noMember = await request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: 'nobody@atlas.team', password: 'not-the-password' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(noMember.status).toBe(401);
+    expect(await noMember.json()).toEqual(genericLoginError);
+
+    await db.insert(members).values({
+      id: 'u-passwordless',
+      name: '无密码账号',
+      initials: '无密',
+      email: 'passwordless@atlas.team',
+      passwordHash: null,
+      role: 'viewer',
+      joined: '2026-05',
+    });
+
+    const noPasswordAccount = await request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: 'passwordless@atlas.team', password: 'not-the-password' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(noPasswordAccount.status).toBe(401);
+    expect(await noPasswordAccount.json()).toEqual(genericLoginError);
+
     const missingPassword = await request('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email: 'lin@atlas.team' }),
       headers: { 'content-type': 'application/json' },
     });
     expect(missingPassword.status).toBe(401);
+    expect(await missingPassword.json()).toEqual(genericLoginError);
 
     const wrongPassword = await request('/auth/login', {
       method: 'POST',
@@ -140,6 +172,7 @@ describe('Atlas API', () => {
       headers: { 'content-type': 'application/json' },
     });
     expect(wrongPassword.status).toBe(401);
+    expect(await wrongPassword.json()).toEqual(genericLoginError);
 
     const login = await request('/auth/login', {
       method: 'POST',
@@ -151,6 +184,48 @@ describe('Atlas API', () => {
     expect(body.csrfToken.length).toBeGreaterThan(20);
     const cookie = login.headers.get('set-cookie') || '';
     expect(cookie).toContain('atlas_session=');
+  });
+
+  test('rate limits repeated login failures by client and email', async () => {
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const res = await request('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'limited@atlas.team', password: 'not-the-password' }),
+        headers: { 'content-type': 'application/json' },
+      });
+      expect(res.status).toBe(401);
+    }
+
+    const limited = await request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: 'limited@atlas.team', password: 'not-the-password' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(limited.status).toBe(429);
+    expect(await limited.json()).toEqual({
+      code: 'too_many_requests',
+      message: 'Too many login attempts. Please try again later.',
+    });
+  });
+
+  test('marks auth cookies secure by default in production runtime', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const login = await request('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ email: 'lin@atlas.team', password: 'atlas-demo-password' }),
+        headers: { 'content-type': 'application/json' },
+      });
+      expect(login.status).toBe(200);
+      expect(login.headers.getSetCookie().join('\n')).toContain('Secure');
+    } finally {
+      if (previousNodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = previousNodeEnv;
+      }
+    }
   });
 
   test('requires csrf token for cookie session writes', async () => {
@@ -463,5 +538,28 @@ describe('Atlas API', () => {
     expect(purge.status).toBe(200);
     expect(await purge.json()).toEqual({ purged: 1 });
     expect((await request('/documents/d3')).status).toBe(404);
+  });
+
+  test('purges expired sessions', async () => {
+    const admin = await loginAs();
+    await db.insert(sessions).values({
+      id: 'session_expired_test',
+      memberId: 'u1',
+      csrfToken: 'csrf_expired_test',
+      expiresAt: '2000-01-01T00:00:00.000Z',
+    });
+
+    const purge = await request('/auth/sessions/purge-expired', {
+      method: 'POST',
+      headers: admin.headers,
+    });
+    expect(purge.status).toBe(200);
+    expect(await purge.json()).toEqual({ purged: 1 });
+
+    const [expired] = await db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.id, 'session_expired_test'));
+    expect(expired).toBeUndefined();
   });
 });

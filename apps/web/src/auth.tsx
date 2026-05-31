@@ -56,14 +56,10 @@ const ROLE_LABEL: Record<string, string> = { admin: '管理员', editor: '编辑
 
 function authErrorMessage(message?: string) {
   if (!message) return '登录失败，请稍后再试。';
-  if (message.includes('no password configured')) {
-    return '这个账号还没有配置密码登录。请先更新本地 seed 数据，或换一个已配置密码的账号。';
-  }
+  if (message.includes('Too many login attempts')) return '尝试次数过多，请稍后再试。';
   if (message.includes('Email or password') || message.includes('password is incorrect')) {
     return '邮箱或密码不正确。';
   }
-  if (message.includes('Password is required')) return '请输入密码。';
-  if (message.includes('No member exists')) return '找不到这个邮箱。';
   return message;
 }
 
