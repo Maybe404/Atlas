@@ -4,37 +4,53 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiJson } from './api-client';
 import type { Loose } from './loose-types';
 
-const DEMO_PASSWORD = 'atlas-demo-password';
+const IS_DEV_DEMO_LOGIN = import.meta.env.DEV;
 
-const DEMO_LOGIN_ACCOUNTS = [
-  {
-    id: 'u1',
-    email: 'lin@atlas.team',
-    name: '林知远',
-    initials: 'LZ',
-    role: 'admin',
-    joined: '2024-02',
-    tint: 'var(--blue)',
-  },
-  {
-    id: 'u2',
-    email: 'chen@atlas.team',
-    name: '陈夏',
-    initials: 'CX',
-    role: 'editor',
-    joined: '2024-03',
-    tint: '#ff9500',
-  },
-  {
-    id: 'u5',
-    email: 'he@atlas.team',
-    name: '何远',
-    initials: 'HE',
-    role: 'viewer',
-    joined: '2025-01',
-    tint: '#34c759',
-  },
-];
+type DemoLoginAccount = {
+  id: string;
+  email: string;
+  name: string;
+  initials: string;
+  role: Member['role'];
+  joined: string;
+  tint: string;
+};
+
+const DEMO_LOGIN_ACCOUNTS: DemoLoginAccount[] = IS_DEV_DEMO_LOGIN
+  ? [
+      {
+        id: 'u1',
+        email: 'lin@atlas.team',
+        name: '林知远',
+        initials: 'LZ',
+        role: 'admin',
+        joined: '2024-02',
+        tint: 'var(--blue)',
+      },
+      {
+        id: 'u2',
+        email: 'chen@atlas.team',
+        name: '陈夏',
+        initials: 'CX',
+        role: 'editor',
+        joined: '2024-03',
+        tint: '#ff9500',
+      },
+      {
+        id: 'u5',
+        email: 'he@atlas.team',
+        name: '何远',
+        initials: 'HE',
+        role: 'viewer',
+        joined: '2025-01',
+        tint: '#34c759',
+      },
+    ]
+  : [];
+
+function demoPassword() {
+  return IS_DEV_DEMO_LOGIN ? 'atlas-demo-password' : '';
+}
 
 const ROLE_LABEL: Record<string, string> = { admin: '管理员', editor: '编辑', viewer: '仅读者' };
 
@@ -140,9 +156,10 @@ export function useAuth({
 
   const switchTo = useCallback(
     async (id: string) => {
-      const account = DEMO_LOGIN_ACCOUNTS.find((candidate: Loose) => candidate.id === id);
+      if (!IS_DEV_DEMO_LOGIN) return { ok: false, msg: '演示账号切换仅在开发环境可用。' };
+      const account = DEMO_LOGIN_ACCOUNTS.find((candidate) => candidate.id === id);
       if (!account) return { ok: false, msg: '找不到这个账号。' };
-      return login(account.email, DEMO_PASSWORD);
+      return login(account.email, demoPassword());
     },
     [login],
   );
@@ -374,13 +391,15 @@ export function UserMenu({
                 <span>查看信息</span>
                 <span className="um-chev">›</span>
               </button>
-              <button className="um-item" onClick={() => setPane('switch')}>
-                <span className="um-item-glyph">
-                  <SwitchGlyph />
-                </span>
-                <span>切换账号</span>
-                <span className="um-chev">›</span>
-              </button>
+              {IS_DEV_DEMO_LOGIN && (
+                <button className="um-item" onClick={() => setPane('switch')}>
+                  <span className="um-item-glyph">
+                    <SwitchGlyph />
+                  </span>
+                  <span>切换账号</span>
+                  <span className="um-chev">›</span>
+                </button>
+              )}
               <div className="um-sep" />
               <button
                 className="um-item um-item-danger"
@@ -537,7 +556,7 @@ export function LoginView({
 
   const fillDemo = (account: Loose) => {
     setEmail(account.email);
-    setPassword(DEMO_PASSWORD);
+    setPassword(demoPassword());
     setError('');
     setTimeout(() => emailRef.current?.form?.requestSubmit?.(), 60);
   };
@@ -653,33 +672,39 @@ export function LoginView({
               </div>
             </form>
 
-            <div className="login-divider">
-              <span className="login-divider-line" />
-              <span className="login-divider-text mono">DEMO 账号</span>
-              <span className="login-divider-line" />
-            </div>
+            {IS_DEV_DEMO_LOGIN && (
+              <>
+                <div className="login-divider">
+                  <span className="login-divider-line" />
+                  <span className="login-divider-text mono">DEMO 账号</span>
+                  <span className="login-divider-line" />
+                </div>
 
-            <div className="login-demo-list">
-              {DEMO_LOGIN_ACCOUNTS.map((account: Loose) => (
-                <button
-                  key={account.id}
-                  type="button"
-                  className="login-demo-card"
-                  onClick={() => fillDemo(account)}
-                  title={`点击以 ${account.name} 身份登录`}
-                >
-                  <span className="login-demo-avatar" style={{ background: account.tint }}>
-                    {account.initials}
-                  </span>
-                  <span className="login-demo-meta">
-                    <span className="login-demo-name">{account.name}</span>
-                    <span className="login-demo-email mono">{account.email}</span>
-                  </span>
-                  <span className={`um-role role-${account.role}`}>{ROLE_LABEL[account.role]}</span>
-                </button>
-              ))}
-              {returnTo && <div className="login-return-hint">登录后回到刚才的页面</div>}
-            </div>
+                <div className="login-demo-list">
+                  {DEMO_LOGIN_ACCOUNTS.map((account) => (
+                    <button
+                      key={account.id}
+                      type="button"
+                      className="login-demo-card"
+                      onClick={() => fillDemo(account)}
+                      title={`点击以 ${account.name} 身份登录`}
+                    >
+                      <span className="login-demo-avatar" style={{ background: account.tint }}>
+                        {account.initials}
+                      </span>
+                      <span className="login-demo-meta">
+                        <span className="login-demo-name">{account.name}</span>
+                        <span className="login-demo-email mono">{account.email}</span>
+                      </span>
+                      <span className={`um-role role-${account.role}`}>
+                        {ROLE_LABEL[account.role]}
+                      </span>
+                    </button>
+                  ))}
+                  {returnTo && <div className="login-return-hint">登录后回到刚才的页面</div>}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

@@ -6,15 +6,15 @@
 
 当前是「**可本地使用的全栈 MVP**」状态，核心读写链路已经接到真实 SQLite 数据库：
 
-- ✅ 前端 UI 已接真实 API：React Query 拉取空间、文档、成员、权限、回收站、Skill 版本与分享状态，CRUD 通过 mutation 同步到 SQLite。
+- ✅ 前端 UI 已接真实 API：React Query 拉取空间、文档、成员、权限、回收站与分享状态，CRUD 通过 mutation 同步到 SQLite。
 - ✅ URL 路由已落地：Reader、管理、上传、设置、公开链接都有可刷新地址。
 - ✅ Hono + Drizzle + SQLite 迁移已生成并验证，`db:migrate` / `db:seed` 可直接初始化。
 - ✅ 登录与 session 已有可用实现：密码登录、30 天 cookie session、双提交 CSRF token；未登录时按游客处理，只返回公开文章。
 - ✅ 空间与文档权限真实执行：空间/文档查询按当前用户过滤，写操作要求 editor/admin 权限；文档可额外按成员分享 viewer/editor。
 - ✅ HTML 上传已接后端：`multipart/form-data` 上传、8 MB 大小限制、自动识别标题/摘要，并保存原始 HTML 供 iframe sandbox 原样展示。
-- ✅ 回收站、Skill 版本、分享链接已有表和接口，UI 已接入恢复、过期清理、切换版本、公开链接与成员分享。
+- ✅ 回收站与分享链接已有表和接口，UI 已接入恢复、过期清理、公开链接与成员分享。
 - ✅ 分享链接支持到期、撤销、重置 token、访问计数、最近访问时间和 `allowIndexing` 标记。
-- ✅ 审计日志已记录登录/登出、空间、成员、文档、分享、Skill 变更，可通过管理员接口查看最近 100 条。
+- ✅ 审计日志已记录登录/登出、空间、成员、文档、分享变更，可通过管理员接口查看最近 100 条。
 - ✅ API 核心路径已有 Bun 测试：空间列表、上传原文保存与元数据识别、密码登录、CSRF、权限矩阵、软删除/恢复、公开链接到期/撤销/轮换、回收站过期清理。
 - ⚠️ 仍是 MVP：没有邮箱验证/SSO/组织级邀请流；前端 e2e、生产级 CSP/资源代理、完整审计查询 UI 仍待补。
 
@@ -60,10 +60,10 @@ bun dev:api
 - `http://localhost:5173/spaces/s1/docs/d1`：Reader
 - `http://localhost:5173/admin/docs`：文档管理
 - `http://localhost:5173/admin/upload`：HTML 上传
-- `http://localhost:5173/admin/settings`：空间、成员、权限、回收站、Skill 设置
+- `http://localhost:5173/admin/settings`：空间、成员、权限、回收站设置
 - `http://localhost:5173/share/demo-d1-public-link`：公开分享链接示例
 
-Seed 后示例账号如下，所有账号使用同一个演示密码：
+Seed 后示例账号如下，所有账号使用同一个演示密码。**这些账号和密码是公开的开发/演示数据，只能用于本地 seed 后体验功能；生产环境不要导入 seed 数据，也不要依赖这些账号作为真实成员账号。** 生产构建会隐藏前端的一键 demo 登录/账号切换入口。
 
 | 姓名 | 邮箱 | 角色 | 密码 |
 |---|---|---|---|
@@ -94,7 +94,7 @@ Seed 后示例账号如下，所有账号使用同一个演示密码：
 | `bun test apps/api/src` | 跑 API 测试 |
 | `bun run --filter @atlas/api db:generate` | 根据 Drizzle schema 生成迁移 |
 | `bun run --filter @atlas/api db:migrate` | 应用已提交迁移 |
-| `bun run --filter @atlas/api db:seed` | 用 fixtures 重置并灌入示例数据 |
+| `bun run --filter @atlas/api db:seed` | 用公开开发/演示 fixtures 重置并灌入示例数据 |
 | `bun run lint` | Biome 检查 |
 | `bun run fmt` | Biome 格式化 |
 
@@ -104,6 +104,8 @@ Seed 后示例账号如下，所有账号使用同一个演示密码：
 |---|---|---|
 | `PORT` | `3000` | API 监听端口 |
 | `DATABASE_URL` | `apps/api/data/atlas.sqlite` | SQLite 文件路径。测试会覆盖到 `apps/api/data/test-atlas.sqlite` |
+
+> `db:seed` 会写入公开演示账号与固定演示密码，方便本地体验和测试权限矩阵；它不是生产初始化脚本。
 
 生产部署前建议显式设置 `DATABASE_URL`，并把 `secure` cookie、可信 origin、HTTPS、CSP、静态资源策略一起梳理。
 
@@ -180,7 +182,7 @@ Seed 后示例账号如下，所有账号使用同一个演示密码：
 
 Atlas 有三层权限：
 
-- 工作区角色：`admin`、`editor`、`viewer`。当前只有 `admin` 能管理成员、空间、回收站、Skill 和审计日志。
+- 工作区角色：`admin`、`editor`、`viewer`。当前只有 `admin` 能管理成员、空间、回收站和审计日志。
 - 空间角色：`editor`、`viewer`、`null`。空间 editor 可在该空间创建/修改文档；viewer 只能读。
 - 文档成员角色：`editor`、`viewer`、`null`。文档成员分享可以给没有空间权限的人单篇访问权。
 
@@ -198,7 +200,7 @@ bun run --filter @atlas/api db:migrate
 bun run --filter @atlas/api db:seed
 ```
 
-`db:seed` 会清空并重灌示例数据、空间权限、文档成员、公开链接和 Skill 版本。测试会创建独立的 `test-atlas.sqlite` 并在结束后删除。
+`db:seed` 会清空并重灌公开开发/演示数据、空间权限、文档成员和公开链接。演示成员共用固定密码，仅用于本地体验与测试；测试会创建独立的 `test-atlas.sqlite` 并在结束后删除。
 
 ## 安全边界
 

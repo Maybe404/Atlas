@@ -17,9 +17,9 @@
 
 项目方向是合理的，但仍处在“原型迁移到产品化”的中间状态：
 
-- 后端结构相对清楚，但存在权限边界过宽、N+1 查询、缺少索引、认证生产化配置不足等问题。
-- 声明了 `sanitize-html` 依赖，但 `validateHtmlForStorage` 实际只做了大小校验，没有调用 sanitize；`skill_versions` 表名义上跟踪 sanitize 版本，但没有任何 sanitize 逻辑真正运行。
-- 前端大量核心 TSX 仍带 `// @ts-nocheck`，Biome 也整体排除了 `apps/web/src/**/*.tsx`，前端 lint/typecheck 覆盖不足。
+- 后端结构相对清楚，但存在权限边界过宽、N+1 查询、认证生产化配置不足等问题（部分高危项已在 TODO 1/2/3/7/8 中完成）。
+- TODO 3 已选择“承认不做服务端 sanitize，sandbox iframe 为唯一隔离边界”：`sanitize-html`、`skill_versions`、`/skills` 与 `skillVersion` 字段均已移除。
+- TODO 4 已恢复前端核心 TSX 的 lint/typecheck 覆盖，`@ts-nocheck` 已清零；a11y 存量问题以 warning 保留。
 - `/spaces` 接口承担了空间目录、文档列表和文档正文 bootstrap 的职责，负载过重。
 - 前端有大文件、重复色映射、持续 DOM 扫描和 idle `requestAnimationFrame` 等可维护性与效率问题。
 - `packages/shared/src/fixtures.ts`：旧原型静态数据与当前 seed/API 数据并存，已在 TODO 22 单独列出。
@@ -465,7 +465,13 @@ export function canRead(doc, user) {
 
 ---
 
-### TODO 10：移除/封装演示账号一键切换
+### TODO 10：移除/封装演示账号一键切换 ✅ 已解决
+
+**状态：已完成（2026-05-31）**
+
+**方案与现状：**
+
+前端 demo 账号列表、固定演示密码和一键填充/切换入口已封装到 `import.meta.env.DEV` 分支：本地 `bun dev` 仍保留便捷体验；生产构建中账号数组为空，登录页不渲染 DEMO 账号区，用户菜单不渲染“切换账号”，`switchTo` 也会直接拒绝。README 已明确 seed 账号/固定密码是公开开发演示数据，不能作为生产初始化或真实成员账号使用。解决的问题：生产 bundle 不再包含 `atlas-demo-password`，也不再暴露前端一键 demo 登录入口；seed 的固定密码风险被限定并写入文档边界。
 
 **严重程度：P1 / 安全风险**
 
@@ -496,7 +502,19 @@ const DEMO_LOGIN_ACCOUNTS = [
 
 ---
 
-### TODO 11：`GET /skills` 缺少 auth 检查（如果保留该功能）
+### TODO 11：`GET /skills` 缺少 auth 检查（如果保留该功能）✅ 已解决
+
+**状态：已完成（2026-05-31）—— 随 TODO 3 删除 `/skills` 模块自然消解**
+
+**方案与现状：**
+
+TODO 3 已选择选项 2：删除整套 skill/sanitize 版本概念。当前源码中已不存在 `routes/skills.ts`、`skillsRouter` 挂载、`skillVersions` 表、`/skills` 前端入口或 `skillVersion` 业务字段。由于 `GET /skills` 接口本身已经删除，原先“未登录也能列出所有 skill 版本、note、createdBy”的暴露面不再存在。
+
+**复核（2026-05-31）：**
+
+- `apps/api/src/server.ts` 只挂载 `/auth`、`/spaces`、`/documents`、`/members`，不再挂载 `/skills`。
+- `apps/api/src/db/schema.ts` 不再定义 `skillVersions`，`documents` 也不再包含 `skillVersion` 字段。
+- 全仓运行时源码搜索 `skillsRouter` / `routes/skills` / `skillVersions` / `skillVersion` / `/skills` / `sanitize-html` 均无命中；仅旧迁移快照仍保留历史建表记录，属于迁移历史，不是当前接口暴露面。
 
 **严重程度：P1 / 信息泄露**
 
@@ -653,7 +671,20 @@ targets.forEach(m => setMemberSpaceRole(m.id, space.id, role, { silent: true }))
 
 ---
 
-### TODO 16：统一默认 `skillVersion`（如果该模块保留）
+### TODO 16：统一默认 `skillVersion`（如果该模块保留）✅ 已解决
+
+**状态：已完成（2026-05-31）—— 随 TODO 3 删除 `skillVersion` 自然消解**
+
+**方案与现状：**
+
+TODO 3 已选择选项 2：彻底删除 skill/sanitize 版本概念。因此不再需要统一默认 `skillVersion` 常量；当前 schema、documents 路由和 seed 流程都不再写入或读取 `skillVersion`。
+
+**复核（2026-05-31）：**
+
+- `apps/api/src/db/schema.ts` 的 `documents` 表不再包含 `skillVersion` 列，也没有 `skillVersions` 表。
+- `apps/api/src/routes/documents.ts` 的 create/upload/update 流程不再引用 `skillVersion`。
+- `apps/api/src/db/seed.ts` 不再写入 `skillVersion`。
+- 全仓运行时源码搜索 `skillVersion` / `skillVersions` 无命中；仅旧迁移快照保留历史记录。
 
 **严重程度：P2 / 冗余与一致性问题**
 
@@ -741,7 +772,19 @@ const attachTimer = setInterval(attachScroll, 500);
 
 ---
 
-### TODO 20：清理 Biome 历史遗留排除项
+### TODO 20：清理 Biome 历史遗留排除项 ✅ 已解决
+
+**状态：已完成（2026-05-31）—— 随 TODO 4 清理历史排除项自然消解**
+
+**方案与现状：**
+
+TODO 4 恢复前端 TSX lint/typecheck 覆盖时，已经同步删除 `biome.json` 中的历史遗留排除项 `!src/data.js`、`!tweaks-panel.jsx` 和 `!apps/web/src/**/*.tsx`。当前 `files.includes` 只保留仍有明确原因的排除：依赖/构建产物、HTML 样例、样式文件、Drizzle 迁移 meta、以及 seed fixture。
+
+**复核（2026-05-31）：**
+
+- `biome.json` 中不再包含 `!src/data.js`、`!tweaks-panel.jsx`、`!apps/web/src/**/*.tsx`。
+- `apps/web/src` 中 `@ts-nocheck` 搜索无命中。
+- 当前保留的 `!packages/shared/src/fixtures.ts` 已在 TODO 22 单独跟踪，不能并入本项静默删除。
 
 **严重程度：P3 / 工程卫生问题**
 
@@ -826,11 +869,11 @@ API 给出的分享 URL 是 `/public/:token`，前端实际使用并路由匹配
 ---
 
 1. P0：收紧 `/spaces` 对未登录用户的字段（TODO 1）、修复 `share` 存在性泄漏（TODO 2）、决定 sanitize-html / skill 模块的去留（TODO 3）。
-2. P1 安全/一致性：客户端 `canRead` 与服务端对齐（TODO 9）、移除 demo 一键切换 (TODO 10)、`/skills` 加权限（TODO 11）、补齐认证生产化安全边界（TODO 12）。
+2. P1 安全/一致性：客户端 `canRead` 与服务端对齐（TODO 9）、移除 demo 一键切换 (TODO 10)、补齐认证生产化安全边界（TODO 12）。
 3. P1 性能：瘦身 `/spaces`（TODO 5）、治理 N+1（TODO 6）、补索引（TODO 7）、`purge-expired` 改为 SQL 过滤（TODO 8）。
 4. P1 质量：恢复前端 lint/typecheck 覆盖（TODO 4）。
-5. P2：批量空间成员更新（TODO 13）、拆分大文件（TODO 14）、统一颜色映射（TODO 15）、统一 skillVersion（TODO 16，依赖 TODO 3 结论）。
-6. P3：DOM 扫描、idle rAF、分享弹窗成员、Biome 历史 exclude、分享 URL 来源、旧 fixture 清理。
+5. P2：批量空间成员更新（TODO 13）、拆分大文件（TODO 14）、统一颜色映射（TODO 15）。
+6. P3：DOM 扫描、idle rAF、分享弹窗成员、分享 URL 来源、旧 fixture 清理。
 
 > 注：仓库已经在 `.gitignore` 里覆盖了 `dist`、`apps/api/data/`、`*.sqlite`、`*.sqlite-*`，`git ls-files` 也确认未跟踪这些文件——原 TODO「检查构建产物 / SQLite 是否被 git 跟踪」无须再列入。
 
