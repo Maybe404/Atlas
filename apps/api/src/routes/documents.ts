@@ -5,7 +5,7 @@ import {
   UpdateDocumentSchema,
   UpdateDocumentShareSchema,
 } from '@atlas/shared';
-import { and, desc, eq, isNotNull, lte } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, lte } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
 import { documentMembers, documents, members, shareLinks, spaces } from '../db/schema';
@@ -17,9 +17,11 @@ import { validateHtmlForStorage } from '../lib/html-limits';
 import { badRequest, conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId, makeToken } from '../lib/id';
 import {
-  canEditDocument,
+  canEditDocumentWithLookup,
   isAdmin,
   listReadableDocuments,
+  loadPermissionLookup,
+  type PermissionLookup,
   publicDocumentByToken,
   requireDocumentEditor,
   requireDocumentRead,
@@ -28,11 +30,25 @@ import {
 } from '../lib/permissions';
 import { toPublicMember } from '../lib/serializers';
 
-function toDoc(row: {
-  doc: typeof documents.$inferSelect;
-  space?: typeof spaces.$inferSelect | null;
-  author?: typeof members.$inferSelect | null;
-}) {
+type User = typeof members.$inferSelect;
+type SpaceRow = typeof spaces.$inferSelect;
+type DocumentRow = typeof documents.$inferSelect;
+
+type ToDocOptions = {
+  includeHtml?: boolean;
+  canRead?: boolean;
+  canEdit?: boolean;
+};
+
+function toDoc(
+  row: {
+    doc: DocumentRow;
+    space?: SpaceRow | null;
+    author?: User | null;
+  },
+  options: ToDocOptions = {},
+) {
+  const includeHtml = options.includeHtml ?? true;
   return {
     id: row.doc.id,
     spaceId: row.doc.spaceId,
@@ -46,34 +62,55 @@ function toDoc(row: {
     visibility: row.doc.visibility,
     dot: row.doc.dot,
     tags: row.doc.tags,
-    html: row.doc.html,
+    ...(includeHtml ? { html: row.doc.html } : {}),
     deletedAt: row.doc.deletedAt,
     purgeAfter: row.doc.purgeAfter,
+    ...(options.canRead !== undefined ? { canRead: options.canRead } : {}),
+    ...(options.canEdit !== undefined ? { canEdit: options.canEdit } : {}),
   };
 }
 
-async function hydrateDoc(doc: typeof documents.$inferSelect) {
-  const [space] = await db.select().from(spaces).where(eq(spaces.id, doc.spaceId));
-  const [author] = await db.select().from(members).where(eq(members.id, doc.authorId));
-  return toDoc({ doc, space, author });
-}
-
-async function hydrateDocForUser(
-  doc: typeof documents.$inferSelect,
-  user: typeof members.$inferSelect | undefined,
+async function hydrateDocs(
+  docs: DocumentRow[],
+  options: ToDocOptions & { user?: User; lookup?: PermissionLookup } = {},
 ) {
-  return {
-    ...(await hydrateDoc(doc)),
-    canEdit: await canEditDocument(user, doc),
-  };
+  const spaceIds = [...new Set(docs.map((doc) => doc.spaceId))];
+  const authorIds = [...new Set(docs.map((doc) => doc.authorId))];
+  const [spaceRows, authorRows] = await Promise.all([
+    spaceIds.length ? db.select().from(spaces).where(inArray(spaces.id, spaceIds)) : [],
+    authorIds.length ? db.select().from(members).where(inArray(members.id, authorIds)) : [],
+  ]);
+  const spacesById = new Map(spaceRows.map((space) => [space.id, space]));
+  const authorsById = new Map(authorRows.map((author) => [author.id, author]));
+
+  return docs.map((doc) =>
+    toDoc(
+      { doc, space: spacesById.get(doc.spaceId), author: authorsById.get(doc.authorId) },
+      {
+        ...options,
+        canEdit:
+          options.lookup && options.user
+            ? canEditDocumentWithLookup(options.user, doc, options.lookup)
+            : options.canEdit,
+      },
+    ),
+  );
+}
+
+async function hydrateDoc(
+  doc: DocumentRow,
+  options: ToDocOptions & { user?: User; lookup?: PermissionLookup } = {},
+) {
+  const [hydrated] = await hydrateDocs([doc], options);
+  return hydrated;
 }
 
 export const documentsRouter = new Hono<AppEnv>()
   .get('/', async (c) => {
     const user = c.get('user');
     const docs = await listReadableDocuments(user);
-    const result = await Promise.all(docs.map((doc) => hydrateDoc(doc)));
-    return c.json(result);
+    const lookup = await loadPermissionLookup(user);
+    return c.json(await hydrateDocs(docs, { includeHtml: false, canRead: true, user, lookup }));
   })
   .get('/trash', async (c) => {
     const user = requireUser(c.get('user'));
@@ -105,7 +142,8 @@ export const documentsRouter = new Hono<AppEnv>()
   .get('/:id', async (c) => {
     const user = c.get('user');
     const doc = await requireDocumentRead(user, c.req.param('id'));
-    return c.json(await hydrateDocForUser(doc, user));
+    const lookup = await loadPermissionLookup(user);
+    return c.json(await hydrateDoc(doc, { canRead: true, user, lookup }));
   })
   .post('/', async (c) => {
     const user = requireUser(c.get('user'));

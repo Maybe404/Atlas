@@ -84,16 +84,10 @@ export function isDemoSession(session: Loose) {
   return Boolean(session?.demo);
 }
 
-export function canRead(doc?: DirectoryDocument | null, user?: Member | null) {
+export function canRead(doc?: DirectoryDocument | null, _user?: Member | null) {
   if (!doc) return true;
   if (typeof doc.canRead === 'boolean') return doc.canRead;
-  if (doc.locked) return false;
-  if (!('visibility' in doc)) return false;
-  if (doc.visibility === 'public') return true;
-  if (!user) return false;
-  if (user.role === 'admin') return true;
-  if (doc.author === user.id) return true;
-  return doc.visibility === 'invite';
+  return false;
 }
 
 export function firstPublicDoc(spaces: Space[] = []) {

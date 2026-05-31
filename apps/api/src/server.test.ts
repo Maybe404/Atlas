@@ -55,7 +55,7 @@ async function loginAs(email = 'lin@atlas.team') {
 }
 
 describe('Atlas API', () => {
-  test('anonymous visitors see directory entries but only public document HTML', async () => {
+  test('anonymous visitors see lightweight directory entries without document HTML', async () => {
     const res = await request('/spaces');
     expect(res.status).toBe(200);
     const spaces = (await res.json()) as ApiSpace[];
@@ -81,7 +81,7 @@ describe('Atlas API', () => {
     const lockedDocs = docs.filter((doc) => doc.locked);
     expect(publicDocs.length).toBeGreaterThan(0);
     expect(lockedDocs.length).toBeGreaterThan(0);
-    expect(publicDocs.every((doc) => doc.canRead && doc.html)).toBe(true);
+    expect(publicDocs.every((doc) => doc.canRead === true && doc.html === undefined)).toBe(true);
 
     for (const doc of lockedDocs) {
       expect(doc.locked).toBe(true);
@@ -118,10 +118,12 @@ describe('Atlas API', () => {
 
     const doc = await request(`/documents/${created.id}`, { headers: { cookie: admin.cookie } });
     expect(doc.status).toBe(200);
-    const body = (await doc.json()) as ApiDoc;
+    const body = (await doc.json()) as ApiDoc & { canRead: boolean; canEdit: boolean };
     expect(body.title).toBe('Smoke Title');
     expect(body.desc).toBe('A useful generated summary for the uploaded HTML document.');
     expect(body.html).toBe(rawHtml);
+    expect(body.canRead).toBe(true);
+    expect(body.canEdit).toBe(true);
   });
 
   test('rejects password logins without the correct password and issues csrf token on success', async () => {
@@ -258,6 +260,9 @@ describe('Atlas API', () => {
 
     const readable = await request('/documents/d3', { headers: { cookie: viewer.cookie } });
     expect(readable.status).toBe(200);
+    const readableBody = (await readable.json()) as ApiDoc & { canRead: boolean; canEdit: boolean };
+    expect(readableBody.canRead).toBe(true);
+    expect(readableBody.canEdit).toBe(false);
 
     const cannotEdit = await request('/documents/d3', {
       method: 'PATCH',
@@ -268,6 +273,18 @@ describe('Atlas API', () => {
 
     const privateDoc = await request('/documents/d2', { headers: { cookie: viewer.cookie } });
     expect(privateDoc.status).toBe(404);
+  });
+
+  test('lists lightweight readable documents with server permission flags', async () => {
+    const viewer = await loginAs('he@atlas.team');
+
+    const res = await request('/documents', { headers: { cookie: viewer.cookie } });
+    expect(res.status).toBe(200);
+    const docs = (await res.json()) as (ApiDoc & { canRead: boolean; canEdit: boolean })[];
+    expect(docs.length).toBeGreaterThan(0);
+    expect(docs.every((doc) => doc.canRead === true)).toBe(true);
+    expect(docs.every((doc) => typeof doc.canEdit === 'boolean')).toBe(true);
+    expect(docs.every((doc) => doc.html === undefined)).toBe(true);
   });
 
   test('document invitations grant single-document access without space access', async () => {
@@ -281,8 +298,9 @@ describe('Atlas API', () => {
 
     const readable = await request('/documents/d6', { headers: { cookie: viewer.cookie } });
     expect(readable.status).toBe(200);
-    const readableBody = (await readable.json()) as ApiDoc & { canEdit: boolean };
+    const readableBody = (await readable.json()) as ApiDoc & { canRead: boolean; canEdit: boolean };
     expect(readableBody.id).toBe('d6');
+    expect(readableBody.canRead).toBe(true);
     expect(readableBody.canEdit).toBe(false);
 
     const spacesRes = await request('/spaces', { headers: { cookie: viewer.cookie } });

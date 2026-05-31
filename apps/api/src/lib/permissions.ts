@@ -1,5 +1,5 @@
 import type { SpaceMemberRole } from '@atlas/shared';
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import { db } from '../db/client';
 import {
   documentMembers,
@@ -15,9 +15,51 @@ import { forbidden, notFound } from './http-error';
 type User = typeof members.$inferSelect;
 type SpaceRow = typeof spaces.$inferSelect;
 type DocumentRow = typeof documents.$inferSelect;
+type SpaceMemberRow = typeof spaceMembers.$inferSelect;
+type DocumentMemberRow = typeof documentMembers.$inferSelect;
+
+export type PermissionLookup = {
+  spaceRolesBySpaceId: Map<string, SpaceMemberRole>;
+  documentRolesByDocumentId: Map<string, SpaceMemberRole>;
+};
+
+export function emptyPermissionLookup(): PermissionLookup {
+  return {
+    spaceRolesBySpaceId: new Map(),
+    documentRolesByDocumentId: new Map(),
+  };
+}
+
+export async function loadPermissionLookup(user: User | undefined): Promise<PermissionLookup> {
+  if (!user || isAdmin(user)) return emptyPermissionLookup();
+
+  const [spaceRows, documentRows] = await Promise.all([
+    db.select().from(spaceMembers).where(eq(spaceMembers.memberId, user.id)),
+    db.select().from(documentMembers).where(eq(documentMembers.memberId, user.id)),
+  ]);
+
+  return {
+    spaceRolesBySpaceId: new Map(
+      spaceRows.map((row: SpaceMemberRow) => [row.spaceId, row.role as SpaceMemberRole]),
+    ),
+    documentRolesByDocumentId: new Map(
+      documentRows.map((row: DocumentMemberRow) => [row.documentId, row.role as SpaceMemberRole]),
+    ),
+  };
+}
 
 export function isAdmin(user?: User) {
   return user?.role === 'admin';
+}
+
+export function getSpaceRoleFromLookup(
+  user: User | undefined,
+  lookup: PermissionLookup,
+  spaceId: string,
+) {
+  if (!user) return null;
+  if (isAdmin(user)) return 'editor' as const;
+  return lookup.spaceRolesBySpaceId.get(spaceId) ?? null;
 }
 
 export async function getSpaceRole(user: User | undefined, spaceId: string) {
@@ -42,6 +84,20 @@ export async function requireSpaceEditor(user: User, spaceId: string) {
   return role;
 }
 
+export function canReadDocumentWithLookup(
+  user: User | undefined,
+  doc: DocumentRow,
+  lookup: PermissionLookup,
+) {
+  if (doc.deletedAt) return false;
+  if (doc.visibility === 'public') return true;
+  if (!user) return false;
+  if (isAdmin(user) || doc.authorId === user.id) return true;
+  if (doc.visibility === 'private') return false;
+  if (getSpaceRoleFromLookup(user, lookup, doc.spaceId)) return true;
+  return lookup.documentRolesByDocumentId.has(doc.id);
+}
+
 export async function canReadDocument(user: User | undefined, doc: DocumentRow) {
   if (doc.deletedAt) return false;
   if (doc.visibility === 'public') return true;
@@ -64,6 +120,19 @@ export async function requireDocumentRead(user: User | undefined, docId: string)
     .where(and(eq(documents.id, docId), isNull(documents.deletedAt)));
   if (!doc || !(await canReadDocument(user, doc))) throw notFound();
   return doc;
+}
+
+export function canEditDocumentWithLookup(
+  user: User | undefined,
+  doc: DocumentRow,
+  lookup: PermissionLookup,
+) {
+  if (doc.deletedAt) return false;
+  if (!user) return false;
+  if (isAdmin(user) || doc.authorId === user.id) return true;
+  if (doc.visibility === 'private') return false;
+  if (getSpaceRoleFromLookup(user, lookup, doc.spaceId) === 'editor') return true;
+  return lookup.documentRolesByDocumentId.get(doc.id) === 'editor';
 }
 
 export async function canEditDocument(user: User | undefined, doc: DocumentRow) {
@@ -137,48 +206,31 @@ export async function listReadableDocuments(user: User | undefined, space?: Spac
     return db.select().from(documents).where(isNull(documents.deletedAt));
   }
 
-  const publicRows = await db
+  const rows = await db
     .select({ doc: documents })
     .from(documents)
-    .where(and(eq(documents.visibility, 'public'), isNull(documents.deletedAt), ...spaceScope));
-
-  const authorRows = await db
-    .select({ doc: documents })
-    .from(documents)
-    .where(and(eq(documents.authorId, user.id), isNull(documents.deletedAt), ...spaceScope));
-
-  const spaceRows = await db
-    .select({ doc: documents })
-    .from(documents)
-    .innerJoin(spaceMembers, eq(spaceMembers.spaceId, documents.spaceId))
+    .leftJoin(
+      spaceMembers,
+      and(eq(spaceMembers.spaceId, documents.spaceId), eq(spaceMembers.memberId, user.id)),
+    )
+    .leftJoin(
+      documentMembers,
+      and(eq(documentMembers.documentId, documents.id), eq(documentMembers.memberId, user.id)),
+    )
     .where(
       and(
-        eq(spaceMembers.memberId, user.id),
-        eq(documents.visibility, 'invite'),
         isNull(documents.deletedAt),
         ...spaceScope,
+        or(
+          eq(documents.visibility, 'public'),
+          eq(documents.authorId, user.id),
+          and(eq(documents.visibility, 'invite'), isNotNull(spaceMembers.memberId)),
+          and(eq(documents.visibility, 'invite'), isNotNull(documentMembers.memberId)),
+        ),
       ),
     );
 
-  const directRows = await db
-    .select({ doc: documents })
-    .from(documents)
-    .innerJoin(documentMembers, eq(documentMembers.documentId, documents.id))
-    .where(
-      and(
-        eq(documentMembers.memberId, user.id),
-        eq(documents.visibility, 'invite'),
-        isNull(documents.deletedAt),
-        ...spaceScope,
-      ),
-    );
-
-  const seen = new Set<string>();
-  return [...publicRows, ...authorRows, ...spaceRows, ...directRows].flatMap((row) => {
-    if (seen.has(row.doc.id)) return [];
-    seen.add(row.doc.id);
-    return [row.doc];
-  });
+  return rows.map((row) => row.doc);
 }
 
 export async function listDirectoryDocuments(user: User | undefined, space?: SpaceRow) {

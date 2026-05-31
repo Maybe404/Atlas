@@ -1,5 +1,5 @@
 import { CreateSpaceSchema, SetSpaceMemberRoleSchema, UpdateSpaceSchema } from '@atlas/shared';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
 import { type documents, members, spaceMembers, spaces } from '../db/schema';
@@ -10,22 +10,24 @@ import { displayDate } from '../lib/dates';
 import { forbidden, notFound } from '../lib/http-error';
 import { makeId } from '../lib/id';
 import {
-  canEditDocument,
-  canReadDocument,
-  getSpaceRole,
+  canEditDocumentWithLookup,
+  canReadDocumentWithLookup,
+  getSpaceRoleFromLookup,
   isAdmin,
   listDirectoryDocuments,
   listReadableSpaces,
+  loadPermissionLookup,
+  type PermissionLookup,
   requireSpaceAccess,
   requireSpaceEditor,
 } from '../lib/permissions';
 import { toPublicMember } from '../lib/serializers';
 
-function toDoc(
-  doc: typeof documents.$inferSelect,
-  author?: typeof members.$inferSelect | null,
-  options: { includeHtml?: boolean; canRead?: boolean } = {},
-) {
+type User = typeof members.$inferSelect;
+type SpaceRow = typeof spaces.$inferSelect;
+type DocumentRow = typeof documents.$inferSelect;
+
+function toDoc(doc: DocumentRow, author?: User | null, options: { canRead?: boolean } = {}) {
   return {
     id: doc.id,
     spaceId: doc.spaceId,
@@ -37,14 +39,13 @@ function toDoc(
     visibility: doc.visibility,
     dot: doc.dot,
     tags: doc.tags,
-    ...(options.includeHtml ? { html: doc.html } : {}),
     deletedAt: doc.deletedAt,
     canRead: options.canRead ?? false,
     locked: false,
   };
 }
 
-function toLockedDoc(doc: typeof documents.$inferSelect) {
+function toLockedDoc(doc: DocumentRow) {
   return {
     id: doc.id,
     spaceId: doc.spaceId,
@@ -55,47 +56,72 @@ function toLockedDoc(doc: typeof documents.$inferSelect) {
   };
 }
 
-async function childrenForSpace(
-  user: typeof members.$inferSelect | undefined,
-  space: typeof spaces.$inferSelect,
-) {
-  const docs = await listDirectoryDocuments(user, space);
-  return Promise.all(
-    docs.map(async (doc) => {
-      const canRead = await canReadDocument(user, doc);
-      if (!canRead) return toLockedDoc(doc);
+async function authorsByIdFor(docs: DocumentRow[]) {
+  const authorIds = [...new Set(docs.map((doc) => doc.authorId))];
+  if (authorIds.length === 0) return new Map<string, User>();
+  const rows = await db.select().from(members).where(inArray(members.id, authorIds));
+  return new Map(rows.map((author) => [author.id, author]));
+}
 
-      const [author] = await db.select().from(members).where(eq(members.id, doc.authorId));
-      return {
-        ...toDoc(doc, author, { includeHtml: true, canRead: true }),
-        canEdit: await canEditDocument(user, doc),
-      };
-    }),
-  );
+function buildChildren(
+  user: User | undefined,
+  docs: DocumentRow[],
+  authorsById: Map<string, User>,
+  lookup: PermissionLookup,
+) {
+  return docs.map((doc) => {
+    const canRead = canReadDocumentWithLookup(user, doc, lookup);
+    if (!canRead) return toLockedDoc(doc);
+
+    return {
+      ...toDoc(doc, authorsById.get(doc.authorId), { canRead: true }),
+      canEdit: canEditDocumentWithLookup(user, doc, lookup),
+    };
+  });
+}
+
+async function spaceWithChildren(user: User | undefined, sp: SpaceRow, lookup: PermissionLookup) {
+  const docs = await listDirectoryDocuments(user, sp);
+  const authorsById = await authorsByIdFor(docs);
+  const children = buildChildren(user, docs, authorsById, lookup);
+  return {
+    ...sp,
+    count: children.length,
+    children,
+    role: getSpaceRoleFromLookup(user, lookup, sp.id),
+  };
 }
 
 export const spacesRouter = new Hono<AppEnv>()
   .get('/', async (c) => {
     const user = c.get('user');
+    const lookup = await loadPermissionLookup(user);
     const membershipSpaces = await listReadableSpaces(user);
-    const readableDocs = await listDirectoryDocuments(user);
+    const directoryDocs = await listDirectoryDocuments(user);
     const readableSpaceIds = new Set([
       ...membershipSpaces.map((sp) => sp.id),
-      ...readableDocs.map((doc) => doc.spaceId),
+      ...directoryDocs.map((doc) => doc.spaceId),
     ]);
     const allSpaces = isAdmin(user) ? membershipSpaces : await db.select().from(spaces);
     const readableSpaces = allSpaces.filter((sp) => readableSpaceIds.has(sp.id));
-    const result = await Promise.all(
-      readableSpaces.map(async (sp) => {
-        const children = await childrenForSpace(user, sp);
-        return {
-          ...sp,
-          count: children.length,
-          children,
-          role: await getSpaceRole(user, sp.id),
-        };
-      }),
-    );
+    const authorsById = await authorsByIdFor(directoryDocs);
+    const docsBySpaceId = new Map<string, DocumentRow[]>();
+
+    for (const doc of directoryDocs) {
+      const existing = docsBySpaceId.get(doc.spaceId) ?? [];
+      existing.push(doc);
+      docsBySpaceId.set(doc.spaceId, existing);
+    }
+
+    const result = readableSpaces.map((sp) => {
+      const children = buildChildren(user, docsBySpaceId.get(sp.id) ?? [], authorsById, lookup);
+      return {
+        ...sp,
+        count: children.length,
+        children,
+        role: getSpaceRoleFromLookup(user, lookup, sp.id),
+      };
+    });
     return c.json(result);
   })
   .get('/:id', async (c) => {
@@ -103,10 +129,10 @@ export const spacesRouter = new Hono<AppEnv>()
     const id = c.req.param('id');
     const [sp] = await db.select().from(spaces).where(eq(spaces.id, id));
     if (!sp) throw notFound();
-    const children = await childrenForSpace(user, sp);
-    const role = await getSpaceRole(user, id);
-    if (!role && children.length === 0) throw notFound();
-    return c.json({ ...sp, count: children.length, children, role });
+    const lookup = await loadPermissionLookup(user);
+    const result = await spaceWithChildren(user, sp, lookup);
+    if (!result.role && result.children.length === 0) throw notFound();
+    return c.json(result);
   })
   .post('/', async (c) => {
     const user = requireUser(c.get('user'));

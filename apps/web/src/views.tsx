@@ -6,6 +6,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { apiGet } from './api-client';
 import { canRead, firstPublicDoc } from './auth';
 import { AnimatedScrollList, I } from './chrome';
+import { useDocument } from './data-hooks';
 import { visibilityLabel } from './labels';
 import type { Loose } from './loose-types';
 import { documentReaderUrl } from './url-utils';
@@ -48,7 +49,11 @@ function ReaderView({
     requestedDoc || (requestedSpace ? requestedSpace.children?.[0] : space?.children?.[0]);
   const denied = Boolean(user && ctx.spaceId && ctx.docId && (!requestedSpace || !requestedDoc));
   const allowed = !denied && canRead(doc, user);
-  const author = allowed && doc?.author ? members.find((m: Loose) => m.id === doc.author) : null;
+  const detailQuery = useDocument(doc?.id, Boolean(allowed && doc?.id));
+  const detailDoc = detailQuery.data || doc;
+  const detailDenied = allowed && detailQuery.isError;
+  const author =
+    allowed && detailDoc?.author ? members.find((m: Loose) => m.id === detailDoc.author) : null;
   const [copied, setCopied] = useState(false);
   const readerLink = window.location.href;
   const copyReaderLink = () => {
@@ -59,8 +64,8 @@ function ReaderView({
 
   const iframeRef = useRef<Loose>(null);
 
-  if (denied || !space || !doc) {
-    const earlyDocId = doc?.id || ctx.docId;
+  if (denied || detailDenied || !space || !doc) {
+    const earlyDocId = detailDoc?.id || doc?.id || ctx.docId;
     return (
       <div className="main-card reader-card">
         <div className={`reader-meta-bar ${chromeVisible ? '' : 'meta-bar-hidden'}`}>
@@ -195,13 +200,17 @@ function ReaderView({
 
       <div className={`reader-iframe-wrap ${framedDoc ? 'framed' : ''}`}>
         {allowed ? (
-          <iframe
-            ref={iframeRef}
-            className="reader-iframe"
-            srcDoc={doc.html || '<!doctype html><html><body><p>暂无内容</p></body></html>'}
-            title={doc.title}
-            sandbox="allow-scripts allow-forms allow-popups"
-          />
+          detailQuery.isLoading ? (
+            <div className="app-state-banner">正在加载正文…</div>
+          ) : (
+            <iframe
+              ref={iframeRef}
+              className="reader-iframe"
+              srcDoc={detailDoc.html || '<!doctype html><html><body><p>暂无内容</p></body></html>'}
+              title={detailDoc.title}
+              sandbox="allow-scripts allow-forms allow-popups"
+            />
+          )
         ) : (
           <div className="reader-locked">
             <div className="reader-locked-glyph">
@@ -952,6 +961,43 @@ export { AdminDocsView };
 // HTML EDITOR DIALOG — edit doc content, save
 // ─────────────────────────────────────────────────────────────────────────
 function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }: Loose) {
+  const detailQuery = useDocument(doc.isNew ? null : doc.id, !doc.isNew);
+
+  if (!doc.isNew && detailQuery.isLoading) {
+    return (
+      <div className="overlay editor-overlay">
+        <div className="editor-dialog" onMouseDown={(e: Loose) => e.stopPropagation()}>
+          <div className="app-state-banner">正在加载文章正文…</div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!doc.isNew && (detailQuery.isError || !detailQuery.data)) {
+    return (
+      <div
+        className="overlay editor-overlay"
+        onMouseDown={(e: Loose) => {
+          if (e.target.classList.contains('editor-overlay')) onClose();
+        }}
+      >
+        <div className="editor-dialog" onMouseDown={(e: Loose) => e.stopPropagation()}>
+          <div className="app-state-banner">无法加载文章正文，可能没有编辑权限或文章已被删除。</div>
+          <div style={{ padding: 16 }}>
+            <button className="btn secondary" onClick={onClose}>
+              关闭
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const fullDoc = doc.isNew ? doc : { ...doc, ...detailQuery.data };
+  return <HTMLEditorDialogBody doc={fullDoc} spaces={spaces} onClose={onClose} onSave={onSave} />;
+}
+
+function HTMLEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) {
   const defaultHTML =
     doc.html ||
     (doc.isNew

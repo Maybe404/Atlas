@@ -26,6 +26,7 @@ export const atlasKeys = {
   me: ['me'] as const,
   spaces: ['spaces'] as const,
   documents: ['documents'] as const,
+  document: (documentId: string) => ['documents', documentId] as const,
   members: ['members'] as const,
   permissions: ['permissions'] as const,
   spaceMembers: (spaceId: string) => ['space-members', spaceId] as const,
@@ -71,6 +72,14 @@ export function useAtlasData() {
       meQuery.error ||
       (isWorkspaceAdmin ? membersQuery.error || permissionsQuery.error : null),
   };
+}
+
+export function useDocument(documentId?: string | null, enabled = true) {
+  return useQuery({
+    queryKey: atlasKeys.document(documentId || ''),
+    queryFn: () => apiGet(`/documents/${documentId}`),
+    enabled: enabled && Boolean(documentId),
+  });
 }
 
 export function useAtlasMutations(pushToast?: PushToast) {
@@ -122,7 +131,24 @@ export function useAtlasMutations(pushToast?: PushToast) {
     mutationFn: ({ id, patch }: { id: string; patch: UpdateDocumentInput }) =>
       apiJson(`/documents/${id}`, 'PATCH', patch),
     onSuccess: async (_data: unknown, variables: { id: string; patch: UpdateDocumentInput }) => {
-      await invalidateCore();
+      const directoryFields: (keyof UpdateDocumentInput)[] = [
+        'title',
+        'desc',
+        'visibility',
+        'dot',
+        'tags',
+        'spaceId',
+      ];
+      const mayUpdateDirectoryMetadata =
+        Boolean(variables.patch.html) ||
+        directoryFields.some((field) => variables.patch[field] !== undefined);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: atlasKeys.document(variables.id) }),
+        queryClient.invalidateQueries({ queryKey: atlasKeys.documents }),
+        ...(mayUpdateDirectoryMetadata
+          ? [queryClient.invalidateQueries({ queryKey: atlasKeys.spaces })]
+          : []),
+      ]);
       pushToast?.({ msg: '已保存', meta: variables.patch?.title || '内容已更新' });
     },
   });

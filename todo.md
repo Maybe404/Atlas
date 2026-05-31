@@ -258,9 +258,13 @@ if (!canManage) return c.json(emptyShareState(doc.id));
 
 ---
 
-### TODO 5：瘦身 `/spaces` 接口，避免返回所有文档 HTML
+### TODO 5：瘦身 `/spaces` 接口，避免返回所有文档 HTML ✅ 已解决
 
-**严重程度：P1 / 性能与架构风险**
+**状态：已完成（2026-05-31）**
+
+**方案与现状：**
+
+`/spaces` 现在只返回空间和文档目录元信息；所有 children（包括 public 可读文档）都不再包含 `html`，locked 文档继续使用最小 DTO。Reader 和后台 HTML 编辑器改为在确需正文时通过 `GET /documents/:id` 按需加载；`GET /documents` 列表也改为轻量响应。文档更新会刷新对应 detail query，只有目录元信息可能变化时才刷新 `/spaces`，避免纯正文保存触发全量目录重拉。
 
 **相关文件：**
 
@@ -301,7 +305,13 @@ queryClient.invalidateQueries({ queryKey: atlasKeys.spaces })
 
 ---
 
-### TODO 6：治理文档列表与空间 children 的 N+1 查询
+### TODO 6：治理文档列表与空间 children 的 N+1 查询 ✅ 已解决
+
+**状态：已完成（2026-05-31）**
+
+**方案与现状：**
+
+新增 `PermissionLookup` 批量预取当前用户的空间成员与文档成员角色，并提供同步权限判断 helper；`/spaces` 一次性加载目录文档、批量加载作者、按 `spaceId` 分组后在内存中组装 children；`/documents` 列表批量加载 space/author 并复用权限 lookup 计算 `canEdit`。解决了原先每个 space/doc 单独查 author、space role、document member 的 N+1 问题，同时保留匿名 locked 目录体验和既有权限语义。
 
 **严重程度：P1 / 性能风险**
 
@@ -432,7 +442,13 @@ for (const doc of toPurge) {
 
 ---
 
-### TODO 9：客户端 `canRead` 与服务端权限规则不一致
+### TODO 9：客户端 `canRead` 与服务端权限规则不一致 ✅ 已解决
+
+**状态：已完成（2026-05-31）**
+
+**方案与现状：**
+
+`/spaces`、`GET /documents`、`GET /documents/:id` 都返回服务端计算的 `canRead`；前端 `canRead()` 保留函数名但移除 invite/admin/author 的本地推断，改为只信任服务端 `doc.canRead`，缺失时 fail closed。解决了登录用户被客户端误判为可读所有 invite 文档的问题，Reader 只有在目录 DTO 标记可读时才会请求正文。
 
 **严重程度：P1 / 一致性与体验风险**
 
