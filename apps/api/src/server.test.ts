@@ -14,9 +14,8 @@ await import('./db/seed');
 
 const { default: server } = await import('./server');
 const { db } = await import('./db/client');
-const { documentMembers, documents, members, sessions, shareLinks, spaceMembers } = await import(
-  './db/schema'
-);
+const { auditLogs, documentMembers, documents, members, sessions, shareLinks, spaceMembers } =
+  await import('./db/schema');
 
 afterAll(() => {
   rmSync(testDb, { force: true });
@@ -377,6 +376,42 @@ describe('Atlas API', () => {
     expect(afterInvalid.filter((row) => row.memberId === 'u2' || row.memberId === 'u4')).toEqual(
       beforeInvalid,
     );
+
+    const missingSpace = await request('/spaces/not-a-space/members', {
+      method: 'PUT',
+      body: JSON.stringify({ updates: [{ memberId: 'u2', role: 'viewer' }] }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(missingSpace.status).toBe(404);
+
+    const missingSpaceClear = await request('/spaces/not-a-space/members', {
+      method: 'PUT',
+      body: JSON.stringify({ updates: [{ memberId: 'u2', role: null }] }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(missingSpaceClear.status).toBe(404);
+  });
+
+  test('single space member updates validate space and member before writing', async () => {
+    const admin = await loginAs();
+    const before = await db.select().from(spaceMembers).where(eq(spaceMembers.spaceId, 's1'));
+
+    const missingMember = await request('/spaces/s1/members/not-a-member', {
+      method: 'PUT',
+      body: JSON.stringify({ role: 'viewer' }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(missingMember.status).toBe(404);
+    expect(await db.select().from(spaceMembers).where(eq(spaceMembers.spaceId, 's1'))).toEqual(
+      before,
+    );
+
+    const missingSpace = await request('/spaces/not-a-space/members/u2', {
+      method: 'PUT',
+      body: JSON.stringify({ role: null }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(missingSpace.status).toBe(404);
   });
 
   test('enforces document read and edit permission boundaries', async () => {
@@ -442,6 +477,27 @@ describe('Atlas API', () => {
     expect(productSpace?.children.map((doc) => doc.id)).toContain('d6');
   });
 
+  test('document member endpoint validates members before writing', async () => {
+    const admin = await loginAs();
+    const before = await db
+      .select()
+      .from(documentMembers)
+      .where(eq(documentMembers.documentId, 'd1'));
+    const auditsBefore = await db.select().from(auditLogs).where(eq(auditLogs.targetId, 'd1'));
+
+    const invalid = await request('/documents/d1/members/not-a-member', {
+      method: 'PUT',
+      body: JSON.stringify({ role: 'viewer' }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(invalid.status).toBe(404);
+    expect(
+      await db.select().from(documentMembers).where(eq(documentMembers.documentId, 'd1')),
+    ).toEqual(before);
+    expect(await db.select().from(auditLogs).where(eq(auditLogs.targetId, 'd1'))).toEqual(
+      auditsBefore,
+    );
+  });
   test('soft deletes and restores documents', async () => {
     const admin = await loginAs();
     const remove = await request('/documents/d2', { method: 'DELETE', headers: admin.headers });
@@ -514,6 +570,102 @@ describe('Atlas API', () => {
     expect(shareBody.public.token).not.toBe('demo-d1-public-link');
     expect(shareBody.public.url).toBe(`/share/${shareBody.public.token}`);
     expect((await request(`/documents/public/${shareBody.public.token}`)).status).toBe(200);
+  });
+
+  test('share updates validate dates and members atomically', async () => {
+    const admin = await loginAs();
+    const shareBeforeRotate = await request('/documents/d1/share', {
+      headers: { cookie: admin.cookie },
+    });
+    expect(shareBeforeRotate.status).toBe(200);
+    const shareBeforeRotateBody = (await shareBeforeRotate.json()) as {
+      public: { enabled: boolean; token: string | null; expiresAt: string | null };
+    };
+
+    const rotateOnly = await request('/documents/d1/share', {
+      method: 'PATCH',
+      body: JSON.stringify({ rotateToken: true }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(rotateOnly.status).toBe(200);
+
+    const shareAfterRotate = await request('/documents/d1/share', {
+      headers: { cookie: admin.cookie },
+    });
+    const shareAfterRotateBody = (await shareAfterRotate.json()) as {
+      public: { enabled: boolean; token: string | null; expiresAt: string | null };
+    };
+    expect(shareAfterRotateBody.public.token).toBeTruthy();
+    expect(shareAfterRotateBody.public.token).not.toBe(shareBeforeRotateBody.public.token);
+    expect(shareAfterRotateBody.public.enabled).toBe(shareBeforeRotateBody.public.enabled);
+
+    const invalidDate = await request('/documents/d1/share', {
+      method: 'PATCH',
+      body: JSON.stringify({ expiresAt: 'not-a-date' }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(invalidDate.status).toBe(400);
+    expect((await invalidDate.json()) as { code: string }).toMatchObject({
+      code: 'validation_error',
+    });
+
+    const [publicBeforeInvalidMember] = await db
+      .select()
+      .from(shareLinks)
+      .where(eq(shareLinks.documentId, 'd1'));
+    const membersBeforeInvalid = await db
+      .select()
+      .from(documentMembers)
+      .where(eq(documentMembers.documentId, 'd1'));
+    const auditsBeforeInvalid = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.targetId, 'd1'));
+
+    const invalidMember = await request('/documents/d1/share', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        publicEnabled: false,
+        members: [
+          { memberId: 'u3', role: 'viewer' },
+          { memberId: 'not-a-member', role: 'editor' },
+        ],
+      }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(invalidMember.status).toBe(404);
+    const [publicAfterInvalidMember] = await db
+      .select()
+      .from(shareLinks)
+      .where(eq(shareLinks.documentId, 'd1'));
+    const membersAfterInvalid = await db
+      .select()
+      .from(documentMembers)
+      .where(eq(documentMembers.documentId, 'd1'));
+    const auditsAfterInvalid = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.targetId, 'd1'));
+    expect(publicAfterInvalidMember).toEqual(publicBeforeInvalidMember);
+    expect(membersAfterInvalid).toEqual(membersBeforeInvalid);
+    expect(auditsAfterInvalid).toEqual(auditsBeforeInvalid);
+
+    const duplicateMembers = await request('/documents/d1/share', {
+      method: 'PATCH',
+      body: JSON.stringify({
+        members: [
+          { memberId: 'u3', role: 'viewer' },
+          { memberId: 'u3', role: 'editor' },
+        ],
+      }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(duplicateMembers.status).toBe(200);
+    const afterDuplicateMembers = await db
+      .select()
+      .from(documentMembers)
+      .where(eq(documentMembers.documentId, 'd1'));
+    expect(afterDuplicateMembers.find((row) => row.memberId === 'u3')?.role).toBe('editor');
   });
 
   test('only admins and document authors can manage share settings', async () => {

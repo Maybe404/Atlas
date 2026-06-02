@@ -6,7 +6,7 @@ import { apiGet } from './api-client';
 import { AnimatedItem, AnimatedScrollList, I } from './chrome';
 import { atlasKeys } from './data-hooks';
 import type { Loose } from './loose-types';
-import { SPACE_COLORS } from './theme-tokens';
+import { dotClass, SPACE_COLORS } from './theme-tokens';
 import { publicShareUrl } from './url-utils';
 
 const _I3 = I;
@@ -171,20 +171,7 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
                             onClose();
                           }}
                         >
-                          <span
-                            className={
-                              'dot ' +
-                              (it.dot === 'accent'
-                                ? 'dot-blue'
-                                : it.dot === 'moss'
-                                  ? 'dot-green'
-                                  : it.dot === 'plum'
-                                    ? 'dot-purple'
-                                    : it.dot === 'ink'
-                                      ? 'dot-gray'
-                                      : 'dot-blue')
-                            }
-                          ></span>
+                          <span className={`dot ${dotClass(it.dot)}`}></span>
                           <span>{it.title}</span>
                           <span className="path">{it.path}</span>
                         </div>

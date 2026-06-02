@@ -114,6 +114,8 @@ export const UpdateMemberSchema = z.object({
   password: z.string().min(8).max(128).optional(),
 });
 
+const IsoDateTimeSchema = z.string().datetime({ offset: true });
+
 export const SetSpaceMemberRoleSchema = z.object({
   memberId: z.string(),
   role: SpaceRoleSchema,
@@ -132,7 +134,7 @@ export const UpdateDocumentShareSchema = z.object({
   publicEnabled: z.boolean().optional(),
   showAuthor: z.boolean().optional(),
   allowIndexing: z.boolean().optional(),
-  expiresAt: z.string().nullable().optional(),
+  expiresAt: IsoDateTimeSchema.nullable().optional(),
   rotateToken: z.boolean().optional(),
   members: z.array(SetDocumentMemberRoleSchema).optional(),
 });

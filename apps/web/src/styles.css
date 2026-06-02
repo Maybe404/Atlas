@@ -401,6 +401,8 @@ html { transition: background 0.3s var(--ease-soft); }
 .tree-node .dot.green { background: #34c759; }
 .tree-node .dot.orange { background: #ff9500; }
 .tree-node .dot.purple { background: #af52de; }
+.tree-node .dot.gray { background: #6e6e73; }
+.tree-node .dot.pink { background: #ff2d55; }
 .tree-node .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .tree-node .count { font-family: var(--font-mono); font-size: 11px; color: var(--ink-4); }
 .tree-children {

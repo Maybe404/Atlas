@@ -121,7 +121,7 @@ Seed 后示例账号如下，所有账号使用同一个演示密码。**这些�
 ├── apps/
 │   ├── web/        前端 (Vite + React 19 + TS)
 │   │   ├── index.html
-│   │   ├── public/embedded-sample.html      ReaderView iframe 用
+│   │   ├── public/embedded-sample.html      本地示例 HTML
 │   │   └── src/
 │   │       ├── main.tsx                     入口
 │   │       ├── app.tsx                      根组件 App + Dock
@@ -139,7 +139,7 @@ Seed 后示例账号如下，所有账号使用同一个演示密码。**这些�
 │       ├── src/lib/{auth,permissions,html-limits,audit,serializers,...}.ts
 │       └── src/db/{schema,client,migrate,seed,migrations}.ts
 ├── packages/
-│   └── shared/     共享 Zod schema、领域类型、ATLAS_DATA fixtures
+│   └── shared/     共享 Zod schema、领域类型与 HTML metadata 工具
 ├── package.json    Bun workspaces 根
 ├── bunfig.toml
 ├── biome.json
@@ -156,12 +156,15 @@ Seed 后示例账号如下，所有账号使用同一个演示密码。**这些�
 | `GET` | `/auth/me` | 当前用户、session 与 CSRF 状态 |
 | `POST` | `/auth/login` | 密码登录，body: `{ email, password }` |
 | `POST` | `/auth/logout` | 删除当前 session |
+| `POST` | `/auth/sessions/purge-expired` | 管理员清理过期 session 行 |
 | `GET` | `/auth/audit` | 管理员查看最近 100 条审计日志 |
 | `GET` | `/spaces` | 当前用户可读空间及其文档 |
 | `POST` | `/spaces` | 管理员创建空间 |
+| `GET` | `/spaces/:id` | 读取单个空间及其可见文档 |
 | `PATCH` | `/spaces/:id` | 空间 editor/admin 更新空间 |
 | `DELETE` | `/spaces/:id` | 管理员删除空间 |
 | `GET` | `/spaces/:id/members` | 查看空间成员角色 |
+| `PUT` | `/spaces/:id/members` | 管理员批量设置空间 viewer/editor/null |
 | `PUT` | `/spaces/:id/members/:memberId` | 管理员设置空间 viewer/editor/null |
 | `GET` | `/documents` | 当前用户可读文档 |
 | `GET` | `/documents/trash` | 管理员查看回收站 |
@@ -175,11 +178,14 @@ Seed 后示例账号如下，所有账号使用同一个演示密码。**这些�
 | `POST` | `/documents/:id/restore` | 管理员恢复回收站文档 |
 | `DELETE` | `/documents/:id/permanent` | 管理员永久删除文档 |
 | `GET` | `/documents/:id/share` | 查看文档分享状态 |
+| `GET` | `/documents/:id/share/members` | 搜索可邀请成员 |
 | `PATCH` | `/documents/:id/share` | 更新公开链接、成员分享、轮换 token |
 | `PUT` | `/documents/:id/members/:memberId` | 设置文档 viewer/editor/null |
 | `GET` | `/members` | 管理员查看成员 |
 | `GET` | `/members/permissions` | 管理员查看空间权限矩阵 |
-| `PATCH` | `/members/:id` | 管理员更新成员姓名或工作区角色 |
+| `POST` | `/members` | 管理员创建成员 |
+| `PATCH` | `/members/:id` | 管理员更新成员姓名、工作区角色或密码 |
+| `DELETE` | `/members/:id` | 管理员删除成员 |
 
 非 `GET` 请求在 cookie session 下必须带 `X-Atlas-CSRF` header，值来自 `atlas_csrf` cookie。
 
@@ -231,8 +237,8 @@ bun run --filter @atlas/api db:seed
 
 ## 说明
 
-- 前端代码扁平在 `apps/web/src/` 下，大部分 `.tsx` 仍保留 `// @ts-nocheck`，后续可以逐文件补 props/state 类型。
-- `packages/shared/src/fixtures.ts` 现在只用于 `db:seed` 生成示例数据库；运行时前端不再读 fixtures。
+- 前端代码扁平在 `apps/web/src/` 下，`.tsx` 已纳入 typecheck 与 Biome 检查；少量宽松类型集中在 `loose-types.ts`。
+- 演示种子数据在 `apps/api/src/db/seed-data.ts`，由 `db:seed` 写入示例数据库；运行时前端不读 fixtures。
 - API 用 `bun:sqlite` 原生驱动，无需 `better-sqlite3`。
 - 前端 API 调用集中在 `apps/web/src/api-client.ts` 和 `apps/web/src/data-hooks.ts`，避免把后端 `bun:sqlite` 类型拖入浏览器工程。
 
@@ -245,7 +251,7 @@ bun run --filter @atlas/api db:seed
 3. **HTML 安全加固** —— CSP、资源代理、下载/图片白名单、恶意样本测试集、iframe sandbox 权限复核。
 4. **审计与分享 UI 完整化** —— 审计日志筛选/分页、公开访问统计图、noindex meta 落到公开页面 HTML。
 5. **回收站策略细化** —— 定时任务调度、永久删除确认 UI、空间删除时的文档迁移或阻止策略。
-6. **逐文件去掉 `@ts-nocheck`**，补 props/state 类型，并把前端原型组件拆出更稳定的数据边界。
+6. **继续收紧前端类型边界** —— 减少 `Loose` 使用，补齐 props/state 类型，并把前端原型组件拆出更稳定的数据边界。
 
 ## 常见问题
 

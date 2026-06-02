@@ -33,28 +33,41 @@ export function spaceColorLabel(accent: Loose) {
   return SPACE_COLOR_LABEL[String(accent)] || SPACE_COLOR_LABEL.accent;
 }
 
+const DOCUMENT_DOT_CLASS: Record<string, string> = {
+  accent: 'dot-blue',
+  moss: 'dot-green',
+  slate: 'dot-blue',
+  plum: 'dot-purple',
+  ink: 'dot-gray',
+  rose: 'dot-pink',
+};
+
+const SPACE_ACCENT_DOT_CLASS: Record<string, string> = {
+  accent: 'dot-orange',
+  moss: 'dot-green',
+  slate: 'dot-blue',
+  plum: 'dot-purple',
+  ink: 'dot-gray',
+  rose: 'dot-pink',
+};
+
+const SPACE_TREE_DOT_CLASS: Record<string, string> = {
+  accent: 'orange',
+  moss: 'green',
+  slate: '',
+  plum: 'purple',
+  ink: 'gray',
+  rose: 'pink',
+};
+
 export function dotClass(dot: Loose) {
-  return dot === 'accent'
-    ? 'dot-blue'
-    : dot === 'moss'
-      ? 'dot-green'
-      : dot === 'slate'
-        ? 'dot-blue'
-        : dot === 'plum'
-          ? 'dot-purple'
-          : dot === 'ink'
-            ? 'dot-gray'
-            : 'dot-blue';
+  return DOCUMENT_DOT_CLASS[String(dot)] ?? DOCUMENT_DOT_CLASS.accent;
 }
 
 export function accentDot(accent: Loose) {
-  return accent === 'moss'
-    ? 'dot-green'
-    : accent === 'plum'
-      ? 'dot-purple'
-      : accent === 'accent'
-        ? 'dot-orange'
-        : accent === 'ink'
-          ? 'dot-gray'
-          : 'dot-blue';
+  return SPACE_ACCENT_DOT_CLASS[String(accent)] ?? SPACE_ACCENT_DOT_CLASS.accent;
+}
+
+export function spaceTreeDotClass(accent: Loose) {
+  return SPACE_TREE_DOT_CLASS[String(accent)] ?? SPACE_TREE_DOT_CLASS.accent;
 }

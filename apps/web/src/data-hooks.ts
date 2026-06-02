@@ -144,7 +144,7 @@ export function useAtlasMutations(pushToast?: PushToast) {
         'spaceId',
       ];
       const mayUpdateDirectoryMetadata =
-        Boolean(variables.patch.html) ||
+        variables.patch.html !== undefined ||
         directoryFields.some((field) => variables.patch[field] !== undefined);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: atlasKeys.document(variables.id) }),

@@ -3,7 +3,7 @@ import { canRead } from '../auth';
 import { I } from '../chrome';
 import { visibilityLabel } from '../labels';
 import type { Loose } from '../loose-types';
-import { dotClass } from './shared';
+import { accentDot, dotClass } from './shared';
 
 const _I = I;
 
@@ -44,16 +44,7 @@ export function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }: L
           <div className="left">
             <div className="eyebrow">
               <span
-                className={
-                  'dot ' +
-                  (space.accent === 'accent'
-                    ? 'dot-orange'
-                    : space.accent === 'moss'
-                      ? 'dot-green'
-                      : space.accent === 'plum'
-                        ? 'dot-purple'
-                        : 'dot-blue')
-                }
+                className={`dot ${accentDot(space.accent)}`}
                 style={{ width: 7, height: 7, borderRadius: '50%' }}
               ></span>
               空间 · {space.name}

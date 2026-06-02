@@ -63,6 +63,10 @@ export const documents = sqliteTable(
     authorIdIdx: index('documents_author_id_idx').on(table.authorId),
     visibilityIdx: index('documents_visibility_idx').on(table.visibility),
     deletedAtIdx: index('documents_deleted_at_idx').on(table.deletedAt),
+    deletedPurgeAfterIdx: index('documents_deleted_purge_after_idx').on(
+      table.deletedAt,
+      table.purgeAfter,
+    ),
     spaceDeletedIdx: index('documents_space_deleted_idx').on(table.spaceId, table.deletedAt),
     visibilityDeletedIdx: index('documents_visibility_deleted_idx').on(
       table.visibility,
@@ -86,6 +90,7 @@ export const spaceMembers = sqliteTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.spaceId, table.memberId] }),
+    memberIdIdx: index('space_members_member_id_idx').on(table.memberId),
   }),
 );
 
@@ -102,6 +107,7 @@ export const documentMembers = sqliteTable(
   },
   (table) => ({
     pk: primaryKey({ columns: [table.documentId, table.memberId] }),
+    memberIdIdx: index('document_members_member_id_idx').on(table.memberId),
   }),
 );
 

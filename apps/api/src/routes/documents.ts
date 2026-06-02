@@ -8,7 +8,7 @@ import {
 import { and, desc, eq, inArray, isNotNull, like, lte, ne, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
-import { documentMembers, documents, members, shareLinks, spaces } from '../db/schema';
+import { auditLogs, documentMembers, documents, members, shareLinks, spaces } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
@@ -425,60 +425,80 @@ export const documentsRouter = new Hono<AppEnv>()
     const user = requireUser(c.get('user'));
     const doc = await requireDocumentShareManager(user, c.req.param('id'));
     const body = UpdateDocumentShareSchema.parse(await c.req.json());
-    const [existing] = await db.select().from(shareLinks).where(eq(shareLinks.documentId, doc.id));
+    const memberUpdates = body.members
+      ? [...new Map(body.members.map((item) => [item.memberId, item])).values()]
+      : [];
+    const memberIds = memberUpdates.map((item) => item.memberId);
+    if (memberIds.length > 0) {
+      const existingMembers = await db
+        .select({ id: members.id })
+        .from(members)
+        .where(inArray(members.id, memberIds));
+      const existingMemberIds = new Set(existingMembers.map((member) => member.id));
+      const missingMemberId = memberIds.find((memberId) => !existingMemberIds.has(memberId));
+      if (missingMemberId) throw notFound('Member not found.');
+    }
 
-    if (
+    const shouldUpdatePublicShare =
       body.publicEnabled !== undefined ||
       body.showAuthor !== undefined ||
       body.allowIndexing !== undefined ||
-      body.expiresAt !== undefined
-    ) {
-      const values = {
-        enabled: body.publicEnabled ?? existing?.enabled ?? false,
-        showAuthor: body.showAuthor ?? existing?.showAuthor ?? true,
-        allowIndexing: body.allowIndexing ?? existing?.allowIndexing ?? false,
-        expiresAt: body.expiresAt === undefined ? (existing?.expiresAt ?? null) : body.expiresAt,
-        revokedAt:
-          body.publicEnabled === false
-            ? nowIso()
-            : body.publicEnabled === true
-              ? null
-              : (existing?.revokedAt ?? null),
-        updatedAt: nowIso(),
-      };
-      if (existing) {
-        await db
-          .update(shareLinks)
-          .set({ ...values, token: body.rotateToken ? makeToken() : existing.token })
-          .where(eq(shareLinks.id, existing.id));
-      } else {
-        await db.insert(shareLinks).values({
-          id: makeId('link'),
-          documentId: doc.id,
-          token: makeToken(),
-          createdBy: user.id,
-          ...values,
+      body.expiresAt !== undefined ||
+      body.rotateToken === true;
+
+    await db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(shareLinks)
+        .where(eq(shareLinks.documentId, doc.id));
+
+      if (shouldUpdatePublicShare) {
+        const values = {
+          enabled: body.publicEnabled ?? existing?.enabled ?? false,
+          showAuthor: body.showAuthor ?? existing?.showAuthor ?? true,
+          allowIndexing: body.allowIndexing ?? existing?.allowIndexing ?? false,
+          expiresAt: body.expiresAt === undefined ? (existing?.expiresAt ?? null) : body.expiresAt,
+          revokedAt:
+            body.publicEnabled === false
+              ? nowIso()
+              : body.publicEnabled === true
+                ? null
+                : (existing?.revokedAt ?? null),
+          updatedAt: nowIso(),
+        };
+        if (existing) {
+          await tx
+            .update(shareLinks)
+            .set({ ...values, token: body.rotateToken ? makeToken() : existing.token })
+            .where(eq(shareLinks.id, existing.id));
+        } else {
+          await tx.insert(shareLinks).values({
+            id: makeId('link'),
+            documentId: doc.id,
+            token: makeToken(),
+            createdBy: user.id,
+            ...values,
+          });
+        }
+        await tx.insert(auditLogs).values({
+          id: makeId('audit'),
+          actorId: user.id,
+          action: 'share.public_update',
+          targetType: 'document',
+          targetId: doc.id,
+          details: {
+            publicEnabled: body.publicEnabled,
+            showAuthor: body.showAuthor,
+            allowIndexing: body.allowIndexing,
+            expiresAt: body.expiresAt,
+            rotateToken: body.rotateToken,
+          },
         });
       }
-      await writeAudit({
-        actorId: user.id,
-        action: 'share.public_update',
-        targetType: 'document',
-        targetId: doc.id,
-        details: {
-          publicEnabled: body.publicEnabled,
-          showAuthor: body.showAuthor,
-          allowIndexing: body.allowIndexing,
-          expiresAt: body.expiresAt,
-          rotateToken: body.rotateToken,
-        },
-      });
-    }
 
-    if (body.members) {
-      for (const item of body.members) {
+      for (const item of memberUpdates) {
         const parsed = SetDocumentMemberRoleSchema.parse(item);
-        await db
+        await tx
           .delete(documentMembers)
           .where(
             and(
@@ -487,13 +507,14 @@ export const documentsRouter = new Hono<AppEnv>()
             ),
           );
         if (parsed.role) {
-          await db.insert(documentMembers).values({
+          await tx.insert(documentMembers).values({
             documentId: doc.id,
             memberId: parsed.memberId,
             role: parsed.role,
           });
         }
-        await writeAudit({
+        await tx.insert(auditLogs).values({
+          id: makeId('audit'),
           actorId: user.id,
           action: 'share.member_update',
           targetType: 'document',
@@ -501,7 +522,7 @@ export const documentsRouter = new Hono<AppEnv>()
           details: { memberId: parsed.memberId, role: parsed.role },
         });
       }
-    }
+    });
 
     return c.json({ ok: true });
   })
@@ -511,24 +532,33 @@ export const documentsRouter = new Hono<AppEnv>()
     const memberId = c.req.param('memberId');
     const body = SetDocumentMemberRoleSchema.parse({ ...(await c.req.json()), memberId });
 
-    await db
-      .delete(documentMembers)
-      .where(
-        and(eq(documentMembers.documentId, doc.id), eq(documentMembers.memberId, body.memberId)),
-      );
-    if (body.role) {
-      await db.insert(documentMembers).values({
-        documentId: doc.id,
-        memberId: body.memberId,
-        role: body.role,
+    const [member] = await db
+      .select({ id: members.id })
+      .from(members)
+      .where(eq(members.id, body.memberId));
+    if (!member) throw notFound('Member not found.');
+
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(documentMembers)
+        .where(
+          and(eq(documentMembers.documentId, doc.id), eq(documentMembers.memberId, body.memberId)),
+        );
+      if (body.role) {
+        await tx.insert(documentMembers).values({
+          documentId: doc.id,
+          memberId: body.memberId,
+          role: body.role,
+        });
+      }
+      await tx.insert(auditLogs).values({
+        id: makeId('audit'),
+        actorId: user.id,
+        action: 'document.member_update',
+        targetType: 'document',
+        targetId: doc.id,
+        details: { memberId: body.memberId, role: body.role },
       });
-    }
-    await writeAudit({
-      actorId: user.id,
-      action: 'document.member_update',
-      targetType: 'document',
-      targetId: doc.id,
-      details: { memberId: body.memberId, role: body.role },
     });
     return c.json({ ok: true });
   });

@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { canRead, UserMenu } from './auth';
 import type { Loose } from './loose-types';
+import { spaceTreeDotClass } from './theme-tokens';
 
 // Icons (SF-style: hairlines, rounded caps)
 type IconProps = React.SVGProps<SVGSVGElement>;
@@ -630,16 +631,7 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
         {spaces.map((space: Loose, sIdx: number) => {
           const open = expanded[space.id];
           const activeSpace = ctx.spaceId === space.id && !ctx.docId;
-          const dotCls =
-            space.accent === 'moss'
-              ? 'green'
-              : space.accent === 'slate'
-                ? ''
-                : space.accent === 'plum'
-                  ? 'purple'
-                  : space.accent === 'accent'
-                    ? 'orange'
-                    : '';
+          const dotCls = spaceTreeDotClass(space.accent);
           return (
             <div key={space.id}>
               <AnimatedItem index={sIdx}>

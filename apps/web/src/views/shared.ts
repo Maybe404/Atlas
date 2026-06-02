@@ -1,1 +1,1 @@
-export { accentDot, dotClass } from '../theme-tokens';
+export { accentDot, dotClass, spaceTreeDotClass } from '../theme-tokens';

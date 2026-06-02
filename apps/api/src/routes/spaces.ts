@@ -32,6 +32,12 @@ type User = typeof members.$inferSelect;
 type SpaceRow = typeof spaces.$inferSelect;
 type DocumentRow = typeof documents.$inferSelect;
 
+async function requireSpaceById(id: string) {
+  const [space] = await db.select().from(spaces).where(eq(spaces.id, id));
+  if (!space) throw notFound();
+  return space;
+}
+
 function toDoc(doc: DocumentRow, author?: User | null, options: { canRead?: boolean } = {}) {
   return {
     id: doc.id,
@@ -132,8 +138,7 @@ export const spacesRouter = new Hono<AppEnv>()
   .get('/:id', async (c) => {
     const user = c.get('user');
     const id = c.req.param('id');
-    const [sp] = await db.select().from(spaces).where(eq(spaces.id, id));
-    if (!sp) throw notFound();
+    const sp = await requireSpaceById(id);
     const lookup = await loadPermissionLookup(user);
     const result = await spaceWithChildren(user, sp, lookup);
     if (!result.role && result.children.length === 0) throw notFound();
@@ -184,6 +189,7 @@ export const spacesRouter = new Hono<AppEnv>()
     const user = requireUser(c.get('user'));
     const id = c.req.param('id');
     if (!isAdmin(user)) throw forbidden('Only workspace admins can delete spaces.');
+    await requireSpaceById(id);
     await requireSpaceAccess(user, id);
     await db.delete(spaces).where(eq(spaces.id, id));
     await writeAudit({
@@ -197,6 +203,7 @@ export const spacesRouter = new Hono<AppEnv>()
   .get('/:id/members', async (c) => {
     const user = requireUser(c.get('user'));
     const spaceId = c.req.param('id');
+    await requireSpaceById(spaceId);
     await requireSpaceAccess(user, spaceId);
 
     const rows = await db
@@ -217,6 +224,7 @@ export const spacesRouter = new Hono<AppEnv>()
     if (!isAdmin(user)) throw forbidden('Only workspace admins can change space permissions.');
 
     const spaceId = c.req.param('id');
+    await requireSpaceById(spaceId);
     await requireSpaceAccess(user, spaceId);
     const body = BatchSetSpaceMemberRolesSchema.parse(await c.req.json());
     const updates = [...new Map(body.updates.map((item) => [item.memberId, item])).values()];
@@ -263,22 +271,31 @@ export const spacesRouter = new Hono<AppEnv>()
 
     const spaceId = c.req.param('id');
     const memberId = c.req.param('memberId');
+    await requireSpaceById(spaceId);
     await requireSpaceAccess(user, spaceId);
     const body = SetSpaceMemberRoleSchema.parse({ ...(await c.req.json()), memberId });
+    const [member] = await db
+      .select({ id: members.id })
+      .from(members)
+      .where(eq(members.id, body.memberId));
+    if (!member) throw notFound('Member not found.');
 
-    await db
-      .delete(spaceMembers)
-      .where(and(eq(spaceMembers.spaceId, spaceId), eq(spaceMembers.memberId, body.memberId)));
+    await db.transaction(async (tx) => {
+      await tx
+        .delete(spaceMembers)
+        .where(and(eq(spaceMembers.spaceId, spaceId), eq(spaceMembers.memberId, body.memberId)));
 
-    if (body.role) {
-      await db.insert(spaceMembers).values({ spaceId, memberId: body.memberId, role: body.role });
-    }
-    await writeAudit({
-      actorId: user.id,
-      action: 'space.member_update',
-      targetType: 'space',
-      targetId: spaceId,
-      details: { memberId: body.memberId, role: body.role },
+      if (body.role) {
+        await tx.insert(spaceMembers).values({ spaceId, memberId: body.memberId, role: body.role });
+      }
+      await tx.insert(auditLogs).values({
+        id: makeId('audit'),
+        actorId: user.id,
+        action: 'space.member_update',
+        targetType: 'space',
+        targetId: spaceId,
+        details: { memberId: body.memberId, role: body.role },
+      });
     });
 
     return c.json({ ok: true });
