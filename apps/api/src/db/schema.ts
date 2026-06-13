@@ -51,6 +51,7 @@ export const documents = sqliteTable(
     desc: text('desc').notNull().default(''),
     html: text('html').notNull().default(''),
     visibility: text('visibility', { enum: ['public', 'invite', 'private'] }).notNull(),
+    format: text('format', { enum: ['html', 'markdown'] }).notNull().default('html'),
     dot: text('dot').notNull().default('slate'),
     tags: text('tags', { mode: 'json' }).$type<string[]>().notNull().default([]),
     updated: text('updated').notNull().default(sql`(current_timestamp)`),

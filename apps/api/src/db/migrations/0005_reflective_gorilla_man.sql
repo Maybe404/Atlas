@@ -1,0 +1,1 @@
+ALTER TABLE `documents` ADD `format` text DEFAULT 'html' NOT NULL;
