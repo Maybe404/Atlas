@@ -47,6 +47,7 @@ function toDoc(doc: DocumentRow, author?: User | null, options: { canRead?: bool
     authorName: author?.name,
     updated: displayDate(doc.updated),
     visibility: doc.visibility,
+    format: doc.format,
     dot: doc.dot,
     tags: doc.tags,
     deletedAt: doc.deletedAt,
