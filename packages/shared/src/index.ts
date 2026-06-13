@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 export { extractHtmlMetadata } from './html-metadata';
+export { extractMarkdownMetadata } from './markdown-metadata';
 
 // ── Domain ─────────────────────────────────────────────────────────────────
 export const RoleSchema = z.enum(['admin', 'editor', 'viewer']);
