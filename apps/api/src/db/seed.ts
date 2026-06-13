@@ -95,7 +95,8 @@ for (const sp of ATLAS_DATA.tree) {
       visibility: doc.visibility,
       dot: doc.dot as string,
       tags: doc.tags ?? [],
-      html: sampleHtml(doc),
+      format: doc.format ?? 'html',
+      html: doc.format === 'markdown' ? (doc.content ?? '') : sampleHtml(doc),
       updated: doc.updated,
     });
   }
