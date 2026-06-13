@@ -1,10 +1,11 @@
-import { extractHtmlMetadata } from '@atlas/shared';
+import { extractHtmlMetadata, extractMarkdownMetadata } from '@atlas/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatedScrollList, I } from '../chrome';
 import { visibilityLabel } from '../labels';
 import type { Loose } from '../loose-types';
 import { documentReaderUrl } from '../url-utils';
 import { HTMLEditorDialog } from './html-editor-dialog';
+import { MarkdownEditorDialog } from './markdown-editor-dialog';
 import { dotClass } from './shared';
 import { SpaceChipPicker } from './space-chip-picker';
 
@@ -41,6 +42,7 @@ export function AdminDocsView({
   const [renameVal, setRenameVal] = useState('');
   const [menuOpenId, setMenuOpenId] = useState<Loose>(null);
   const [editing, setEditing] = useState<Loose>(null); // doc being edited
+  const [showNewMenu, setShowNewMenu] = useState(false);
 
   // filter state
   const [status, setStatus] = useState('all'); // all | published | draft
@@ -94,7 +96,7 @@ export function AdminDocsView({
     setMenuOpenId(null);
   };
 
-  const createNew = () => {
+  const startNew = (format: 'html' | 'markdown') => {
     const defaultSpace =
       editableSpaces.find((s: Loose) => s.id === (spaceFilter !== 'all' ? spaceFilter : 's1')) ||
       editableSpaces[0] ||
@@ -112,13 +114,19 @@ export function AdminDocsView({
       spaceName: defaultSpace?.name || '工程',
       spaceAccent: defaultSpace?.accent || 'accent',
       html: '',
+      format,
       isNew: true,
     });
+    setShowNewMenu(false);
   };
 
-  const saveDoc = (html: Loose, patch: Loose = {}) => {
+  const saveDoc = (content: Loose, patch: Loose = {}) => {
     if (!editing) return;
-    const metadata = extractHtmlMetadata(html, { fallbackTitle: patch.title || editing.title });
+    const format = patch.format || editing.format || 'html';
+    const metadata =
+      format === 'markdown'
+        ? extractMarkdownMetadata(content, { fallbackTitle: patch.title || editing.title })
+        : extractHtmlMetadata(content, { fallbackTitle: patch.title || editing.title });
     const nextTitle = patch.title || metadata.title || editing.title || '未命名文章';
     const nextDesc = patch.desc || metadata.summary || editing.desc || '';
     if (editing.isNew) {
@@ -127,17 +135,24 @@ export function AdminDocsView({
         title: nextTitle,
         desc: nextDesc,
         visibility: patch.visibility || editing.visibility || 'private',
-        html,
+        format,
+        html: content,
         tags: editing.tags || ['draft'],
         dot: editing.dot || 'slate',
       });
     } else {
-      mutations.updateDocument(editing.id, { desc: nextDesc, ...patch, title: nextTitle, html });
+      const { spaceName: _sn, spaceAccent: _sa, ...rest } = patch;
+      mutations.updateDocument(editing.id, {
+        desc: nextDesc,
+        ...rest,
+        title: nextTitle,
+        html: content,
+      });
     }
     setEditing(null);
   };
 
-  // close popover when clicking elsewhere
+  // close row-menu popover when clicking elsewhere
   useEffect(() => {
     if (!menuOpenId) return;
     const onDocClick = (e: Loose) => {
@@ -147,6 +162,17 @@ export function AdminDocsView({
     document.addEventListener('mousedown', onDocClick);
     return () => document.removeEventListener('mousedown', onDocClick);
   }, [menuOpenId]);
+
+  // close new-doc menu when clicking elsewhere
+  useEffect(() => {
+    if (!showNewMenu) return;
+    const onDocClick = (e: Loose) => {
+      if (e.target.closest?.('.space-picker-pop')) return;
+      setShowNewMenu(false);
+    };
+    document.addEventListener('mousedown', onDocClick);
+    return () => document.removeEventListener('mousedown', onDocClick);
+  }, [showNewMenu]);
 
   return (
     <div className="main-card">
@@ -169,10 +195,25 @@ export function AdminDocsView({
                 <_I.upload width="13" height="13" />
                 <span>上传 HTML</span>
               </button>
-              <button className="btn primary" onClick={createNew}>
-                <_I.plus />
-                <span>新建文章</span>
-              </button>
+              <div style={{ position: 'relative' }}>
+                <button className="btn primary" onClick={() => setShowNewMenu((o) => !o)}>
+                  <_I.plus />
+                  <span>新建文章</span>
+                </button>
+                {showNewMenu && (
+                  <div
+                    className="space-picker-pop"
+                    style={{ top: 'calc(100% + 4px)', right: 0, left: 'auto' }}
+                  >
+                    <div className="space-picker-row" onClick={() => startNew('markdown')}>
+                      <span>新建 Markdown</span>
+                    </div>
+                    <div className="space-picker-row" onClick={() => startNew('html')}>
+                      <span>新建 HTML</span>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -440,14 +481,22 @@ export function AdminDocsView({
           })}
         </AnimatedScrollList>
       </div>
-      {editing && (
-        <HTMLEditorDialog
-          doc={editing}
-          spaces={spaces}
-          onClose={() => setEditing(null)}
-          onSave={(html: Loose, patch: Loose) => saveDoc(html, patch)}
-        />
-      )}
+      {editing &&
+        (editing.format === 'markdown' ? (
+          <MarkdownEditorDialog
+            doc={editing}
+            spaces={spaces}
+            onClose={() => setEditing(null)}
+            onSave={(content: Loose, patch: Loose) => saveDoc(content, patch)}
+          />
+        ) : (
+          <HTMLEditorDialog
+            doc={editing}
+            spaces={spaces}
+            onClose={() => setEditing(null)}
+            onSave={(html: Loose, patch: Loose) => saveDoc(html, patch)}
+          />
+        ))}
     </div>
   );
 }
