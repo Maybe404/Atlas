@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useRef } from 'react';
 import { apiGet } from '../api-client';
 import type { Loose } from '../loose-types';
+import { MarkdownReader } from './markdown-reader';
 import { dotClass } from './shared';
 
 export function PublicDocumentView({ token, onChromeScroll }: Loose) {
@@ -49,14 +50,18 @@ export function PublicDocumentView({ token, onChromeScroll }: Loose) {
         </span>
       </div>
       <div className="reader-iframe-wrap" onScroll={onChromeScroll}>
-        <iframe
-          ref={iframeRef}
-          className="reader-iframe"
-          srcDoc={doc.html || '<!doctype html><html><body><p>暂无内容</p></body></html>'}
-          title={doc.title}
-          sandbox="allow-scripts allow-forms allow-popups"
-          onLoad={bindIframeScroll}
-        />
+        {doc.format === 'markdown' ? (
+          <MarkdownReader content={doc.html || ''} onScroll={onChromeScroll} />
+        ) : (
+          <iframe
+            ref={iframeRef}
+            className="reader-iframe"
+            srcDoc={doc.html || '<!doctype html><html><body><p>暂无内容</p></body></html>'}
+            title={doc.title}
+            sandbox="allow-scripts allow-forms allow-popups"
+            onLoad={bindIframeScroll}
+          />
+        )}
       </div>
     </div>
   );
