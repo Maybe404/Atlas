@@ -9,6 +9,9 @@ export type Role = z.infer<typeof RoleSchema>;
 export const VisibilitySchema = z.enum(['public', 'invite', 'private']);
 export type Visibility = z.infer<typeof VisibilitySchema>;
 
+export const FormatSchema = z.enum(['html', 'markdown']);
+export type Format = z.infer<typeof FormatSchema>;
+
 export const AccentSchema = z.enum(['accent', 'moss', 'slate', 'plum', 'ink', 'rose']);
 export type Accent = z.infer<typeof AccentSchema>;
 
@@ -33,6 +36,7 @@ export const DocumentSchema = z.object({
   authorName: z.string().optional(),
   updated: z.string(),
   visibility: VisibilitySchema,
+  format: FormatSchema.default('html'),
   dot: AccentSchema.or(z.string()),
   tags: z.array(z.string()).default([]),
   html: z.string().optional(),
@@ -89,6 +93,7 @@ export const CreateDocumentSchema = z.object({
   title: z.string().trim().min(1).max(200),
   desc: z.string().default(''),
   visibility: VisibilitySchema,
+  format: FormatSchema.default('html'),
   html: z.string().default(''),
   dot: AccentSchema.or(z.string()).default('slate'),
   tags: z.array(z.string()).default([]),
