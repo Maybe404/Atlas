@@ -32,6 +32,7 @@ export function extractMarkdownMetadata(
   const fallbackTitle = normalizeFallbackTitle(options.fallbackTitle);
   const lines = md.replace(/\r\n/g, '\n').split('\n');
 
+  // Only ATX headings (# …) and setext headings (underline with = or -) are recognised.
   let headingTitle = '';
   let inFence = false;
   const paragraphLines: string[] = [];
@@ -46,9 +47,26 @@ export function extractMarkdownMetadata(
     }
     if (inFence) continue;
 
+    // ATX heading: # … through ###### …
     const atx = line.match(/^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/);
     if (atx && !headingTitle) {
       headingTitle = atx[1]?.trim() ?? '';
+      continue;
+    }
+
+    // Thematic break: 3+ of the same `-`, `*`, or `_`, optionally space-separated, nothing else.
+    const isThematicBreak = /^\s{0,3}([-*_])(?:\s*\1){2,}\s*$/.test(line);
+    if (isThematicBreak) {
+      if (paragraphLines.length && !summary) summary = stripInline(paragraphLines.join(' '));
+      // Reset accumulated lines so a setext heading immediately before a break isn't misread.
+      paragraphLines.length = 0;
+      continue;
+    }
+
+    // Setext heading underline: line of `=` or `-` directly after a single accumulated prose line.
+    if (!headingTitle && paragraphLines.length === 1 && /^\s{0,3}(=+|-+)\s*$/.test(line)) {
+      headingTitle = paragraphLines[0] ?? '';
+      paragraphLines.length = 0;
       continue;
     }
 
@@ -57,7 +75,8 @@ export function extractMarkdownMetadata(
         if (paragraphLines.length) summary = stripInline(paragraphLines.join(' '));
         continue;
       }
-      if (/^\s{0,3}(#{1,6}\s|[-*+]\s|\d+\.\s|>|\||---|\*\*\*)/.test(line)) {
+      // Block-level markers that are not paragraph text (headings, lists, blockquotes, tables).
+      if (/^\s{0,3}(#{1,6}\s|[-*+]\s|\d+\.\s|>|\|)/.test(line)) {
         if (paragraphLines.length) summary = stripInline(paragraphLines.join(' '));
         continue;
       }

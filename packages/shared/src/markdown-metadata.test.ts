@@ -21,4 +21,29 @@ describe('extractMarkdownMetadata', () => {
     const { summary } = extractMarkdownMetadata(md, {});
     expect(summary).toBe('真正的摘要段落。');
   });
+
+  test('***bold italic*** paragraph is captured as summary, not dropped', () => {
+    const md = '***重点*** 提示信息';
+    const { summary } = extractMarkdownMetadata(md, {});
+    expect(summary).toBe('重点 提示信息');
+  });
+
+  test('setext heading sets title and following paragraph becomes summary', () => {
+    const md = '部署清单\n========\n\n正文摘要。';
+    const { title, summary } = extractMarkdownMetadata(md, {});
+    expect(title).toBe('部署清单');
+    expect(summary).toBe('正文摘要。');
+  });
+
+  test('empty input yields empty title and summary', () => {
+    const { title, summary } = extractMarkdownMetadata('', {});
+    expect(title).toBe('');
+    expect(summary).toBe('');
+  });
+
+  test('thematic break line is skipped, real paragraph below becomes summary', () => {
+    const md = '***\n\n真正的段落。';
+    const { summary } = extractMarkdownMetadata(md, {});
+    expect(summary).toBe('真正的段落。');
+  });
 });
