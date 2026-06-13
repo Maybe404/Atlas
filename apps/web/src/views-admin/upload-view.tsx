@@ -1,8 +1,9 @@
-import { extractHtmlMetadata } from '@atlas/shared';
+import { extractHtmlMetadata, extractMarkdownMetadata } from '@atlas/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { I } from '../chrome';
 import { visibilityLabel } from '../labels';
 import type { Loose } from '../loose-types';
+import { MarkdownReader } from '../views/markdown-reader';
 
 const _I2 = I;
 
@@ -17,6 +18,7 @@ export function AdminUploadView({
   const [files, setFiles] = useState<Loose[]>([]);
   const [selectedFile, setSelectedFile] = useState<Loose>(null);
   const [selectedHtml, setSelectedHtml] = useState('');
+  const [selectedFormat, setSelectedFormat] = useState('html');
   const [over, setOver] = useState(false);
   // Uploads require space-editor access; only offer spaces the user can actually write to.
   const editableSpaces = spaces.filter((s: Loose) => s.role === 'editor');
@@ -38,16 +40,21 @@ export function AdminUploadView({
 
   const acceptFiles = useCallback((incoming: Loose) => {
     const file =
-      Array.from(incoming || []).find((f: Loose) => /\.html?$/i.test(f.name)) || incoming?.[0];
+      Array.from(incoming || []).find((f: Loose) => /\.(html?|md|markdown)$/i.test(f.name)) ||
+      incoming?.[0];
     if (!file) return;
+    const isMd = /\.(md|markdown)$/i.test(file.name);
     setSelectedFile(file);
-    file.text().then((html: Loose) => {
-      const metadata = extractHtmlMetadata(html, { fallbackTitle: file.name });
-      setSelectedHtml(html);
+    setSelectedFormat(isMd ? 'markdown' : 'html');
+    file.text().then((text: Loose) => {
+      const meta = isMd
+        ? extractMarkdownMetadata(text, { fallbackTitle: file.name })
+        : extractHtmlMetadata(text, { fallbackTitle: file.name });
+      setSelectedHtml(text);
       setMeta((m: Loose) => ({
         ...m,
-        title: metadata.title || file.name.replace(/\.html?$/i, ''),
-        desc: metadata.summary || '',
+        title: meta.title || file.name.replace(/\.(md|markdown|html?)$/i, ''),
+        desc: meta.summary || '',
       }));
     });
     const ns = [
@@ -84,10 +91,10 @@ export function AdminUploadView({
             >
               团队后台 · 上传
             </div>
-            <h1>上传 HTML 文档</h1>
+            <h1>上传文档（HTML / Markdown）</h1>
             <p className="sub">
-              Atlas 不编辑
-              HTML——它只负责隔离展示外部生成的文档。上传后会保存原始文件，并自动识别标题与摘要。
+              Atlas
+              不编辑原始内容——它只负责隔离展示外部生成的文档。上传后会保存原始文件，并自动识别标题与摘要。
             </p>
 
             <div className="steps">
@@ -118,13 +125,13 @@ export function AdminUploadView({
                 >
                   <input
                     type="file"
-                    accept=".html,.htm,text/html"
+                    accept=".html,.htm,.md,.markdown,text/html,text/markdown"
                     style={{ display: 'none' }}
                     id="atlas-upload-file"
                     onChange={(e: Loose) => acceptFiles(e.target.files)}
                   />
-                  <div className="big">把 HTML 拖到这里</div>
-                  <div className="small">支持单个 .html 文件</div>
+                  <div className="big">把 HTML / Markdown 拖到这里</div>
+                  <div className="small">支持 .html 或 .md 文件</div>
                   <div className="meta">最多 8 MB · sandbox 隔离展示</div>
                   <label
                     className="btn secondary"
@@ -318,12 +325,21 @@ export function AdminUploadView({
                     >
                       {meta.desc}
                     </div>
-                    <iframe
-                      className="upload-html-preview"
-                      srcDoc={selectedHtml || '<!doctype html><html><body></body></html>'}
-                      title="HTML 预览"
-                      sandbox="allow-scripts allow-forms allow-popups"
-                    />
+                    {selectedFormat === 'markdown' ? (
+                      <div
+                        className="upload-html-preview"
+                        style={{ overflow: 'auto', background: 'var(--canvas)' }}
+                      >
+                        <MarkdownReader content={selectedHtml} />
+                      </div>
+                    ) : (
+                      <iframe
+                        className="upload-html-preview"
+                        srcDoc={selectedHtml || '<!doctype html><html><body></body></html>'}
+                        title="HTML 预览"
+                        sandbox="allow-scripts allow-forms allow-popups"
+                      />
+                    )}
                   </div>
                 </div>
 
@@ -405,6 +421,7 @@ export function AdminUploadView({
                         formData.set('desc', meta.desc);
                         formData.set('spaceId', meta.spaceId);
                         formData.set('visibility', meta.visibility);
+                        formData.set('format', selectedFormat);
                         mutations.uploadDocument(formData, {
                           onSuccess: () => {
                             setStep(3);
