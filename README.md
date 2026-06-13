@@ -161,8 +161,8 @@ Seed 后示例账号如下，所有账号使用同一个演示密码。**这些�
 | `GET` | `/spaces` | 当前用户可读空间及其文档 |
 | `POST` | `/spaces` | 管理员创建空间 |
 | `GET` | `/spaces/:id` | 读取单个空间及其可见文档 |
-| `PATCH` | `/spaces/:id` | 空间 editor/admin 更新空间 |
-| `DELETE` | `/spaces/:id` | 管理员删除空间 |
+| `PATCH` | `/spaces/:id` | 管理员更新空间元数据 |
+| `DELETE` | `/spaces/:id` | 管理员删除空间（需先清空其下文档） |
 | `GET` | `/spaces/:id/members` | 查看空间成员角色 |
 | `PUT` | `/spaces/:id/members` | 管理员批量设置空间 viewer/editor/null |
 | `PUT` | `/spaces/:id/members/:memberId` | 管理员设置空间 viewer/editor/null |
@@ -250,7 +250,7 @@ bun run --filter @atlas/api db:seed
 2. **生产级鉴权体验** —— 邮箱验证、邀请成员、找回密码、SSO/OIDC、session 管理页面和登录 UI。
 3. **HTML 安全加固** —— CSP、资源代理、下载/图片白名单、恶意样本测试集、iframe sandbox 权限复核。
 4. **审计与分享 UI 完整化** —— 审计日志筛选/分页、公开访问统计图、noindex meta 落到公开页面 HTML。
-5. **回收站策略细化** —— 定时任务调度、永久删除确认 UI、空间删除时的文档迁移或阻止策略。
+5. **回收站策略细化** —— 定时任务调度、永久删除确认 UI；空间删除已改为「非空则阻止」，后续可补充文档迁移到指定空间的选项。
 6. **继续收紧前端类型边界** —— 减少 `Loose` 使用，补齐 props/state 类型，并把前端原型组件拆出更稳定的数据边界。
 
 ## 常见问题

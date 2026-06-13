@@ -99,7 +99,7 @@ export function AdminSettingsView({
               onEditSpace={onEditSpace}
               onNewSpace={onNewSpace}
               onDeleteSpace={(id: Loose) => {
-                if (confirm('确认删除该空间？其下文档会一起删除。')) {
+                if (confirm('确认删除该空间？空间需先清空其下文档才能删除。')) {
                   mutations.deleteSpace(id);
                 }
               }}

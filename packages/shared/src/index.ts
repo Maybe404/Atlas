@@ -77,7 +77,7 @@ export type Space = z.infer<typeof SpaceSchema>;
 
 // ── API request/response shapes ────────────────────────────────────────────
 export const CreateSpaceSchema = z.object({
-  name: z.string().min(1).max(64),
+  name: z.string().trim().min(1).max(64),
   accent: AccentSchema,
   personal: z.boolean().optional(),
 });
@@ -86,7 +86,7 @@ export const UpdateSpaceSchema = CreateSpaceSchema.partial();
 
 export const CreateDocumentSchema = z.object({
   spaceId: z.string(),
-  title: z.string().min(1).max(200),
+  title: z.string().trim().min(1).max(200),
   desc: z.string().default(''),
   visibility: VisibilitySchema,
   html: z.string().default(''),
@@ -97,19 +97,19 @@ export const CreateDocumentSchema = z.object({
 export const UpdateDocumentSchema = CreateDocumentSchema.partial();
 
 export const LoginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8).max(128).optional(),
 });
 
 export const CreateMemberSchema = z.object({
-  name: z.string().min(1).max(80),
-  email: z.string().email(),
+  name: z.string().trim().min(1).max(80),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8).max(128),
   role: RoleSchema.default('viewer'),
 });
 
 export const UpdateMemberSchema = z.object({
-  name: z.string().min(1).max(80).optional(),
+  name: z.string().trim().min(1).max(80).optional(),
   role: RoleSchema.optional(),
   password: z.string().min(8).max(128).optional(),
 });

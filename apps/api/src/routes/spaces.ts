@@ -4,15 +4,15 @@ import {
   SetSpaceMemberRoleSchema,
   UpdateSpaceSchema,
 } from '@atlas/shared';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, count, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
-import { auditLogs, type documents, members, spaceMembers, spaces } from '../db/schema';
+import { auditLogs, documents, members, spaceMembers, spaces } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
 import { displayDate } from '../lib/dates';
-import { forbidden, notFound } from '../lib/http-error';
+import { badRequest, conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId } from '../lib/id';
 import {
   canEditDocumentWithLookup,
@@ -24,7 +24,6 @@ import {
   loadPermissionLookup,
   type PermissionLookup,
   requireSpaceAccess,
-  requireSpaceEditor,
 } from '../lib/permissions';
 import { toPublicMember } from '../lib/serializers';
 
@@ -170,9 +169,11 @@ export const spacesRouter = new Hono<AppEnv>()
   .patch('/:id', async (c) => {
     const user = requireUser(c.get('user'));
     const id = c.req.param('id');
-    await requireSpaceEditor(user, id);
+    if (!isAdmin(user)) throw forbidden('Only workspace admins can update spaces.');
+    await requireSpaceById(id);
 
     const body = UpdateSpaceSchema.parse(await c.req.json());
+    if (Object.keys(body).length === 0) throw badRequest('No fields to update.');
     const patch: Partial<typeof spaces.$inferInsert> = { ...body };
     if (body.name) patch.mark = body.name.slice(0, 1);
     await db.update(spaces).set(patch).where(eq(spaces.id, id));
@@ -191,6 +192,20 @@ export const spacesRouter = new Hono<AppEnv>()
     if (!isAdmin(user)) throw forbidden('Only workspace admins can delete spaces.');
     await requireSpaceById(id);
     await requireSpaceAccess(user, id);
+
+    // Deleting a space cascades to a hard delete of every document it holds (bypassing trash),
+    // so refuse while the space still contains live documents.
+    const liveDocumentRows = await db
+      .select({ value: count() })
+      .from(documents)
+      .where(and(eq(documents.spaceId, id), isNull(documents.deletedAt)));
+    const liveDocuments = liveDocumentRows[0]?.value ?? 0;
+    if (liveDocuments > 0) {
+      throw conflict(
+        `This space still contains ${liveDocuments} document(s). Move or delete them before removing the space.`,
+      );
+    }
+
     await db.delete(spaces).where(eq(spaces.id, id));
     await writeAudit({
       actorId: user.id,

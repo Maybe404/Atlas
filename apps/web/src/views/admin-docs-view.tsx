@@ -22,15 +22,21 @@ export function AdminDocsView({
   const docs = useMemo(
     () =>
       spaces.flatMap((s: Loose) =>
-        (s.children || []).map((c: Loose) => ({
-          ...c,
-          spaceId: s.id,
-          spaceName: s.name,
-          spaceAccent: s.accent,
-        })),
+        (s.children || [])
+          // Locked entries are documents the current user cannot even read — keep them out of the
+          // management list entirely.
+          .filter((c: Loose) => !c.locked)
+          .map((c: Loose) => ({
+            ...c,
+            spaceId: s.id,
+            spaceName: s.name,
+            spaceAccent: s.accent,
+          })),
       ),
     [spaces],
   );
+  const editableSpaces = useMemo(() => spaces.filter((s: Loose) => s.role === 'editor'), [spaces]);
+  const canCreate = editableSpaces.length > 0;
   const [renaming, setRenaming] = useState<Loose>(null);
   const [renameVal, setRenameVal] = useState('');
   const [menuOpenId, setMenuOpenId] = useState<Loose>(null);
@@ -90,7 +96,8 @@ export function AdminDocsView({
 
   const createNew = () => {
     const defaultSpace =
-      spaceOptions.find((s: Loose) => s.id === (spaceFilter !== 'all' ? spaceFilter : 's1')) ||
+      editableSpaces.find((s: Loose) => s.id === (spaceFilter !== 'all' ? spaceFilter : 's1')) ||
+      editableSpaces[0] ||
       spaceOptions[0];
     setEditing({
       id: 'new',
@@ -153,16 +160,21 @@ export function AdminDocsView({
               文章：直接编辑内容、重命名、调整可见性、删除。点击文章打开编辑器，右侧三点菜单提供更多操作。
             </p>
           </div>
-          <div className="right">
-            <button className="btn secondary" onClick={() => onNavigate({ view: 'admin-upload' })}>
-              <_I.upload width="13" height="13" />
-              <span>上传 HTML</span>
-            </button>
-            <button className="btn primary" onClick={createNew}>
-              <_I.plus />
-              <span>新建文章</span>
-            </button>
-          </div>
+          {canCreate && (
+            <div className="right">
+              <button
+                className="btn secondary"
+                onClick={() => onNavigate({ view: 'admin-upload' })}
+              >
+                <_I.upload width="13" height="13" />
+                <span>上传 HTML</span>
+              </button>
+              <button className="btn primary" onClick={createNew}>
+                <_I.plus />
+                <span>新建文章</span>
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="filter-bar">
@@ -248,7 +260,8 @@ export function AdminDocsView({
                   if (renaming === doc.id) return;
                   if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
                   if (e.target.closest('.row-menu')) return;
-                  openEditor(doc);
+                  if (doc.canEdit) openEditor(doc);
+                  else onNavigate({ view: 'reader', spaceId: doc.spaceId, docId: doc.id });
                 }}
               >
                 <div className="doc-title">
@@ -271,7 +284,7 @@ export function AdminDocsView({
                       <h4
                         onDoubleClick={(e: Loose) => {
                           e.stopPropagation();
-                          startRename(doc);
+                          if (doc.canEdit) startRename(doc);
                         }}
                       >
                         {doc.title}
@@ -282,13 +295,17 @@ export function AdminDocsView({
                     </div>
                   </div>
                 </div>
-                <SpaceChipPicker
-                  doc={doc}
-                  spaces={spaces}
-                  onPick={(s: Loose) => {
-                    mutations.updateDocument(doc.id, { spaceId: s.id });
-                  }}
-                />
+                {doc.canEdit ? (
+                  <SpaceChipPicker
+                    doc={doc}
+                    spaces={spaces}
+                    onPick={(s: Loose) => {
+                      mutations.updateDocument(doc.id, { spaceId: s.id });
+                    }}
+                  />
+                ) : (
+                  <span className="vis-chip">{doc.spaceName}</span>
+                )}
                 <div className="author">
                   <span className="avatar small">{author?.initials}</span>
                   <span>{author?.name}</span>
@@ -298,23 +315,25 @@ export function AdminDocsView({
                   {visibilityLabel(doc.visibility)}
                 </span>
                 <div className="row-actions" style={{ position: 'relative' }}>
-                  <button
-                    className="icon-btn"
-                    title="编辑内容"
-                    onClick={(e: Loose) => {
-                      e.stopPropagation();
-                      openEditor(doc);
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                      <path
-                        d="m9 2.5 2.5 2.5L4 12.5H1.5V10z"
-                        stroke="currentColor"
-                        strokeWidth="1.3"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                  </button>
+                  {doc.canEdit && (
+                    <button
+                      className="icon-btn"
+                      title="编辑内容"
+                      onClick={(e: Loose) => {
+                        e.stopPropagation();
+                        openEditor(doc);
+                      }}
+                    >
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <path
+                          d="m9 2.5 2.5 2.5L4 12.5H1.5V10z"
+                          stroke="currentColor"
+                          strokeWidth="1.3"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+                  )}
                   <button
                     className="icon-btn"
                     title="预览"
@@ -346,49 +365,53 @@ export function AdminDocsView({
                   </button>
                   {menuOpenId === doc.id && (
                     <div className="row-menu" onClick={(e: Loose) => e.stopPropagation()}>
-                      <button
-                        className="row-menu-item"
-                        onClick={() => {
-                          openEditor(doc);
-                        }}
-                      >
-                        <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-                          <path
-                            d="m9 2.5 2.5 2.5L4 12.5H1.5V10z"
-                            stroke="currentColor"
-                            strokeWidth="1.3"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                        <span>编辑内容</span>
-                      </button>
-                      <button
-                        className="row-menu-item"
-                        onClick={() => {
-                          startRename(doc);
-                          setMenuOpenId(null);
-                        }}
-                      >
-                        <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-                          <path
-                            d="M2 12h10M3.5 8.5h2l5-5-2-2-5 5z"
-                            stroke="currentColor"
-                            strokeWidth="1.3"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                        <span>重命名</span>
-                      </button>
-                      <button
-                        className="row-menu-item"
-                        onClick={() => {
-                          onShare(doc.id);
-                          setMenuOpenId(null);
-                        }}
-                      >
-                        <_I.share />
-                        <span>分享</span>
-                      </button>
+                      {doc.canEdit && (
+                        <>
+                          <button
+                            className="row-menu-item"
+                            onClick={() => {
+                              openEditor(doc);
+                            }}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                              <path
+                                d="m9 2.5 2.5 2.5L4 12.5H1.5V10z"
+                                stroke="currentColor"
+                                strokeWidth="1.3"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                            <span>编辑内容</span>
+                          </button>
+                          <button
+                            className="row-menu-item"
+                            onClick={() => {
+                              startRename(doc);
+                              setMenuOpenId(null);
+                            }}
+                          >
+                            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                              <path
+                                d="M2 12h10M3.5 8.5h2l5-5-2-2-5 5z"
+                                stroke="currentColor"
+                                strokeWidth="1.3"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                            <span>重命名</span>
+                          </button>
+                          <button
+                            className="row-menu-item"
+                            onClick={() => {
+                              onShare(doc.id);
+                              setMenuOpenId(null);
+                            }}
+                          >
+                            <_I.share />
+                            <span>分享</span>
+                          </button>
+                        </>
+                      )}
                       <button
                         className="row-menu-item"
                         onClick={() => {
@@ -400,11 +423,15 @@ export function AdminDocsView({
                         <_I.link />
                         <span>复制链接</span>
                       </button>
-                      <div className="row-menu-sep"></div>
-                      <button className="row-menu-item danger" onClick={() => deleteDoc(doc)}>
-                        <_I.trash />
-                        <span>删除</span>
-                      </button>
+                      {doc.canEdit && (
+                        <>
+                          <div className="row-menu-sep"></div>
+                          <button className="row-menu-item danger" onClick={() => deleteDoc(doc)}>
+                            <_I.trash />
+                            <span>删除</span>
+                          </button>
+                        </>
+                      )}
                     </div>
                   )}
                 </div>

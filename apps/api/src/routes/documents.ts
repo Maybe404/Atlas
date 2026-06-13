@@ -232,6 +232,7 @@ export const documentsRouter = new Hono<AppEnv>()
     const user = requireUser(c.get('user'));
     const doc = await requireDocumentEditor(user, c.req.param('id'));
     const body = UpdateDocumentSchema.parse(await c.req.json());
+    if (Object.keys(body).length === 0) throw badRequest('No fields to update.');
 
     if (body.spaceId && body.spaceId !== doc.spaceId) {
       await requireSpaceEditor(user, body.spaceId);
@@ -312,6 +313,10 @@ export const documentsRouter = new Hono<AppEnv>()
     const user = requireUser(c.get('user'));
     if (!isAdmin(user)) throw forbidden('Only workspace admins can permanently delete documents.');
     const id = c.req.param('id');
+    const [doc] = await db.select().from(documents).where(eq(documents.id, id));
+    // Only documents already in the trash can be permanently removed; this is not a hard-delete
+    // shortcut for live documents.
+    if (!doc?.deletedAt) throw notFound();
     await db.delete(documents).where(eq(documents.id, id));
     await writeAudit({
       actorId: user.id,
@@ -368,6 +373,7 @@ export const documentsRouter = new Hono<AppEnv>()
 
     return c.json({
       documentId: doc.id,
+      visibility: doc.visibility,
       canEdit: true,
       canManage: true,
       public: link
@@ -428,6 +434,16 @@ export const documentsRouter = new Hono<AppEnv>()
     const memberUpdates = body.members
       ? [...new Map(body.members.map((item) => [item.memberId, item])).values()]
       : [];
+
+    // Private documents are only reachable by admins and the author, so granting a document
+    // member would create access that the permission layer never honors. Reject it instead of
+    // silently writing a no-op membership. (Removing members — role: null — stays allowed.)
+    if (doc.visibility === 'private' && memberUpdates.some((item) => item.role)) {
+      throw badRequest(
+        'Private documents cannot be shared with members. Set the document to invite-only first.',
+      );
+    }
+
     const memberIds = memberUpdates.map((item) => item.memberId);
     if (memberIds.length > 0) {
       const existingMembers = await db

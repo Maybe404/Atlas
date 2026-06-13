@@ -14,8 +14,16 @@ await import('./db/seed');
 
 const { default: server } = await import('./server');
 const { db } = await import('./db/client');
-const { auditLogs, documentMembers, documents, members, sessions, shareLinks, spaceMembers } =
-  await import('./db/schema');
+const {
+  auditLogs,
+  documentMembers,
+  documents,
+  members,
+  sessions,
+  shareLinks,
+  spaceMembers,
+  spaces,
+} = await import('./db/schema');
 
 afterAll(() => {
   rmSync(testDb, { force: true });
@@ -761,6 +769,173 @@ describe('Atlas API', () => {
     expect(purge.status).toBe(200);
     expect(await purge.json()).toEqual({ purged: 1 });
     expect((await request('/documents/d3')).status).toBe(404);
+  });
+
+  test('refuses to demote the last remaining admin', async () => {
+    const admin = await loginAs();
+    const demote = await request('/members/u1', {
+      method: 'PATCH',
+      body: JSON.stringify({ role: 'viewer' }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(demote.status).toBe(409);
+    expect((await demote.json()) as { code: string }).toMatchObject({ code: 'conflict' });
+    const [stillAdmin] = await db.select().from(members).where(eq(members.id, 'u1'));
+    expect(stillAdmin?.role).toBe('admin');
+  });
+
+  test('rejects empty PATCH bodies with 400 instead of 500', async () => {
+    const admin = await loginAs();
+    const headers = { 'content-type': 'application/json', ...admin.headers };
+
+    const member = await request('/members/u2', { method: 'PATCH', body: '{}', headers });
+    expect(member.status).toBe(400);
+    const space = await request('/spaces/s1', { method: 'PATCH', body: '{}', headers });
+    expect(space.status).toBe(400);
+    const doc = await request('/documents/d1', { method: 'PATCH', body: '{}', headers });
+    expect(doc.status).toBe(400);
+  });
+
+  test('maps malformed JSON bodies to 400', async () => {
+    const badLogin = await request('/auth/login', {
+      method: 'POST',
+      body: '{',
+      headers: { 'content-type': 'application/json' },
+    });
+    expect(badLogin.status).toBe(400);
+    expect((await badLogin.json()) as { code: string }).toMatchObject({ code: 'bad_request' });
+
+    const admin = await loginAs();
+    const badSpace = await request('/spaces', {
+      method: 'POST',
+      body: '{',
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(badSpace.status).toBe(400);
+  });
+
+  test('trims whitespace-only names and titles to a validation error', async () => {
+    const admin = await loginAs();
+    const headers = { 'content-type': 'application/json', ...admin.headers };
+
+    const member = await request('/members/u2', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: '   ' }),
+      headers,
+    });
+    expect(member.status).toBe(400);
+    const space = await request('/spaces/s1', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: '   ' }),
+      headers,
+    });
+    expect(space.status).toBe(400);
+    const doc = await request('/documents/d1', {
+      method: 'PATCH',
+      body: JSON.stringify({ title: '   ' }),
+      headers,
+    });
+    expect(doc.status).toBe(400);
+  });
+
+  test('only admins can update space metadata', async () => {
+    const editor = await loginAs('su@atlas.team');
+    const res = await request('/spaces/s1', {
+      method: 'PATCH',
+      body: JSON.stringify({ name: '空间编辑改名尝试' }),
+      headers: { 'content-type': 'application/json', ...editor.headers },
+    });
+    expect(res.status).toBe(403);
+    const [space] = await db.select().from(spaces).where(eq(spaces.id, 's1'));
+    expect(space?.name).not.toBe('空间编辑改名尝试');
+  });
+
+  test('refuses to delete a space that still holds live documents', async () => {
+    const admin = await loginAs();
+    const blocked = await request('/spaces/s1', { method: 'DELETE', headers: admin.headers });
+    expect(blocked.status).toBe(409);
+    const [stillThere] = await db.select().from(spaces).where(eq(spaces.id, 's1'));
+    expect(stillThere?.id).toBe('s1');
+
+    const create = await request('/spaces', {
+      method: 'POST',
+      body: JSON.stringify({ name: '空空间', accent: 'accent' }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(create.status).toBe(201);
+    const { id } = (await create.json()) as { id: string };
+    const removed = await request(`/spaces/${id}`, { method: 'DELETE', headers: admin.headers });
+    expect(removed.status).toBe(200);
+  });
+
+  test('permanent delete only removes documents that are already in trash', async () => {
+    const admin = await loginAs();
+
+    const missing = await request('/documents/not-a-doc/permanent', {
+      method: 'DELETE',
+      headers: admin.headers,
+    });
+    expect(missing.status).toBe(404);
+
+    const live = await request('/documents/d1/permanent', {
+      method: 'DELETE',
+      headers: admin.headers,
+    });
+    expect(live.status).toBe(404);
+    const [stillLive] = await db.select().from(documents).where(eq(documents.id, 'd1'));
+    expect(stillLive?.id).toBe('d1');
+
+    const create = await request('/documents', {
+      method: 'POST',
+      body: JSON.stringify({ spaceId: 's1', title: '待永久删除', visibility: 'private', html: '' }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(create.status).toBe(201);
+    const { id } = (await create.json()) as { id: string };
+    await request(`/documents/${id}`, { method: 'DELETE', headers: admin.headers });
+    const purged = await request(`/documents/${id}/permanent`, {
+      method: 'DELETE',
+      headers: admin.headers,
+    });
+    expect(purged.status).toBe(200);
+    const [gone] = await db.select().from(documents).where(eq(documents.id, id));
+    expect(gone).toBeUndefined();
+  });
+
+  test('rejects member invitations on private documents', async () => {
+    const admin = await loginAs();
+    const res = await request('/documents/d2/share', {
+      method: 'PATCH',
+      body: JSON.stringify({ members: [{ memberId: 'u5', role: 'viewer' }] }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(res.status).toBe(400);
+    const roster = await db
+      .select()
+      .from(documentMembers)
+      .where(eq(documentMembers.documentId, 'd2'));
+    expect(roster.find((row) => row.memberId === 'u5')).toBeUndefined();
+  });
+
+  test('bearer-token writes do not require a CSRF header', async () => {
+    const login = await request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email: 'lin@atlas.team', password: 'atlas-demo-password' }),
+      headers: { 'content-type': 'application/json' },
+    });
+    const sessionCookie = login.headers
+      .getSetCookie()
+      .map((item) => item.split(';')[0] ?? '')
+      .find((cookie) => cookie.startsWith('atlas_session='));
+    const sessionId = sessionCookie?.slice('atlas_session='.length);
+    expect(sessionId).toBeTruthy();
+
+    const created = await request('/spaces', {
+      method: 'POST',
+      body: JSON.stringify({ name: 'Bearer 空间', accent: 'accent' }),
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${sessionId}` },
+    });
+    expect(created.status).toBe(201);
   });
 
   test('purges expired sessions', async () => {

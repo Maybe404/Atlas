@@ -43,6 +43,11 @@ app.onError((err, c) => {
     );
   }
 
+  // Malformed JSON bodies surface as SyntaxError from c.req.json(); treat as a client error.
+  if (err instanceof SyntaxError) {
+    return c.json({ code: 'bad_request', message: 'Invalid JSON body.' }, 400);
+  }
+
   console.error(err);
   return c.json({ code: 'internal_error', message: 'Unexpected server error.' }, 500);
 });

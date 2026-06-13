@@ -296,6 +296,10 @@ function ShareDialog({
   const share = shareQuery.data;
   const roster = share?.members || [];
   const canEditShare = Boolean(share?.canManage ?? share?.canEdit);
+  // Private documents are only reachable by admins and the author, so member invitations would
+  // create access the backend never honors — it rejects them. Disable invites accordingly.
+  const isPrivateDoc = share?.visibility === 'private';
+  const canInviteMembers = canEditShare && !isPrivateDoc;
   const memberSearchQuery = useQuery({
     queryKey: atlasKeys.shareMemberSearch(documentId, emailInput.trim()),
     queryFn: () =>
@@ -375,13 +379,21 @@ function ShareDialog({
 
           {tab === 'invite' && (
             <>
+              {isPrivateDoc && canEditShare && (
+                <div className="share-permission-note">
+                  <strong>私密文档不支持单独邀请成员</strong>
+                  <span>
+                    私密文档仅作者与管理员可见。如需邀请其他成员，请先把文档可见性改为「受邀」。
+                  </span>
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
                 <input
                   className="input"
                   style={{ flex: 1 }}
                   placeholder="按姓名或邮箱搜索…"
                   value={emailInput}
-                  disabled={!canEditShare}
+                  disabled={!canInviteMembers}
                   onChange={(e: Loose) => setEmailInput(e.target.value)}
                   onKeyDown={(e: Loose) => {
                     if (e.key === 'Enter') addMember();
@@ -396,7 +408,7 @@ function ShareDialog({
                 </datalist>
                 <button
                   className="btn primary"
-                  disabled={!canEditShare || !emailInput.trim()}
+                  disabled={!canInviteMembers || !emailInput.trim()}
                   onClick={addMember}
                 >
                   邀请

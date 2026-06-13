@@ -25,7 +25,7 @@ export function SpacesPane({ spaces, perms, onEditSpace, onNewSpace, onDeleteSpa
         <div className="card-head">
           <div>
             <h3>所有空间 · {spaces.length}</h3>
-            <div className="sub">点击行编辑名称与配色，或删除（其下文档移至「私人草稿」）</div>
+            <div className="sub">点击行编辑名称与配色；删除空间前需先清空或移走其下文档</div>
           </div>
           <button className="btn primary" onClick={onNewSpace}>
             <_I2.plus />

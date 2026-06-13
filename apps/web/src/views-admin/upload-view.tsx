@@ -18,18 +18,21 @@ export function AdminUploadView({
   const [selectedFile, setSelectedFile] = useState<Loose>(null);
   const [selectedHtml, setSelectedHtml] = useState('');
   const [over, setOver] = useState(false);
+  // Uploads require space-editor access; only offer spaces the user can actually write to.
+  const editableSpaces = spaces.filter((s: Loose) => s.role === 'editor');
   const [meta, setMeta] = useState({
     title: '',
-    spaceId: spaces[0]?.id || '',
+    spaceId: editableSpaces[0]?.id || '',
     visibility: 'invite',
     desc: '',
   });
 
   useEffect(() => {
-    if (!spaces.length) return;
+    const editable = spaces.filter((s: Loose) => s.role === 'editor');
+    if (!editable.length) return;
     setMeta((m: Loose) => ({
       ...m,
-      spaceId: spaces.some((s: Loose) => s.id === m.spaceId) ? m.spaceId : spaces[0].id,
+      spaceId: editable.some((s: Loose) => s.id === m.spaceId) ? m.spaceId : editable[0].id,
     }));
   }, [spaces]);
 
@@ -196,7 +199,7 @@ export function AdminUploadView({
                         setMeta((m: Loose) => ({ ...m, spaceId: e.target.value }))
                       }
                     >
-                      {spaces.map((s: Loose) => (
+                      {editableSpaces.map((s: Loose) => (
                         <option key={s.id} value={s.id}>
                           {s.name}
                         </option>

@@ -221,7 +221,14 @@ function App() {
   const ctx = { view, spaceId, docId };
   const isLogin = view === 'login';
   const isAdminView = ['admin-docs', 'admin-upload', 'admin-settings'].includes(view);
-  const lacksAdminAccess = isAdminView && user && user.role !== 'admin';
+  const isWorkspaceAdmin = !!user && user.role === 'admin';
+  // The backend lets space editors create/edit documents in spaces they can edit, so the doc and
+  // upload back-office is open to them. Member/permission/trash/space settings stay admin-only.
+  const hasEditableSpace = spaces.some((s: Loose) => s.role === 'editor');
+  const lacksAdminAccess =
+    isAdminView &&
+    user &&
+    (view === 'admin-settings' ? !isWorkspaceAdmin : !isWorkspaceAdmin && !hasEditableSpace);
   const hasSidebar = SIDEBAR_VIEWS.has(view) && !isLogin;
   const isPublicView = view === 'public';
 

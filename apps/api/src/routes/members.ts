@@ -6,7 +6,7 @@ import { documents, members, shareLinks, spaceMembers } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
-import { conflict, forbidden, notFound } from '../lib/http-error';
+import { badRequest, conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId } from '../lib/id';
 import { isAdmin } from '../lib/permissions';
 import { toPublicMember } from '../lib/serializers';
@@ -95,6 +95,23 @@ export const membersRouter = new Hono<AppEnv>()
     }
     if (body.role !== undefined) patch.role = body.role;
     if (body.password !== undefined) patch.passwordHash = await Bun.password.hash(body.password);
+
+    if (Object.keys(patch).length === 0) throw badRequest('No fields to update.');
+
+    const [target] = await db.select().from(members).where(eq(members.id, id));
+    if (!target) throw notFound();
+
+    // Never let the workspace lose its last admin (which would lock everyone out of member,
+    // space, trash and audit management).
+    if (body.role !== undefined && target.role === 'admin' && body.role !== 'admin') {
+      const admins = await db
+        .select({ id: members.id })
+        .from(members)
+        .where(eq(members.role, 'admin'));
+      if (admins.length <= 1) {
+        throw conflict('The workspace must keep at least one admin.');
+      }
+    }
 
     await db.update(members).set(patch).where(eq(members.id, id));
     const [member] = await db.select().from(members).where(eq(members.id, id));

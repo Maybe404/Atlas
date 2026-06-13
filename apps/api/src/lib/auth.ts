@@ -13,6 +13,7 @@ export type AuthVariables = {
   user?: CurrentUser;
   sessionId?: string;
   csrfToken?: string;
+  authSource?: 'cookie' | 'bearer';
 };
 
 export type AppEnv = {
@@ -142,6 +143,7 @@ export async function authMiddleware(c: Context<AppEnv>, next: Next) {
       c.set('sessionId', row.session.id);
       c.set('csrfToken', row.session.csrfToken);
       c.set('user', row.member);
+      c.set('authSource', cookieSession ? 'cookie' : 'bearer');
       await next();
       return;
     }
@@ -162,6 +164,13 @@ export async function csrfMiddleware(c: Context<AppEnv>, next: Next) {
   }
 
   if (c.req.path === '/auth/login') {
+    await next();
+    return;
+  }
+
+  // CSRF only protects cookie-based sessions, which browsers attach automatically. Bearer-token
+  // clients must set the header explicitly, so they are not susceptible to CSRF.
+  if (c.get('authSource') === 'bearer') {
     await next();
     return;
   }
