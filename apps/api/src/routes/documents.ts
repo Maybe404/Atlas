@@ -169,7 +169,7 @@ export const documentsRouter = new Hono<AppEnv>()
       id,
       spaceId: body.spaceId,
       authorId: user.id,
-      title: body.title || metadata.title,
+      title: body.title || metadata.title || '未命名文章',
       desc: body.desc || metadata.summary,
       visibility: body.visibility,
       format: body.format,
@@ -205,13 +205,10 @@ export const documentsRouter = new Hono<AppEnv>()
     }
     const format: 'html' | 'markdown' = isMarkdown ? 'markdown' : 'html';
     const content = await file.text();
-    const metadata = extractMetadata(
-      format,
-      content,
-      title || file.name.replace(/\.(md|markdown|html?)$/i, ''),
-    );
+    const filenameBase = file.name.replace(/\.(md|markdown|html?)$/i, '');
+    const metadata = extractMetadata(format, content, title || filenameBase);
     const body = CreateDocumentSchema.parse({
-      title: title || metadata.title || file.name.replace(/\.(md|markdown|html?)$/i, ''),
+      title: title || metadata.title || filenameBase,
       desc: descText,
       spaceId,
       visibility,
