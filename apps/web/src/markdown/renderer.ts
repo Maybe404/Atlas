@@ -2,6 +2,7 @@
 // Do NOT import CSS here — styles are handled separately.
 
 let mdInstance: import('markdown-it').default | null = null;
+let hooksAdded = false;
 
 async function getMarkdownIt(): Promise<import('markdown-it').default> {
   if (mdInstance) return mdInstance;
@@ -104,6 +105,15 @@ export async function renderMarkdown(src: string): Promise<string> {
   // biome-ignore lint/suspicious/noExplicitAny: plugin interop — guard against bundler wrapping
   const DOMPurify = (dompurifyMod as any).default ?? dompurifyMod;
 
+  if (!hooksAdded) {
+    hooksAdded = true;
+    DOMPurify.addHook('afterSanitizeAttributes', (node: Element) => {
+      if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
+        node.setAttribute('rel', 'noopener noreferrer');
+      }
+    });
+  }
+
   const rawHtml = md.render(src ?? '');
   return DOMPurify.sanitize(rawHtml, {
     USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true },
@@ -117,9 +127,11 @@ export async function enhance(container: HTMLElement): Promise<void> {
   const blocks = container.querySelectorAll<HTMLElement>('pre.md-mermaid');
   if (blocks.length === 0) return;
 
-  const mermaidMod = await import('mermaid');
+  const [mermaidMod, dompurifyMod] = await Promise.all([import('mermaid'), import('dompurify')]);
   // biome-ignore lint/suspicious/noExplicitAny: plugin interop — guard against bundler wrapping
   const mermaid = (mermaidMod as any).default ?? mermaidMod;
+  // biome-ignore lint/suspicious/noExplicitAny: plugin interop — guard against bundler wrapping
+  const DOMPurify = (dompurifyMod as any).default ?? dompurifyMod;
 
   mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'neutral' });
 
@@ -133,9 +145,12 @@ export async function enhance(container: HTMLElement): Promise<void> {
       const { svg } = await mermaid.render(id, source);
       const wrap = document.createElement('div');
       wrap.className = 'md-mermaid-rendered';
-      wrap.innerHTML = svg;
+      wrap.innerHTML = DOMPurify.sanitize(svg, {
+        USE_PROFILES: { svg: true, svgFilters: true },
+      }) as string;
       block.replaceWith(wrap);
-    } catch {
+    } catch (e) {
+      console.warn('mermaid render failed', e);
       block.classList.add('md-mermaid-error');
     }
   }
