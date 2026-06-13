@@ -1,6 +1,7 @@
 import {
   CreateDocumentSchema,
   extractHtmlMetadata,
+  extractMarkdownMetadata,
   SetDocumentMemberRoleSchema,
   UpdateDocumentSchema,
   UpdateDocumentShareSchema,
@@ -13,7 +14,7 @@ import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
 import { addDaysToIso, displayDate, nowIso } from '../lib/dates';
-import { validateHtmlForStorage } from '../lib/html-limits';
+import { validateContentForStorage } from '../lib/html-limits';
 import { badRequest, conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId, makeToken } from '../lib/id';
 import {
@@ -60,6 +61,7 @@ function toDoc(
     authorName: row.author?.name,
     updated: displayDate(row.doc.updated),
     visibility: row.doc.visibility,
+    format: row.doc.format,
     dot: row.doc.dot,
     tags: row.doc.tags,
     ...(includeHtml ? { html: row.doc.html } : {}),
@@ -68,6 +70,12 @@ function toDoc(
     ...(options.canRead !== undefined ? { canRead: options.canRead } : {}),
     ...(options.canEdit !== undefined ? { canEdit: options.canEdit } : {}),
   };
+}
+
+function extractMetadata(format: 'html' | 'markdown', content: string, fallbackTitle: string) {
+  return format === 'markdown'
+    ? extractMarkdownMetadata(content, { fallbackTitle })
+    : extractHtmlMetadata(content, { fallbackTitle });
 }
 
 async function hydrateDocs(
@@ -154,17 +162,18 @@ export const documentsRouter = new Hono<AppEnv>()
     const body = CreateDocumentSchema.parse(await c.req.json());
     await requireSpaceEditor(user, body.spaceId);
 
-    const checkedHtml = validateHtmlForStorage(body.html);
-    const metadata = extractHtmlMetadata(body.html, { fallbackTitle: body.title });
+    const checked = validateContentForStorage(body.html);
+    const metadata = extractMetadata(body.format, body.html, body.title);
     const id = makeId('d');
     await db.insert(documents).values({
       id,
       spaceId: body.spaceId,
       authorId: user.id,
-      title: body.title,
+      title: body.title || metadata.title,
       desc: body.desc || metadata.summary,
       visibility: body.visibility,
-      html: checkedHtml.html,
+      format: body.format,
+      html: checked.content,
       dot: body.dot,
       tags: body.tags,
       updated: nowIso(),
@@ -174,9 +183,9 @@ export const documentsRouter = new Hono<AppEnv>()
       action: 'document.create',
       targetType: 'document',
       targetId: id,
-      details: { spaceId: body.spaceId, title: body.title },
+      details: { spaceId: body.spaceId, title: body.title, format: body.format },
     });
-    return c.json({ id, stored: { size: checkedHtml.size } }, 201);
+    return c.json({ id, stored: { size: checked.size } }, 201);
   })
   .post('/upload', async (c) => {
     const user = requireUser(c.get('user'));
@@ -188,23 +197,32 @@ export const documentsRouter = new Hono<AppEnv>()
     const visibility = String(form.get('visibility') || 'private');
 
     if (!(file instanceof File)) throw badRequest('Upload requires a file field.');
-    if (!/^text\/html\b/i.test(file.type || '') && !/\.html?$/i.test(file.name)) {
-      throw badRequest('Only .html files can be uploaded.');
+    const isMarkdown =
+      /\.(md|markdown)$/i.test(file.name) || /^text\/(x-)?markdown\b/i.test(file.type || '');
+    const isHtml = /\.html?$/i.test(file.name) || /^text\/html\b/i.test(file.type || '');
+    if (!isMarkdown && !isHtml) {
+      throw badRequest('只支持上传 .html 或 .md 文件。');
     }
-    const html = await file.text();
-    const metadata = extractHtmlMetadata(html, { fallbackTitle: title || file.name });
+    const format: 'html' | 'markdown' = isMarkdown ? 'markdown' : 'html';
+    const content = await file.text();
+    const metadata = extractMetadata(
+      format,
+      content,
+      title || file.name.replace(/\.(md|markdown|html?)$/i, ''),
+    );
     const body = CreateDocumentSchema.parse({
-      title: title || metadata.title || file.name.replace(/\.html?$/i, ''),
+      title: title || metadata.title || file.name.replace(/\.(md|markdown|html?)$/i, ''),
       desc: descText,
       spaceId,
       visibility,
-      html,
+      format,
+      html: content,
       tags: ['uploaded'],
       dot: 'accent',
     });
 
     await requireSpaceEditor(user, body.spaceId);
-    const checkedHtml = validateHtmlForStorage(body.html);
+    const checked = validateContentForStorage(body.html);
     const id = makeId('d');
     await db.insert(documents).values({
       id,
@@ -213,7 +231,8 @@ export const documentsRouter = new Hono<AppEnv>()
       title: body.title,
       desc: body.desc || metadata.summary,
       visibility: body.visibility,
-      html: checkedHtml.html,
+      format: body.format,
+      html: checked.content,
       dot: body.dot,
       tags: body.tags,
       updated: nowIso(),
@@ -223,10 +242,10 @@ export const documentsRouter = new Hono<AppEnv>()
       action: 'document.upload',
       targetType: 'document',
       targetId: id,
-      details: { spaceId: body.spaceId, filename: file.name },
+      details: { spaceId: body.spaceId, filename: file.name, format },
     });
 
-    return c.json({ id, filename: file.name, stored: { size: checkedHtml.size } }, 201);
+    return c.json({ id, filename: file.name, stored: { size: checked.size } }, 201);
   })
   .patch('/:id', async (c) => {
     const user = requireUser(c.get('user'));
@@ -248,10 +267,14 @@ export const documentsRouter = new Hono<AppEnv>()
     if (body.dot !== undefined) patch.dot = body.dot;
     if (body.tags !== undefined) patch.tags = body.tags;
     if (body.html !== undefined) {
-      patch.html = validateHtmlForStorage(body.html).html;
-      const metadata = extractHtmlMetadata(body.html, { fallbackTitle: body.title ?? doc.title });
+      patch.html = validateContentForStorage(body.html).content;
+      const format = body.format ?? doc.format;
+      if (body.format !== undefined) patch.format = body.format;
+      const metadata = extractMetadata(format, body.html, body.title ?? doc.title);
       if (body.title === undefined && metadata.title) patch.title = metadata.title;
       if (body.desc === undefined && metadata.summary) patch.desc = metadata.summary;
+    } else if (body.format !== undefined) {
+      patch.format = body.format;
     }
 
     await db.update(documents).set(patch).where(eq(documents.id, doc.id));

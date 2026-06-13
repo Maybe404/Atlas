@@ -41,6 +41,7 @@ type ApiDoc = {
   title: string;
   desc: string;
   html: string;
+  format?: string;
   publicLink: { token: string };
 };
 type CreatedDoc = { id: string; stored: { size: number } };
@@ -959,5 +960,53 @@ describe('Atlas API', () => {
       .from(sessions)
       .where(eq(sessions.id, 'session_expired_test'));
     expect(expired).toBeUndefined();
+  });
+
+  test('creates a markdown document and infers metadata by markdown rules', async () => {
+    const admin = await loginAs();
+    const md = '# Markdown 标题\n\n这是 markdown 摘要段落。\n\n- 列表项';
+    const create = await request('/documents', {
+      method: 'POST',
+      body: JSON.stringify({
+        spaceId: 's1',
+        title: '',
+        visibility: 'private',
+        format: 'markdown',
+        html: md,
+      }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(create.status).toBe(201);
+    const created = (await create.json()) as { id: string };
+
+    const res = await request(`/documents/${created.id}`, { headers: { cookie: admin.cookie } });
+    const body = (await res.json()) as ApiDoc & { format: string };
+    expect(body.format).toBe('markdown');
+    expect(body.title).toBe('Markdown 标题');
+    expect(body.desc).toBe('这是 markdown 摘要段落。');
+    expect(body.html).toBe(md);
+  });
+
+  test('uploads a .md file and stores it as markdown', async () => {
+    const admin = await loginAs();
+    const md = '# 上传的 MD\n\n上传摘要。';
+    const form = new FormData();
+    form.set('file', new File([md], 'guide.md', { type: 'text/markdown' }));
+    form.set('spaceId', 's1');
+    form.set('visibility', 'private');
+
+    const upload = await request('/documents/upload', {
+      method: 'POST',
+      body: form,
+      headers: admin.headers,
+    });
+    expect(upload.status).toBe(201);
+    const created = (await upload.json()) as { id: string };
+
+    const res = await request(`/documents/${created.id}`, { headers: { cookie: admin.cookie } });
+    const body = (await res.json()) as ApiDoc & { format: string };
+    expect(body.format).toBe('markdown');
+    expect(body.title).toBe('上传的 MD');
+    expect(body.html).toBe(md);
   });
 });

@@ -91,7 +91,7 @@ export const UpdateSpaceSchema = CreateSpaceSchema.partial();
 
 export const CreateDocumentSchema = z.object({
   spaceId: z.string(),
-  title: z.string().trim().min(1).max(200),
+  title: z.string().trim().max(200).default(''),
   desc: z.string().default(''),
   visibility: VisibilitySchema,
   format: FormatSchema.default('html'),
@@ -100,7 +100,16 @@ export const CreateDocumentSchema = z.object({
   tags: z.array(z.string()).default([]),
 });
 
-export const UpdateDocumentSchema = CreateDocumentSchema.partial();
+export const UpdateDocumentSchema = z.object({
+  spaceId: z.string().optional(),
+  title: z.string().trim().min(1).max(200).optional(),
+  desc: z.string().optional(),
+  visibility: VisibilitySchema.optional(),
+  format: FormatSchema.optional(),
+  html: z.string().optional(),
+  dot: AccentSchema.or(z.string()).optional(),
+  tags: z.array(z.string()).optional(),
+});
 
 export const LoginSchema = z.object({
   email: z.string().trim().toLowerCase().email(),
