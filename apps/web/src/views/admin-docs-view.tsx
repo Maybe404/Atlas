@@ -123,17 +123,17 @@ export function AdminDocsView({
   const saveDoc = (content: Loose, patch: Loose = {}) => {
     if (!editing) return;
     const format = patch.format || editing.format || 'html';
-    const metadata =
-      format === 'markdown'
-        ? extractMarkdownMetadata(content, { fallbackTitle: patch.title || editing.title })
-        : extractHtmlMetadata(content, { fallbackTitle: patch.title || editing.title });
-    const nextTitle = patch.title || metadata.title || editing.title || '未命名文章';
-    const nextDesc = patch.desc || metadata.summary || editing.desc || '';
     if (editing.isNew) {
+      // Only infer title/desc from content when creating; the editor dialogs already
+      // include title/desc in the patch when the user edits them.
+      const metadata =
+        format === 'markdown'
+          ? extractMarkdownMetadata(content, { fallbackTitle: patch.title || editing.title })
+          : extractHtmlMetadata(content, { fallbackTitle: patch.title || editing.title });
       mutations.createDocument({
         spaceId: patch.spaceId || editing.spaceId,
-        title: nextTitle,
-        desc: nextDesc,
+        title: patch.title || metadata.title || editing.title || '未命名文章',
+        desc: patch.desc || metadata.summary || editing.desc || '',
         visibility: patch.visibility || editing.visibility || 'private',
         format,
         html: content,
@@ -141,13 +141,10 @@ export function AdminDocsView({
         dot: editing.dot || 'slate',
       });
     } else {
+      // Trust the dialog's patch — it carries title/desc only when actually changed,
+      // so a stored title that intentionally differs from the content heading is preserved.
       const { spaceName: _sn, spaceAccent: _sa, ...rest } = patch;
-      mutations.updateDocument(editing.id, {
-        desc: nextDesc,
-        ...rest,
-        title: nextTitle,
-        html: content,
-      });
+      mutations.updateDocument(editing.id, { ...rest, html: content });
     }
     setEditing(null);
   };
@@ -332,7 +329,8 @@ export function AdminDocsView({
                       </h4>
                     )}
                     <div className="path">
-                      {doc.spaceName}/{doc.id}.html
+                      {doc.spaceName}/{doc.id}
+                      {doc.format === 'markdown' ? '.md' : '.html'}
                     </div>
                   </div>
                 </div>
