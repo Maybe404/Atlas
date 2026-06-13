@@ -228,6 +228,18 @@ const I = {
       />
     </svg>
   ),
+  copy: (p: IconProps = {}) => (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" {...p}>
+      <rect x="4.5" y="4.5" width="7" height="7" rx="1.5" stroke="currentColor" strokeWidth="1.4" />
+      <path
+        d="M4.5 8.5H2.5A1.5 1.5 0 0 1 1 7V2.5A1.5 1.5 0 0 1 2.5 1H7a1.5 1.5 0 0 1 1.5 1.5v2"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
 };
 
 export { I };
