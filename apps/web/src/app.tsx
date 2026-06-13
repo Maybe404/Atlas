@@ -343,6 +343,7 @@ function App() {
             onShare={(id: string) => openShare(id)}
             onLogin={openLogin}
             onChromeScroll={hideChrome}
+            mutations={mutations}
           />
         )}
         {view === 'public' && (

@@ -240,6 +240,17 @@ const I = {
       />
     </svg>
   ),
+  edit: (p: IconProps = {}) => (
+    <svg width="13" height="13" viewBox="0 0 13 13" fill="none" {...p}>
+      <path
+        d="M9 2.5l1.5 1.5L4 10.5H2.5V9L9 2.5z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
 };
 
 export { I };

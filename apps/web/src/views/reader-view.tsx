@@ -3,6 +3,9 @@ import { canRead, firstPublicDoc } from '../auth';
 import { I } from '../chrome';
 import { useDocument } from '../data-hooks';
 import type { Loose } from '../loose-types';
+import { copyMarkdownRich, copyMarkdownSource } from '../markdown/copy';
+import { MarkdownEditorDialog } from './markdown-editor-dialog';
+import { MarkdownReader } from './markdown-reader';
 import { dotClass } from './shared';
 
 const _I = I;
@@ -18,6 +21,7 @@ export function ReaderView({
   onShare,
   onLogin,
   onChromeScroll,
+  mutations,
 }: Loose) {
   const requestedSpace = spaces.find((s: Loose) => s.id === ctx.spaceId);
   const space = requestedSpace || spaces[0];
@@ -32,6 +36,18 @@ export function ReaderView({
   const author =
     allowed && detailDoc?.author ? members.find((m: Loose) => m.id === detailDoc.author) : null;
   const [copied, setCopied] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [copiedMode, setCopiedMode] = useState('');
+  const isMarkdown = detailDoc?.format === 'markdown';
+  const doCopy = async (mode: 'source' | 'rich') => {
+    try {
+      const src = detailDoc?.html || '';
+      if (mode === 'source') await copyMarkdownSource(src);
+      else await copyMarkdownRich(src);
+      setCopiedMode(mode);
+      setTimeout(() => setCopiedMode(''), 1400);
+    } catch {}
+  };
   const readerLink = window.location.href;
   const copyReaderLink = () => {
     navigator.clipboard?.writeText(readerLink);
@@ -169,6 +185,24 @@ export function ReaderView({
                 <span>分享</span>
               </button>
             )}
+            {allowed && isMarkdown && (
+              <>
+                <button className="pill-btn ghost" onClick={() => doCopy('source')}>
+                  {copiedMode === 'source' ? <_I.check /> : <_I.copy />}
+                  <span>{copiedMode === 'source' ? '已复制' : '复制源码'}</span>
+                </button>
+                <button className="pill-btn ghost" onClick={() => doCopy('rich')}>
+                  {copiedMode === 'rich' ? <_I.check /> : <_I.copy />}
+                  <span>{copiedMode === 'rich' ? '已复制' : '带格式'}</span>
+                </button>
+                {detailDoc?.canEdit && (
+                  <button className="pill-btn" onClick={() => setEditing(true)}>
+                    <_I.edit />
+                    <span>编辑</span>
+                  </button>
+                )}
+              </>
+            )}
           </>
         ) : null}
         {!allowed ? (
@@ -186,6 +220,8 @@ export function ReaderView({
         {allowed ? (
           detailQuery.isLoading ? (
             <div className="app-state-banner">正在加载正文…</div>
+          ) : isMarkdown ? (
+            <MarkdownReader content={detailDoc.html || ''} onScroll={onChromeScroll} />
           ) : (
             <iframe
               ref={iframeRef}
@@ -267,6 +303,18 @@ export function ReaderView({
           </div>
         )}
       </div>
+      {editing && detailDoc && (
+        <MarkdownEditorDialog
+          doc={detailDoc}
+          spaces={spaces}
+          onClose={() => setEditing(false)}
+          onSave={(content: Loose, patch: Loose) => {
+            const { spaceName: _sn, spaceAccent: _sa, ...rest } = patch || {};
+            mutations?.updateDocument?.(detailDoc.id, { ...rest, html: content });
+            setEditing(false);
+          }}
+        />
+      )}
     </div>
   );
 }
