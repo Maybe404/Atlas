@@ -300,36 +300,21 @@ function Topbar({
       <div className="breadcrumb">
         {isReader && (
           <>
-            <span className="crumb" onClick={() => onNavigate({ view: 'admin-docs' })}>
+            <span
+              className="crumb"
+              onClick={() => onNavigate({ view: 'admin-docs', spaceId: space.id })}
+            >
               {space.name}
             </span>
             <span className="sep">/</span>
             <span className="current">{doc?.title || '文档'}</span>
           </>
         )}
-        {ctx.view === 'admin-docs' && (
-          <>
-            <span className="crumb">团队后台</span>
-            <span className="sep">/</span>
-            <span className="current">文档</span>
-          </>
-        )}
-        {ctx.view === 'admin-upload' && (
-          <>
-            <span className="crumb" onClick={() => onNavigate({ view: 'admin-docs' })}>
-              团队后台
-            </span>
-            <span className="sep">/</span>
-            <span className="current">上传</span>
-          </>
-        )}
-        {ctx.view === 'admin-settings' && (
-          <>
-            <span className="crumb">团队后台</span>
-            <span className="sep">/</span>
-            <span className="current">空间设置</span>
-          </>
-        )}
+        {/* Admin pages are flat sections, not a hierarchy — show a plain page title instead of a
+            "团队后台 / xxx" crumb. The dock already highlights the active admin section. */}
+        {ctx.view === 'admin-docs' && <span className="current">文档管理</span>}
+        {ctx.view === 'admin-upload' && <span className="current">上传文档</span>}
+        {ctx.view === 'admin-settings' && <span className="current">空间设置</span>}
       </div>
 
       <button className="search-trigger" onClick={onSearch}>

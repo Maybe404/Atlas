@@ -46,7 +46,11 @@ export function AdminDocsView({
 
   // filter state
   const [status, setStatus] = useState('all'); // all | published | draft
-  const [spaceFilter, setSpaceFilter] = useState('all');
+  // Seed the space filter from the route: navigating here from a doc's breadcrumb scopes the
+  // list to that space; a bare /admin/docs (dock, cmdk) leaves it on "all".
+  const [spaceFilter, setSpaceFilter] = useState(
+    _ctx?.spaceId && _ctx.spaceId !== 'all' ? _ctx.spaceId : 'all',
+  );
   const [visFilter, setVisFilter] = useState('all'); // all | public | invite | private
   const [search, setSearch] = useState('');
 

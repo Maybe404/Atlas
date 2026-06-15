@@ -173,7 +173,10 @@ export function AdminUploadView({
                 )}
 
                 <div className="flow-footer">
-                  <button className="btn ghost" onClick={() => onNavigate({ view: 'admin-docs' })}>
+                  <button
+                    className="btn ghost"
+                    onClick={() => onNavigate({ view: 'admin-docs', spaceId: 'all' })}
+                  >
                     取消
                   </button>
                   <button className="btn primary" disabled={!allDone} onClick={() => setStep(1)}>
@@ -425,7 +428,10 @@ export function AdminUploadView({
                         mutations.uploadDocument(formData, {
                           onSuccess: () => {
                             setStep(3);
-                            setTimeout(() => onNavigate({ view: 'admin-docs' }), 900);
+                            setTimeout(
+                              () => onNavigate({ view: 'admin-docs', spaceId: 'all' }),
+                              900,
+                            );
                           },
                         });
                       }}

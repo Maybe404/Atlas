@@ -42,7 +42,7 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
         title: '团队后台 · 文档列表',
         path: '⌘⇧D',
         icon: 'doc',
-        go: { view: 'admin-docs' },
+        go: { view: 'admin-docs', spaceId: 'all' },
       },
       {
         type: 'cmd',

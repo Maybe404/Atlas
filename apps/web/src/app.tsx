@@ -37,7 +37,9 @@ function stateFromLocation(location: Loose): RouteState {
   if (path.startsWith('/admin/docs'))
     return {
       view: 'admin-docs',
-      spaceId: params.get('space') || 's1',
+      // No default space here: a bare /admin/docs means "all documents". A space id is
+      // present only when navigated with an explicit filter (e.g. the reader breadcrumb).
+      spaceId: params.get('space') || undefined,
       docId: params.get('doc') || 'd1',
     };
   if (path.startsWith('/login'))
@@ -59,7 +61,10 @@ function stateFromLocation(location: Loose): RouteState {
 }
 
 function urlForState(next: RouteState) {
-  if (next.view === 'admin-docs') return '/admin/docs';
+  if (next.view === 'admin-docs')
+    return next.spaceId && next.spaceId !== 'all'
+      ? `/admin/docs?space=${next.spaceId}`
+      : '/admin/docs';
   if (next.view === 'admin-upload') return '/admin/upload';
   if (next.view === 'admin-settings') return '/admin/settings';
   return `/spaces/${next.spaceId || 's1'}/docs/${next.docId || 'd1'}`;
@@ -468,7 +473,7 @@ function App() {
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {[
               { l: '读者 · 单文档', v: { view: 'reader', spaceId: 's1', docId: 'd1' } },
-              { l: '团队 · 文档列表', v: { view: 'admin-docs' } },
+              { l: '团队 · 文档列表', v: { view: 'admin-docs', spaceId: 'all' } },
               { l: '团队 · 上传', v: { view: 'admin-upload' } },
               { l: '管理员 · 设置', v: { view: 'admin-settings' } },
             ].map((x: Loose) => (
@@ -496,7 +501,7 @@ function Dock({ view, onNavigate, visible, magnify, isGuest }: Loose) {
       go: { view: 'reader', spaceId: 's1', docId: 'd1' },
       guest: true,
     },
-    { id: 'admin-docs', label: '管理', icon: 'admin', go: { view: 'admin-docs' } },
+    { id: 'admin-docs', label: '管理', icon: 'admin', go: { view: 'admin-docs', spaceId: 'all' } },
     { id: 'admin-upload', label: '上传', icon: 'upload', go: { view: 'admin-upload' } },
     { id: 'admin-settings', label: '设置', icon: 'settings', go: { view: 'admin-settings' } },
   ];
