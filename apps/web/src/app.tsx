@@ -201,7 +201,7 @@ function App() {
     chromeHideTimer.current = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
 
     const INTERACTIVE =
-      'button, a[href], input, select, textarea, .toggle, .doc-card, .doc-row, .radio-card, .tree-node, .dock-item, .tab, .cmdk-item, .share-row, .member-row, .skill-row, .trash-row, .file-line, .step, .space-mgr-row, .icon-btn, .color-swatch, .pill-btn, .role-select, .sidebar-collapse-btn, .sidebar-fab';
+      'button, a[href], input, select, textarea, .toggle, .doc-card, .doc-row, .radio-card, .tree-node, .dock-item, .tab, .cmdk-item, .share-row, .member-row, .skill-row, .trash-row, .file-line, .step, .space-mgr-row, .icon-btn, .color-swatch, .pill-btn, .role-select, .sidebar-collapse-btn, .sidebar-fab, .reader-toc-pop, .reader-toc-handle';
 
     const onClick = (e: MouseEvent) => {
       // ignore clicks on actual interactive controls — only "blank space" wakes

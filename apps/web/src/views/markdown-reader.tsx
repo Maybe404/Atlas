@@ -20,7 +20,7 @@ function buildToc(root: HTMLElement): Loose[] {
       num += 1;
       secs.push({ id: h.id, title, num: String(num).padStart(2, '0'), subs: [] });
     } else {
-      secs[secs.length - 1].subs.push({ id: h.id, title });
+      secs[secs.length - 1].subs.push({ id: h.id, title, depth: level - minLevel });
     }
   }
   return secs;
@@ -38,6 +38,9 @@ export function MarkdownReader({ content, onScroll, tocPanel = false }: Loose) {
 
   // Refs read inside event handlers / timers that must see the latest value.
   const idleRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const pickingRef = useRef(false);
+  const pickTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const hoverRef = useRef(false);
   const openRef = useRef(false);
   useEffect(() => {
@@ -118,14 +121,25 @@ export function MarkdownReader({ content, onScroll, tocPanel = false }: Loose) {
   useEffect(
     () => () => {
       if (idleRef.current) clearTimeout(idleRef.current);
+      if (pickTimerRef.current) clearTimeout(pickTimerRef.current);
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
     },
     [],
   );
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
-    onScroll?.(e);
+    // Suppress the chrome auto-hide while a TOC pick is animating the scroll —
+    // otherwise the programmatic jump toggles the top meta bar (flash + jitter).
+    if (!pickingRef.current) onScroll?.(e);
     if (!tocPanel) return;
-    updateActive();
+    // Coalesce scroll-spy to one reflow per frame — reading every heading's
+    // rect on each raw scroll event is what made following the article stutter.
+    if (rafRef.current == null) {
+      rafRef.current = requestAnimationFrame(() => {
+        rafRef.current = null;
+        updateActive();
+      });
+    }
     // While open, scrolling keeps the panel alive and the active item tracks
     // the article; it collapses only once scrolling has been still for 3s.
     if (openRef.current) armIdle();
@@ -137,6 +151,11 @@ export function MarkdownReader({ content, onScroll, tocPanel = false }: Loose) {
     if (sc && el) {
       const top =
         el.getBoundingClientRect().top - sc.getBoundingClientRect().top + sc.scrollTop - 16;
+      pickingRef.current = true;
+      if (pickTimerRef.current) clearTimeout(pickTimerRef.current);
+      pickTimerRef.current = setTimeout(() => {
+        pickingRef.current = false;
+      }, 700);
       sc.scrollTo({ top, behavior: 'smooth' });
     }
     setActive(id);

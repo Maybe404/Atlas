@@ -556,7 +556,7 @@ const READER_TOC = [
   },
 ];
 
-function TocList({ toc, active, onPick }: Loose) {
+function TocList({ toc, active, onPick, plain = false }: Loose) {
   const [topOpacity, setTopOpacity] = useState(0);
   const [botOpacity, setBotOpacity] = useState(1);
   const listRef = useRef<HTMLDivElement>(null);
@@ -582,31 +582,49 @@ function TocList({ toc, active, onPick }: Loose) {
   }, [active]);
 
   let i = 0;
+  // plain mode: render rows directly (no per-item scale/fade). Used by the
+  // reader TOC so following the article is a smooth list scroll with gradient
+  // edges, not items popping in one-by-one as they cross the IO threshold.
+  const wrap = (node: Loose, key: string) =>
+    plain ? (
+      <div key={key}>{node}</div>
+    ) : (
+      <AnimatedItem key={key} index={i++}>
+        {node}
+      </AnimatedItem>
+    );
   return (
     <div className="tree-scroll toc-scroll">
       <div className="scroll-list" ref={listRef} onScroll={onScroll}>
         {toc.map((sec: Loose) => (
           <div key={sec.id}>
-            <AnimatedItem index={i++}>
+            {wrap(
               <div
                 className={`toc-sec ${active === sec.id ? 'active' : ''}`}
                 onClick={() => onPick(sec.id)}
               >
                 <span className="toc-num">{sec.num}</span>
                 <span className="toc-sec-title">{sec.title}</span>
-              </div>
-            </AnimatedItem>
-            {sec.subs.map((sub: Loose) => (
-              <AnimatedItem key={sub.id} index={i++}>
+              </div>,
+              sec.id,
+            )}
+            {sec.subs.map((sub: Loose) =>
+              wrap(
                 <div
                   className={`toc-sub ${active === sub.id ? 'active' : ''}`}
+                  style={
+                    {
+                      '--sub-pad': `${24 + (Math.max(sub.depth || 1, 1) - 1) * 16}px`,
+                    } as React.CSSProperties
+                  }
                   onClick={() => onPick(sub.id)}
                 >
                   <span className="toc-dot"></span>
                   <span className="toc-sub-title">{sub.title}</span>
-                </div>
-              </AnimatedItem>
-            ))}
+                </div>,
+                sub.id,
+              ),
+            )}
           </div>
         ))}
       </div>

@@ -1995,7 +1995,6 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   transform: translateX(-50%) translateY(-130%);
   opacity: 0;
   pointer-events: none;
-  animation: none;
 }
 
 /* When chrome is hidden, the app pulls the main grid up — softens the gap */
@@ -2255,7 +2254,7 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 5px 10px 5px 24px;
+  padding: 5px 10px 5px var(--sub-pad, 24px);
   font-size: 12px;
   color: var(--ink-3);
   border-radius: var(--r-sm);
@@ -2263,13 +2262,6 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   letter-spacing: -0.01em;
   position: relative;
   transition: background var(--dur-fast), color var(--dur-fast);
-}
-.toc-sub::before {
-  content: '';
-  position: absolute;
-  left: 14px; top: 0; bottom: 0;
-  width: 1px;
-  background: var(--hairline-2);
 }
 .toc-sub:hover { color: var(--ink); background: rgba(0,0,0,0.03); }
 [data-theme="dark"] .toc-sub:hover { background: rgba(255,255,255,0.04); }
@@ -2293,24 +2285,27 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
    own open/idle lifecycle. Only mounted for markdown docs that have headings. */
 .reader-toc-pop {
   position: fixed;
-  top: 84px;
-  bottom: 84px;
-  right: 0;
-  width: 256px;
-  max-height: calc(100vh - 168px);
+  top: 50%;
+  right: 14px;
+  width: 250px;
+  height: calc((100vh - 168px) * 0.66);
+  max-height: calc((100vh - 168px) * 0.66);
   display: flex;
   flex-direction: column;
-  background: var(--canvas);
-  border: 1px solid var(--hairline-2);
-  border-right: none;
-  border-radius: var(--r-md) 0 0 var(--r-md);
-  box-shadow: var(--shadow-card);
+  background: var(--glass-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--hairline);
+  border-radius: 20px;
+  box-shadow: var(--shadow-pop);
   z-index: 45;
-  transform: translateX(calc(100% + 14px));
-  transition: transform 0.32s var(--ease-soft);
+  opacity: 0;
+  transform: translateX(calc(100% + 28px)) translateY(-50%);
+  transition: transform 0.5s var(--ease-spring), opacity 0.32s var(--ease-soft);
+  will-change: transform, opacity;
   overflow: hidden;
 }
-.reader-toc-pop.open { transform: translateX(0); }
+.reader-toc-pop.open { opacity: 1; transform: translateX(0) translateY(-50%); }
 .reader-toc-head {
   padding: 13px 16px 4px;
   font-size: 10.5px;
@@ -2321,7 +2316,16 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   flex: 0 0 auto;
 }
 .reader-toc-pop .tree-scroll { padding: 0; }
-.reader-toc-pop .scroll-list { padding: 4px 6px 16px; }
+/* Direct (non-smooth) follow so the active item tracking the article doesn't
+   animate against the page scroll and stutter. */
+.reader-toc-pop .scroll-list { padding: 4px 6px 16px; scroll-behavior: auto; }
+/* Fade edges to the panel's own glass colour so the gradual reveal blends in. */
+.reader-toc-pop .top-gradient {
+  background: linear-gradient(to bottom, var(--glass-strong), transparent);
+}
+.reader-toc-pop .bottom-gradient {
+  background: linear-gradient(to top, var(--glass-strong), transparent);
+}
 
 /* Discoverability affordance — faint right-edge handle when the panel is closed */
 .reader-toc-handle {
