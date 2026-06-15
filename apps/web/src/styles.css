@@ -1635,18 +1635,18 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   background: linear-gradient(to top, var(--canvas), transparent);
 }
 
-/* animated list items (sub-tree leaves) — quick, subtle reveal; reads as an
-   instant list rather than a slow staggered cascade */
+/* animated list items (sub-tree leaves) — scale+fade in/out as they enter and
+   leave the viewport (React Bits AnimatedList). The per-item stagger is capped
+   in AnimatedItem so scrolling never has to wait out a long cascade. */
 .tree-anim-item {
   opacity: 0;
-  transform: scale(0.985) translateY(4px);
-  transition: opacity 0.16s var(--ease-soft), transform 0.2s var(--ease-soft);
+  transform: scale(0.7);
+  transition: opacity 0.22s var(--ease-soft), transform 0.28s var(--ease-spring);
   transition-delay: var(--anim-delay, 0ms);
-  will-change: opacity, transform;
 }
 .tree-anim-item.in {
   opacity: 1;
-  transform: scale(1) translateY(0);
+  transform: scale(1);
 }
 
 /* space row actions — only visible on hover (within space header) */

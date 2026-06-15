@@ -721,8 +721,10 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
 function AnimatedItem({ children, index = 0 }: Loose) {
   const ref = useRef<Loose>(null);
   const [inView, setInView] = useState(false);
-  // Stagger is capped so long lists don't accumulate a sluggish cascade.
-  const delay = Math.min(index, 10) * 14;
+  // Capped stagger: keep the cascade on mount / page-change, but never let the
+  // delay grow with the index — otherwise items far down the list sat at
+  // index*30ms (~0.5s+) and seemed to "wait" before showing while scrolling.
+  const delay = Math.min(index, 8) * 14;
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -735,26 +737,18 @@ function AnimatedItem({ children, index = 0 }: Loose) {
     }
     const io = new IntersectionObserver(
       (entries: Loose) => {
-        // Sticky: once an item has revealed, keep it in. Re-animating on every
-        // scroll pass is what made the lists feel laggy — reveal once, stay put.
-        for (const en of entries) {
-          if (en.isIntersecting) {
-            setInView(true);
-            io.disconnect();
-            break;
-          }
-        }
+        // In/out: items animate as they enter AND leave view (triggerOnce: false).
+        entries.forEach((en: Loose) => {
+          setInView(en.isIntersecting);
+        });
       },
-      { root: root === document.body ? null : root, threshold: 0.15 },
+      { root: root === document.body ? null : root, threshold: 0.2 },
     );
     io.observe(el);
     // also flip on after a tick so initial items animate in
     const t = setTimeout(() => {
       const r = el.getBoundingClientRect();
-      if (r.top < window.innerHeight && r.bottom > 0) {
-        setInView(true);
-        io.disconnect();
-      }
+      if (r.top < window.innerHeight && r.bottom > 0) setInView(true);
     }, 20 + delay);
     return () => {
       io.disconnect();
