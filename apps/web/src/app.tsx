@@ -505,34 +505,86 @@ function Dock({ view, onNavigate, visible, magnify, isGuest }: Loose) {
   const BASE = 34;
   const MAG = 48;
   const DISTANCE = 120;
-  const [mouseX, setMouseX] = useState<Loose>(null);
   const dockRef = useRef<Loose>(null);
+  const itemRefs = useRef<Loose>([]);
+  const centersRef = useRef<Loose>([]);
+  const mouseXRef = useRef<Loose>(null);
+  const rafRef = useRef<Loose>(null);
 
-  const getSize = (_idx: Loose, el: Loose) => {
-    if (!magnify || mouseX == null || !el || !dockRef.current) return BASE;
-    const dockRect = dockRef.current.getBoundingClientRect();
-    const center = dockRect.left + el.offsetLeft + el.offsetWidth / 2;
-    const dist = Math.abs(mouseX - center);
-    if (dist > DISTANCE) return BASE;
-    const t = 1 - dist / DISTANCE;
-    return BASE + (MAG - BASE) * t * t;
+  // Read item layout positions once (per hover / resize), never per frame.
+  const measure = () => {
+    const panel = dockRef.current;
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    centersRef.current = itemRefs.current.map((el: Loose) =>
+      el ? rect.left + el.offsetLeft + el.offsetWidth / 2 : 0,
+    );
   };
+
+  // Write scales straight to the DOM — no React re-render, no layout reads.
+  const paint = () => {
+    rafRef.current = null;
+    const mx = mouseXRef.current;
+    const centers = centersRef.current;
+    itemRefs.current.forEach((el: Loose, i: number) => {
+      if (!el) return;
+      let scale = 1;
+      if (magnify && mx != null) {
+        const dist = Math.abs(mx - centers[i]);
+        if (dist < DISTANCE) {
+          const t = 1 - dist / DISTANCE;
+          scale = (BASE + (MAG - BASE) * t * t) / BASE;
+        }
+      }
+      el.style.transform = `scale(${scale})`;
+    });
+  };
+
+  const schedule = () => {
+    if (rafRef.current == null) rafRef.current = requestAnimationFrame(paint);
+  };
+
+  // Keep transforms in sync when magnify toggles or the item set changes.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: measure/paint are stable per render; re-sync only when magnify or the item set changes
+  useEffect(() => {
+    measure();
+    paint();
+  }, [magnify, items.length]);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: listeners bind once for the dock's lifetime; measure reads live refs
+  useEffect(() => {
+    const onResize = () => measure();
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
 
   return (
     <div className={`dock-anchor ${visible ? '' : 'hidden'}`}>
       <div
         ref={dockRef}
         className="dock-panel"
-        onMouseMove={(e: Loose) => setMouseX(e.clientX)}
-        onMouseLeave={() => setMouseX(null)}
+        onMouseEnter={measure}
+        onMouseMove={(e: Loose) => {
+          mouseXRef.current = e.clientX;
+          schedule();
+        }}
+        onMouseLeave={() => {
+          mouseXRef.current = null;
+          schedule();
+        }}
       >
-        {items.map((it: Loose) => (
+        {items.map((it: Loose, i: number) => (
           <DockItem
             key={it.id}
             item={it}
             active={view === it.id}
             onClick={() => onNavigate(it.go)}
-            getSize={getSize}
+            setRef={(el: Loose) => {
+              itemRefs.current[i] = el;
+            }}
           />
         ))}
       </div>
@@ -540,21 +592,17 @@ function Dock({ view, onNavigate, visible, magnify, isGuest }: Loose) {
   );
 }
 
-function DockItem({ item, active, onClick, getSize }: Loose) {
-  const ref = useRef<Loose>(null);
-  const size = getSize(0, ref.current);
-  const scale = size / 34;
+function DockItem({ item, active, onClick, setRef }: Loose) {
   const iconSize = 14;
   return (
     <div
-      ref={ref}
+      ref={setRef}
       className={`dock-item ${active ? 'active' : ''}`}
       style={{
         width: 34,
         height: 34,
-        transform: `scale(${scale})`,
         transformOrigin: 'center bottom',
-        transition: 'transform 110ms ease-out',
+        transition: 'transform 70ms ease-out',
         willChange: 'transform',
       }}
       onClick={onClick}
