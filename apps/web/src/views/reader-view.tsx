@@ -221,7 +221,7 @@ export function ReaderView({
           detailQuery.isLoading ? (
             <div className="app-state-banner">正在加载正文…</div>
           ) : isMarkdown ? (
-            <MarkdownReader content={detailDoc.html || ''} onScroll={onChromeScroll} />
+            <MarkdownReader content={detailDoc.html || ''} onScroll={onChromeScroll} tocPanel />
           ) : (
             <iframe
               ref={iframeRef}

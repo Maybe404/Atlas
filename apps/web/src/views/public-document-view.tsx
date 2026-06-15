@@ -51,7 +51,7 @@ export function PublicDocumentView({ token, onChromeScroll }: Loose) {
       </div>
       <div className="reader-iframe-wrap" onScroll={onChromeScroll}>
         {doc.format === 'markdown' ? (
-          <MarkdownReader content={doc.html || ''} onScroll={onChromeScroll} />
+          <MarkdownReader content={doc.html || ''} onScroll={onChromeScroll} tocPanel />
         ) : (
           <iframe
             ref={iframeRef}

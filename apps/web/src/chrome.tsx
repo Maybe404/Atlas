@@ -559,6 +559,7 @@ const READER_TOC = [
 function TocList({ toc, active, onPick }: Loose) {
   const [topOpacity, setTopOpacity] = useState(0);
   const [botOpacity, setBotOpacity] = useState(1);
+  const listRef = useRef<HTMLDivElement>(null);
   const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
     setTopOpacity(Math.min(scrollTop / 50, 1));
@@ -566,10 +567,24 @@ function TocList({ toc, active, onPick }: Loose) {
     setBotOpacity(scrollHeight <= clientHeight ? 0 : Math.min(bd / 50, 1));
   };
 
+  // Keep the highlighted entry in view as the article scrolls past it. Mutate
+  // only this list's scrollTop — never scrollIntoView, which would also nudge
+  // ancestor/horizontal scroll while the panel is translated off-screen.
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || !active) return;
+    const el = list.querySelector<HTMLElement>('.toc-sec.active, .toc-sub.active');
+    if (!el) return;
+    const lr = list.getBoundingClientRect();
+    const er = el.getBoundingClientRect();
+    if (er.top < lr.top) list.scrollTop -= lr.top - er.top + 8;
+    else if (er.bottom > lr.bottom) list.scrollTop += er.bottom - lr.bottom + 8;
+  }, [active]);
+
   let i = 0;
   return (
     <div className="tree-scroll toc-scroll">
-      <div className="scroll-list" onScroll={onScroll}>
+      <div className="scroll-list" ref={listRef} onScroll={onScroll}>
         {toc.map((sec: Loose) => (
           <div key={sec.id}>
             <AnimatedItem index={i++}>
@@ -706,6 +721,8 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
 function AnimatedItem({ children, index = 0 }: Loose) {
   const ref = useRef<Loose>(null);
   const [inView, setInView] = useState(false);
+  // Stagger is capped so long lists don't accumulate a sluggish cascade.
+  const delay = Math.min(index, 10) * 14;
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -718,31 +735,37 @@ function AnimatedItem({ children, index = 0 }: Loose) {
     }
     const io = new IntersectionObserver(
       (entries: Loose) => {
-        entries.forEach((en: Loose) => {
-          setInView(en.isIntersecting);
-        });
+        // Sticky: once an item has revealed, keep it in. Re-animating on every
+        // scroll pass is what made the lists feel laggy — reveal once, stay put.
+        for (const en of entries) {
+          if (en.isIntersecting) {
+            setInView(true);
+            io.disconnect();
+            break;
+          }
+        }
       },
-      { root: root === document.body ? null : root, threshold: 0.2 },
+      { root: root === document.body ? null : root, threshold: 0.15 },
     );
     io.observe(el);
     // also flip on after a tick so initial items animate in
-    const t = setTimeout(
-      () => {
-        const r = el.getBoundingClientRect();
-        if (r.top < window.innerHeight && r.bottom > 0) setInView(true);
-      },
-      30 + index * 30,
-    );
+    const t = setTimeout(() => {
+      const r = el.getBoundingClientRect();
+      if (r.top < window.innerHeight && r.bottom > 0) {
+        setInView(true);
+        io.disconnect();
+      }
+    }, 20 + delay);
     return () => {
       io.disconnect();
       clearTimeout(t);
     };
-  }, [index]);
+  }, [delay]);
   return (
     <div
       ref={ref}
       className={`tree-anim-item ${inView ? 'in' : ''}`}
-      style={{ '--anim-delay': `${index * 30}ms` } as React.CSSProperties}
+      style={{ '--anim-delay': `${delay}ms` } as React.CSSProperties}
     >
       {children}
     </div>
