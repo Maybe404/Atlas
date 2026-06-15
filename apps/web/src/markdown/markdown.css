@@ -2,7 +2,7 @@
 @import "katex/dist/katex.min.css";
 
 .md-body {
-  color: var(--ink-1, #1d1d1f);
+  color: var(--ink, #1d1d1f);
   font-size: 15px;
   line-height: 1.72;
   letter-spacing: -0.01em;
@@ -132,4 +132,86 @@
   border-top: 1px solid var(--hairline-2, #e5e3df);
   margin-top: 2.4em;
   padding-top: 1em;
+}
+
+/* ── dark-mode code highlighting ───────────────────────────────────────────
+   highlight.js github.css (imported above) is a light theme: it pins code text
+   to a near-black color, which is unreadable on the dark --pearl block. Override
+   with github-dark token colors, scoped to the dark theme + .md-body only. */
+[data-theme="dark"] .md-body .hljs {
+  color: #c9d1d9;
+  background: transparent;
+}
+[data-theme="dark"] .md-body .hljs-doctag,
+[data-theme="dark"] .md-body .hljs-keyword,
+[data-theme="dark"] .md-body .hljs-meta .hljs-keyword,
+[data-theme="dark"] .md-body .hljs-template-tag,
+[data-theme="dark"] .md-body .hljs-template-variable,
+[data-theme="dark"] .md-body .hljs-type,
+[data-theme="dark"] .md-body .hljs-variable.language_ {
+  color: #ff7b72;
+}
+[data-theme="dark"] .md-body .hljs-title,
+[data-theme="dark"] .md-body .hljs-title.class_,
+[data-theme="dark"] .md-body .hljs-title.class_.inherited__,
+[data-theme="dark"] .md-body .hljs-title.function_ {
+  color: #d2a8ff;
+}
+[data-theme="dark"] .md-body .hljs-attr,
+[data-theme="dark"] .md-body .hljs-attribute,
+[data-theme="dark"] .md-body .hljs-literal,
+[data-theme="dark"] .md-body .hljs-meta,
+[data-theme="dark"] .md-body .hljs-number,
+[data-theme="dark"] .md-body .hljs-operator,
+[data-theme="dark"] .md-body .hljs-selector-attr,
+[data-theme="dark"] .md-body .hljs-selector-class,
+[data-theme="dark"] .md-body .hljs-selector-id,
+[data-theme="dark"] .md-body .hljs-variable {
+  color: #79c0ff;
+}
+[data-theme="dark"] .md-body .hljs-string,
+[data-theme="dark"] .md-body .hljs-meta .hljs-string,
+[data-theme="dark"] .md-body .hljs-regexp {
+  color: #a5d6ff;
+}
+[data-theme="dark"] .md-body .hljs-built_in,
+[data-theme="dark"] .md-body .hljs-symbol {
+  color: #ffa657;
+}
+[data-theme="dark"] .md-body .hljs-comment,
+[data-theme="dark"] .md-body .hljs-code,
+[data-theme="dark"] .md-body .hljs-formula {
+  color: #8b949e;
+}
+[data-theme="dark"] .md-body .hljs-name,
+[data-theme="dark"] .md-body .hljs-quote,
+[data-theme="dark"] .md-body .hljs-selector-tag,
+[data-theme="dark"] .md-body .hljs-selector-pseudo {
+  color: #7ee787;
+}
+[data-theme="dark"] .md-body .hljs-subst {
+  color: #c9d1d9;
+}
+[data-theme="dark"] .md-body .hljs-section {
+  color: #1f6feb;
+  font-weight: bold;
+}
+[data-theme="dark"] .md-body .hljs-bullet {
+  color: #f2cc60;
+}
+[data-theme="dark"] .md-body .hljs-emphasis {
+  color: #c9d1d9;
+  font-style: italic;
+}
+[data-theme="dark"] .md-body .hljs-strong {
+  color: #c9d1d9;
+  font-weight: bold;
+}
+[data-theme="dark"] .md-body .hljs-addition {
+  color: #aff5b4;
+  background: #033a16;
+}
+[data-theme="dark"] .md-body .hljs-deletion {
+  color: #ffdcd7;
+  background: #67060c;
 }
