@@ -1,22 +1,13 @@
 import { db } from './client';
-import {
-  documentMembers,
-  documents,
-  members,
-  sessions,
-  shareLinks,
-  spaceMembers,
-  spaces,
-} from './schema';
+import { documents, grants, members, sessions, shareLinks, spaces } from './schema';
 import { ATLAS_DATA } from './seed-data';
 
 const DEMO_PASSWORD_HASH = '$2b$04$RhYUNqiT505iO9sAwUaXGO/9c55aKJYZtRSazB2H0mHtPbH.m5eF.';
 
 await db.delete(sessions);
-await db.delete(documentMembers);
+await db.delete(grants);
 await db.delete(shareLinks);
 await db.delete(documents);
-await db.delete(spaceMembers);
 await db.delete(spaces);
 await db.delete(members);
 
@@ -102,7 +93,7 @@ for (const sp of ATLAS_DATA.tree) {
   }
 }
 
-const permissions: (typeof spaceMembers.$inferInsert)[] = [];
+const permissions: { memberId: string; spaceId: string; role: 'viewer' | 'editor' }[] = [];
 for (const [memberIndex, member] of ATLAS_DATA.members.entries()) {
   for (const [spaceIndex, space] of ATLAS_DATA.tree.entries()) {
     if (member.id === 'u1' || member.role === 'admin') {
@@ -115,11 +106,19 @@ for (const [memberIndex, member] of ATLAS_DATA.members.entries()) {
   }
 }
 
-await db.insert(spaceMembers).values(permissions);
+await db.insert(grants).values(
+  permissions.map((p) => ({
+    subjectType: 'member' as const,
+    subjectId: p.memberId,
+    targetType: 'space' as const,
+    targetId: p.spaceId,
+    role: p.role,
+  })),
+);
 
-await db.insert(documentMembers).values([
-  { documentId: 'd1', memberId: 'u2', role: 'editor' },
-  { documentId: 'd1', memberId: 'u3', role: 'viewer' },
+await db.insert(grants).values([
+  { subjectType: 'member', subjectId: 'u2', targetType: 'document', targetId: 'd1', role: 'editor' },
+  { subjectType: 'member', subjectId: 'u3', targetType: 'document', targetId: 'd1', role: 'viewer' },
 ]);
 
 await db.insert(shareLinks).values({
