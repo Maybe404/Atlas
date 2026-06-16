@@ -9,7 +9,8 @@ import {
 import { and, desc, eq, inArray, isNotNull, like, lte, ne, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
-import { auditLogs, documentMembers, documents, members, shareLinks, spaces } from '../db/schema';
+import { auditLogs, documents, members, shareLinks, spaces } from '../db/schema';
+import { listDocumentMemberGrants, setMemberDocumentRole } from '../lib/grants';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
@@ -385,11 +386,19 @@ export const documentsRouter = new Hono<AppEnv>()
     const doc = await requireDocumentShareManager(user, c.req.param('id'));
 
     const [link] = await db.select().from(shareLinks).where(eq(shareLinks.documentId, doc.id));
-    const roster = await db
-      .select({ membership: documentMembers, member: members })
-      .from(documentMembers)
-      .innerJoin(members, eq(documentMembers.memberId, members.id))
-      .where(eq(documentMembers.documentId, doc.id));
+    const grantRows = await listDocumentMemberGrants(doc.id);
+    const rosterMembers = grantRows.length
+      ? await db
+          .select()
+          .from(members)
+          .where(
+            inArray(
+              members.id,
+              grantRows.map((row) => row.memberId),
+            ),
+          )
+      : [];
+    const roleByMemberId = new Map(grantRows.map((row) => [row.memberId, row.role]));
 
     return c.json({
       documentId: doc.id,
@@ -419,9 +428,9 @@ export const documentsRouter = new Hono<AppEnv>()
             lastAccessedAt: null,
             accessCount: 0,
           },
-      members: roster.map((row) => ({
-        ...toPublicMember(row.member),
-        role: row.membership.role,
+      members: rosterMembers.map((member) => ({
+        ...toPublicMember(member),
+        role: roleByMemberId.get(member.id),
       })),
     });
   })
@@ -430,10 +439,7 @@ export const documentsRouter = new Hono<AppEnv>()
     const doc = await requireDocumentShareManager(user, c.req.param('id'));
     const q = (c.req.query('q') ?? '').trim();
     const limit = Math.min(Math.max(Number(c.req.query('limit') ?? 8) || 8, 1), 20);
-    const roster = await db
-      .select({ memberId: documentMembers.memberId })
-      .from(documentMembers)
-      .where(eq(documentMembers.documentId, doc.id));
+    const roster = await listDocumentMemberGrants(doc.id);
     const excludedIds = new Set([user.id, ...roster.map((row) => row.memberId)]);
     const filters = q
       ? [or(like(members.name, `%${q}%`), like(members.email, `%${q.toLowerCase()}%`))]
@@ -534,21 +540,7 @@ export const documentsRouter = new Hono<AppEnv>()
 
       for (const item of memberUpdates) {
         const parsed = SetDocumentMemberRoleSchema.parse(item);
-        await tx
-          .delete(documentMembers)
-          .where(
-            and(
-              eq(documentMembers.documentId, doc.id),
-              eq(documentMembers.memberId, parsed.memberId),
-            ),
-          );
-        if (parsed.role) {
-          await tx.insert(documentMembers).values({
-            documentId: doc.id,
-            memberId: parsed.memberId,
-            role: parsed.role,
-          });
-        }
+        await setMemberDocumentRole(tx, parsed.memberId, doc.id, parsed.role);
         await tx.insert(auditLogs).values({
           id: makeId('audit'),
           actorId: user.id,
@@ -575,18 +567,7 @@ export const documentsRouter = new Hono<AppEnv>()
     if (!member) throw notFound('Member not found.');
 
     await db.transaction(async (tx) => {
-      await tx
-        .delete(documentMembers)
-        .where(
-          and(eq(documentMembers.documentId, doc.id), eq(documentMembers.memberId, body.memberId)),
-        );
-      if (body.role) {
-        await tx.insert(documentMembers).values({
-          documentId: doc.id,
-          memberId: body.memberId,
-          role: body.role,
-        });
-      }
+      await setMemberDocumentRole(tx, body.memberId, doc.id, body.role);
       await tx.insert(auditLogs).values({
         id: makeId('audit'),
         actorId: user.id,
