@@ -1,11 +1,12 @@
 import { CreateMemberSchema, UpdateMemberSchema } from '@atlas/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
-import { documents, members, shareLinks, spaceMembers } from '../db/schema';
+import { documents, grants, members, shareLinks } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
+import { removeGrantsForSubject } from '../lib/grants';
 import { badRequest, conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId } from '../lib/id';
 import { isAdmin } from '../lib/permissions';
@@ -75,11 +76,12 @@ export const membersRouter = new Hono<AppEnv>()
     if (!isAdmin(user)) throw forbidden('Only workspace admins can view all permissions.');
     const rows = await db
       .select({
-        memberId: spaceMembers.memberId,
-        spaceId: spaceMembers.spaceId,
-        role: spaceMembers.role,
+        memberId: grants.subjectId,
+        spaceId: grants.targetId,
+        role: grants.role,
       })
-      .from(spaceMembers);
+      .from(grants)
+      .where(and(eq(grants.subjectType, 'member'), eq(grants.targetType, 'space')));
     return c.json(rows);
   })
   .patch('/:id', async (c) => {
@@ -140,6 +142,7 @@ export const membersRouter = new Hono<AppEnv>()
     await db.update(documents).set({ authorId: user.id }).where(eq(documents.authorId, id));
     await db.update(documents).set({ deletedBy: null }).where(eq(documents.deletedBy, id));
     await db.update(shareLinks).set({ createdBy: user.id }).where(eq(shareLinks.createdBy, id));
+    await removeGrantsForSubject(db, id);
     await db.delete(members).where(eq(members.id, id));
     await writeAudit({
       actorId: user.id,
