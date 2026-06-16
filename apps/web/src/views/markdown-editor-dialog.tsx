@@ -5,7 +5,7 @@ import { useDocument } from '../data-hooks';
 import type { Loose } from '../loose-types';
 import { copyMarkdownRich, copyMarkdownSource } from '../markdown/copy';
 import { enhance, renderMarkdown } from '../markdown/renderer';
-import { accentDot, dotClass } from './shared';
+import { accentDot, dotClass, flattenFolders } from './shared';
 
 const _I = I;
 
@@ -59,6 +59,7 @@ function MarkdownEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) 
   const [desc, setDesc] = useState<string>(doc.desc || '');
   const [titleTouched, setTitleTouched] = useState<boolean>(Boolean(doc.title));
   const [spaceId, setSpaceId] = useState<string>(doc.spaceId || (doc.isNew ? '' : 's1'));
+  const [folderId, setFolderId] = useState<string>(doc.folderId || '');
   const [showSpacePicker, setShowSpacePicker] = useState<boolean>(false);
   const [showSpaceRequired, setShowSpaceRequired] = useState<boolean>(false);
   const [dirty, setDirty] = useState<boolean>(false);
@@ -145,6 +146,7 @@ function MarkdownEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) 
       patch.spaceName = selectedSpace.name;
       patch.spaceAccent = selectedSpace.accent;
     }
+    if ((folderId || '') !== (doc.folderId || '')) patch.folderId = folderId || null;
     onSave(md, patch);
   };
 
@@ -286,6 +288,7 @@ function MarkdownEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) 
                           className={`space-picker-row ${active ? 'active' : ''}`}
                           onClick={() => {
                             setSpaceId(s.id);
+                            setFolderId('');
                             setDirty(true);
                             setShowSpacePicker(false);
                             setShowSpaceRequired(false);
@@ -304,6 +307,29 @@ function MarkdownEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) 
                   </div>
                 )}
               </div>
+              {selectedSpace && (
+                <div
+                  className="editor-space-field"
+                  style={{ marginTop: 8, position: 'relative', maxWidth: 320 }}
+                >
+                  <span className="label">文件夹</span>
+                  <select
+                    className="role-select"
+                    value={folderId}
+                    onChange={(e: Loose) => {
+                      setFolderId(e.target.value);
+                      setDirty(true);
+                    }}
+                  >
+                    <option value="">（空间根目录）</option>
+                    {flattenFolders(selectedSpace.folders).map((f: Loose) => (
+                      <option key={f.id} value={f.id}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </div>
           </div>
 

@@ -136,6 +136,7 @@ export function AdminDocsView({
           : extractHtmlMetadata(content, { fallbackTitle: patch.title || editing.title });
       mutations.createDocument({
         spaceId: patch.spaceId || editing.spaceId,
+        folderId: patch.folderId ?? editing.folderId ?? null,
         title: patch.title || metadata.title || editing.title || '未命名文章',
         desc: patch.desc || metadata.summary || editing.desc || '',
         visibility: patch.visibility || editing.visibility || 'private',

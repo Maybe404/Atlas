@@ -649,12 +649,89 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
   const listRef = useRef<Loose>(null);
   const [topOpacity, setTopOpacity] = useState(0);
   const [botOpacity, setBotOpacity] = useState(1);
+  // Folders default to expanded; this holds the ids the user has collapsed.
+  const [folderCollapsed, setFolderCollapsed] = useState<Loose>(() => new Set());
+  const toggleFolder = (id: string) =>
+    setFolderCollapsed((prev: Loose) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   const onScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const { scrollTop, scrollHeight, clientHeight } = e.currentTarget;
     setTopOpacity(Math.min(scrollTop / 50, 1));
     const bd = scrollHeight - (scrollTop + clientHeight);
     setBotOpacity(scrollHeight <= clientHeight ? 0 : Math.min(bd / 50, 1));
+  };
+
+  // Render one folder level: subfolders (recursing) then loose docs, all grouped under `parentId`
+  // (null = space root). `counter` is shared by reference so the stagger index keeps incrementing
+  // across the whole space subtree — the AnimatedItem cascade is preserved unchanged.
+  const renderLevel = (space: Loose, parentId: string | null, counter: { n: number }) => {
+    const nodes: Loose[] = [];
+    const subFolders = (space.folders || [])
+      .filter((f: Loose) => (f.parentId ?? null) === parentId)
+      .sort((a: Loose, b: Loose) => a.order - b.order || a.name.localeCompare(b.name));
+    for (const folder of subFolders) {
+      const isCollapsed = folderCollapsed.has(folder.id);
+      nodes.push(
+        <AnimatedItem key={`folder-${folder.id}`} index={counter.n++}>
+          <div
+            className={`tree-node tree-folder ${isCollapsed ? '' : 'expanded '}`}
+            onClick={(e: Loose) => {
+              e.stopPropagation();
+              toggleFolder(folder.id);
+            }}
+          >
+            <span className="chev">
+              <I.chev />
+            </span>
+            <span className="tree-folder-ico">
+              <I.folder />
+            </span>
+            <span className="name">{folder.name}</span>
+            {folder.restricted && (
+              <span className="tree-lock" title="受限文件夹">
+                <I.lock />
+              </span>
+            )}
+          </div>
+        </AnimatedItem>,
+      );
+      if (!isCollapsed) {
+        nodes.push(
+          <div className="tree-children" key={`folder-children-${folder.id}`}>
+            {renderLevel(space, folder.id, counter)}
+          </div>,
+        );
+      }
+    }
+    const docs = (space.children || []).filter((d: Loose) => (d.folderId ?? null) === parentId);
+    for (const doc of docs) {
+      const locked = !canRead(doc, user);
+      nodes.push(
+        <AnimatedItem key={doc.id} index={counter.n++}>
+          <div
+            className={
+              'tree-node ' + (ctx.docId === doc.id ? 'active ' : '') + (locked ? 'locked' : '')
+            }
+            onClick={(e: Loose) => {
+              e.stopPropagation();
+              onNavigate({ view: 'reader', spaceId: space.id, docId: doc.id });
+            }}
+          >
+            <span className="name doc-title-text">{doc.title}</span>
+            {locked && (
+              <span className="tree-lock" title="登录后可读">
+                <I.lock />
+              </span>
+            )}
+          </div>
+        </AnimatedItem>,
+      );
+    }
+    return nodes;
   };
 
   // build a flat sequence of nodes for stagger animation
@@ -703,33 +780,7 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
                 </div>
               </AnimatedItem>
               {open && !collapsed && (
-                <div className="tree-children">
-                  {space.children.map((doc: Loose, dIdx: number) => {
-                    const locked = !canRead(doc, user);
-                    return (
-                      <AnimatedItem key={doc.id} index={sIdx + dIdx + 1}>
-                        <div
-                          className={
-                            'tree-node ' +
-                            (ctx.docId === doc.id ? 'active ' : '') +
-                            (locked ? 'locked' : '')
-                          }
-                          onClick={(e: Loose) => {
-                            e.stopPropagation();
-                            onNavigate({ view: 'reader', spaceId: space.id, docId: doc.id });
-                          }}
-                        >
-                          <span className="name doc-title-text">{doc.title}</span>
-                          {locked && (
-                            <span className="tree-lock" title="登录后可读">
-                              <I.lock />
-                            </span>
-                          )}
-                        </div>
-                      </AnimatedItem>
-                    );
-                  })}
-                </div>
+                <div className="tree-children">{renderLevel(space, null, { n: sIdx + 1 })}</div>
               )}
             </div>
           );

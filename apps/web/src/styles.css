@@ -404,6 +404,10 @@ html { transition: background 0.3s var(--ease-soft); }
 .tree-node .dot.gray { background: #6e6e73; }
 .tree-node .dot.pink { background: #ff2d55; }
 .tree-node .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Phase 3: folder rows in the directory tree (reuse .tree-node + .expanded chevron rotation) */
+.tree-node.tree-folder .name { font-weight: 500; }
+.tree-folder-ico { display: inline-flex; align-items: center; color: var(--ink-4); flex-shrink: 0; }
+.tree-folder-ico svg { width: 14px; height: 14px; }
 .tree-node .count { font-family: var(--font-mono); font-size: 11px; color: var(--ink-4); }
 .tree-children {
   padding-left: 8px;
