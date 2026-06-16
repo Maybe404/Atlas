@@ -1,7 +1,7 @@
 import { afterAll, describe, expect, test } from 'bun:test';
 import { rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 const testDb = join(import.meta.dir, '../data/test-atlas.sqlite');
 process.env.DATABASE_URL = testDb;
@@ -14,22 +14,47 @@ await import('./db/seed');
 
 const { default: server } = await import('./server');
 const { db } = await import('./db/client');
-const {
-  auditLogs,
-  documentMembers,
-  documents,
-  members,
-  sessions,
-  shareLinks,
-  spaceMembers,
-  spaces,
-} = await import('./db/schema');
+const { auditLogs, documents, grants, members, sessions, shareLinks, spaces } =
+  await import('./db/schema');
+const { setMemberDocumentRole } = await import('./lib/grants');
 
 afterAll(() => {
   rmSync(testDb, { force: true });
   rmSync(`${testDb}-shm`, { force: true });
   rmSync(`${testDb}-wal`, { force: true });
 });
+
+async function spaceGrantRows(spaceId: string) {
+  const rows = await db
+    .select({ memberId: grants.subjectId, role: grants.role })
+    .from(grants)
+    .where(
+      and(
+        eq(grants.subjectType, 'member'),
+        eq(grants.targetType, 'space'),
+        eq(grants.targetId, spaceId),
+      ),
+    );
+  return rows
+    .map((r) => ({ spaceId, memberId: r.memberId, role: r.role }))
+    .sort((a, b) => a.memberId.localeCompare(b.memberId));
+}
+
+async function docGrantRows(documentId: string) {
+  const rows = await db
+    .select({ memberId: grants.subjectId, role: grants.role })
+    .from(grants)
+    .where(
+      and(
+        eq(grants.subjectType, 'member'),
+        eq(grants.targetType, 'document'),
+        eq(grants.targetId, documentId),
+      ),
+    );
+  return rows
+    .map((r) => ({ documentId, memberId: r.memberId, role: r.role }))
+    .sort((a, b) => a.memberId.localeCompare(b.memberId));
+}
 
 async function request(path: string, init?: RequestInit) {
   return server.fetch(new Request(`http://atlas.test${path}`, init));
@@ -354,7 +379,7 @@ describe('Atlas API', () => {
     expect(update.status).toBe(200);
     expect(await update.json()).toEqual({ ok: true, updated: 2 });
 
-    const rows = await db.select().from(spaceMembers).where(eq(spaceMembers.spaceId, 's1'));
+    const rows = await spaceGrantRows('s1');
     expect(rows.find((row) => row.memberId === 'u2')?.role).toBe('editor');
     expect(rows.find((row) => row.memberId === 'u3')?.role).toBe('editor');
 
@@ -364,7 +389,7 @@ describe('Atlas API', () => {
       headers: { 'content-type': 'application/json', ...admin.headers },
     });
     expect(clear.status).toBe(200);
-    const afterClear = await db.select().from(spaceMembers).where(eq(spaceMembers.spaceId, 's1'));
+    const afterClear = await spaceGrantRows('s1');
     expect(afterClear.find((row) => row.memberId === 'u3')).toBeUndefined();
 
     const beforeInvalid = afterClear.filter(
@@ -381,7 +406,7 @@ describe('Atlas API', () => {
       headers: { 'content-type': 'application/json', ...admin.headers },
     });
     expect(invalid.status).toBe(404);
-    const afterInvalid = await db.select().from(spaceMembers).where(eq(spaceMembers.spaceId, 's1'));
+    const afterInvalid = await spaceGrantRows('s1');
     expect(afterInvalid.filter((row) => row.memberId === 'u2' || row.memberId === 'u4')).toEqual(
       beforeInvalid,
     );
@@ -403,7 +428,7 @@ describe('Atlas API', () => {
 
   test('single space member updates validate space and member before writing', async () => {
     const admin = await loginAs();
-    const before = await db.select().from(spaceMembers).where(eq(spaceMembers.spaceId, 's1'));
+    const before = await spaceGrantRows('s1');
 
     const missingMember = await request('/spaces/s1/members/not-a-member', {
       method: 'PUT',
@@ -411,9 +436,7 @@ describe('Atlas API', () => {
       headers: { 'content-type': 'application/json', ...admin.headers },
     });
     expect(missingMember.status).toBe(404);
-    expect(await db.select().from(spaceMembers).where(eq(spaceMembers.spaceId, 's1'))).toEqual(
-      before,
-    );
+    expect(await spaceGrantRows('s1')).toEqual(before);
 
     const missingSpace = await request('/spaces/not-a-space/members/u2', {
       method: 'PUT',
@@ -465,7 +488,7 @@ describe('Atlas API', () => {
       404,
     );
 
-    await db.insert(documentMembers).values({ documentId: 'd6', memberId: 'u5', role: 'viewer' });
+    await setMemberDocumentRole(db, 'u5', 'd6', 'viewer');
 
     const readable = await request('/documents/d6', { headers: { cookie: viewer.cookie } });
     expect(readable.status).toBe(200);
@@ -488,10 +511,7 @@ describe('Atlas API', () => {
 
   test('document member endpoint validates members before writing', async () => {
     const admin = await loginAs();
-    const before = await db
-      .select()
-      .from(documentMembers)
-      .where(eq(documentMembers.documentId, 'd1'));
+    const before = await docGrantRows('d1');
     const auditsBefore = await db.select().from(auditLogs).where(eq(auditLogs.targetId, 'd1'));
 
     const invalid = await request('/documents/d1/members/not-a-member', {
@@ -500,9 +520,7 @@ describe('Atlas API', () => {
       headers: { 'content-type': 'application/json', ...admin.headers },
     });
     expect(invalid.status).toBe(404);
-    expect(
-      await db.select().from(documentMembers).where(eq(documentMembers.documentId, 'd1')),
-    ).toEqual(before);
+    expect(await docGrantRows('d1')).toEqual(before);
     expect(await db.select().from(auditLogs).where(eq(auditLogs.targetId, 'd1'))).toEqual(
       auditsBefore,
     );
@@ -622,10 +640,7 @@ describe('Atlas API', () => {
       .select()
       .from(shareLinks)
       .where(eq(shareLinks.documentId, 'd1'));
-    const membersBeforeInvalid = await db
-      .select()
-      .from(documentMembers)
-      .where(eq(documentMembers.documentId, 'd1'));
+    const membersBeforeInvalid = await docGrantRows('d1');
     const auditsBeforeInvalid = await db
       .select()
       .from(auditLogs)
@@ -647,10 +662,7 @@ describe('Atlas API', () => {
       .select()
       .from(shareLinks)
       .where(eq(shareLinks.documentId, 'd1'));
-    const membersAfterInvalid = await db
-      .select()
-      .from(documentMembers)
-      .where(eq(documentMembers.documentId, 'd1'));
+    const membersAfterInvalid = await docGrantRows('d1');
     const auditsAfterInvalid = await db
       .select()
       .from(auditLogs)
@@ -670,10 +682,7 @@ describe('Atlas API', () => {
       headers: { 'content-type': 'application/json', ...admin.headers },
     });
     expect(duplicateMembers.status).toBe(200);
-    const afterDuplicateMembers = await db
-      .select()
-      .from(documentMembers)
-      .where(eq(documentMembers.documentId, 'd1'));
+    const afterDuplicateMembers = await docGrantRows('d1');
     expect(afterDuplicateMembers.find((row) => row.memberId === 'u3')?.role).toBe('editor');
   });
 
@@ -911,10 +920,7 @@ describe('Atlas API', () => {
       headers: { 'content-type': 'application/json', ...admin.headers },
     });
     expect(res.status).toBe(400);
-    const roster = await db
-      .select()
-      .from(documentMembers)
-      .where(eq(documentMembers.documentId, 'd2'));
+    const roster = await docGrantRows('d2');
     expect(roster.find((row) => row.memberId === 'u5')).toBeUndefined();
   });
 
