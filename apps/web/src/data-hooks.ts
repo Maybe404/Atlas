@@ -1,10 +1,12 @@
 import type {
   BatchSetSpaceMemberRolesSchema,
   CreateDocumentSchema,
+  CreateFolderSchema,
   CreateMemberSchema,
   CreateSpaceSchema,
   UpdateDocumentSchema,
   UpdateDocumentShareSchema,
+  UpdateFolderSchema,
   UpdateMemberSchema,
   UpdateSpaceSchema,
 } from '@atlas/shared';
@@ -20,6 +22,8 @@ type UpdateDocumentInput = z.infer<typeof UpdateDocumentSchema>;
 type CreateMemberInput = z.infer<typeof CreateMemberSchema>;
 type UpdateMemberInput = z.infer<typeof UpdateMemberSchema>;
 type UpdateShareInput = z.infer<typeof UpdateDocumentShareSchema>;
+type CreateFolderInput = z.infer<typeof CreateFolderSchema>;
+type UpdateFolderInput = z.infer<typeof UpdateFolderSchema>;
 
 type Toast = { msg: string; meta?: string };
 type PushToast = (toast: Toast) => void;
@@ -120,6 +124,34 @@ export function useAtlasMutations(pushToast?: PushToast) {
     onSuccess: async () => {
       await invalidateCore();
       pushToast?.({ msg: '空间已删除' });
+    },
+  });
+
+  const createFolder = useMutation({
+    mutationFn: (data: CreateFolderInput) => apiJson('/folders', 'POST', data),
+    onSuccess: async (_data: unknown, variables: CreateFolderInput) => {
+      await invalidateCore();
+      pushToast?.({ msg: '文件夹已创建', meta: variables.name });
+    },
+  });
+
+  const updateFolder = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateFolderInput }) =>
+      apiJson(`/folders/${id}`, 'PATCH', patch),
+    onSuccess: async (_data: unknown, variables: { id: string; patch: UpdateFolderInput }) => {
+      await invalidateCore();
+      pushToast?.({ msg: '文件夹已更新', meta: variables.patch?.name });
+    },
+  });
+
+  const deleteFolder = useMutation({
+    mutationFn: (id: string) => apiJson(`/folders/${id}`, 'DELETE'),
+    onSuccess: async () => {
+      await invalidateCore();
+      pushToast?.({ msg: '文件夹已删除' });
+    },
+    onError: (err: unknown) => {
+      pushToast?.({ msg: '无法删除文件夹', meta: (err as Error)?.message });
     },
   });
 
@@ -279,6 +311,9 @@ export function useAtlasMutations(pushToast?: PushToast) {
     createSpace: (data: CreateSpaceInput) => createSpace.mutate(data),
     updateSpace: (id: string, patch: UpdateSpaceInput) => updateSpace.mutate({ id, patch }),
     deleteSpace: (id: string) => deleteSpace.mutate(id),
+    createFolder: (data: CreateFolderInput) => createFolder.mutate(data),
+    updateFolder: (id: string, patch: UpdateFolderInput) => updateFolder.mutate({ id, patch }),
+    deleteFolder: (id: string) => deleteFolder.mutate(id),
     createDocument: (
       data: CreateDocumentInput,
       options?: Parameters<typeof createDocument.mutate>[1],

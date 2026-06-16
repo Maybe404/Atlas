@@ -6,7 +6,7 @@ import type { Loose } from '../loose-types';
 import { documentReaderUrl } from '../url-utils';
 import { HTMLEditorDialog } from './html-editor-dialog';
 import { MarkdownEditorDialog } from './markdown-editor-dialog';
-import { dotClass } from './shared';
+import { dotClass, flattenFolders, folderPathLabel } from './shared';
 import { SpaceChipPicker } from './space-chip-picker';
 
 const _I = I;
@@ -32,6 +32,7 @@ export function AdminDocsView({
             spaceId: s.id,
             spaceName: s.name,
             spaceAccent: s.accent,
+            folderPath: folderPathLabel(s.folders, c.folderId),
           })),
       ),
     [spaces],
@@ -52,7 +53,22 @@ export function AdminDocsView({
     _ctx?.spaceId && _ctx.spaceId !== 'all' ? _ctx.spaceId : 'all',
   );
   const [visFilter, setVisFilter] = useState('all'); // all | public | invite | private
+  const [folderFilter, setFolderFilter] = useState('all'); // all | <folderId>
   const [search, setSearch] = useState('');
+
+  // Folder filter only makes sense scoped to a single space.
+  const folderOptions = useMemo(() => {
+    if (spaceFilter === 'all') return [];
+    const space = spaces.find((s: Loose) => s.id === spaceFilter);
+    return flattenFolders(space?.folders || []);
+  }, [spaces, spaceFilter]);
+  // Derive the active folder filter instead of resetting via an effect: a stale selection
+  // (after the space changes, or a folder that no longer exists) collapses back to "all".
+  const effectiveFolderFilter = useMemo(() => {
+    if (folderFilter === 'all' || spaceFilter === 'all') return 'all';
+    if (folderFilter === '__root__') return '__root__';
+    return folderOptions.some((f: Loose) => f.id === folderFilter) ? folderFilter : 'all';
+  }, [folderFilter, folderOptions, spaceFilter]);
 
   const spaceOptions = useMemo(() => {
     const seen = new Map();
@@ -68,6 +84,10 @@ export function AdminDocsView({
     if (status === 'published') r = r.filter((d: Loose) => !(d.tags || []).includes('draft'));
     if (status === 'draft') r = r.filter((d: Loose) => (d.tags || []).includes('draft'));
     if (spaceFilter !== 'all') r = r.filter((d: Loose) => d.spaceId === spaceFilter);
+    if (effectiveFolderFilter !== 'all')
+      r = r.filter((d: Loose) =>
+        effectiveFolderFilter === '__root__' ? !d.folderId : d.folderId === effectiveFolderFilter,
+      );
     if (visFilter !== 'all') r = r.filter((d: Loose) => d.visibility === visFilter);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
@@ -76,7 +96,7 @@ export function AdminDocsView({
       );
     }
     return r;
-  }, [docs, status, spaceFilter, visFilter, search]);
+  }, [docs, status, spaceFilter, effectiveFolderFilter, visFilter, search]);
 
   const startRename = (doc: Loose) => {
     setRenaming(doc.id);
@@ -268,6 +288,24 @@ export function AdminDocsView({
               ))}
             </select>
           </div>
+          {spaceFilter !== 'all' && folderOptions.length > 0 && (
+            <div className="filter-group">
+              <span className="filter-label">文件夹</span>
+              <select
+                className="filter-select"
+                value={effectiveFolderFilter}
+                onChange={(e: Loose) => setFolderFilter(e.target.value)}
+              >
+                <option value="all">全部文件夹</option>
+                <option value="__root__">（空间根目录）</option>
+                {folderOptions.map((f: Loose) => (
+                  <option key={f.id} value={f.id}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="filter-group">
             <span className="filter-label">分类</span>
             <div className="segmented">
@@ -334,7 +372,8 @@ export function AdminDocsView({
                       </h4>
                     )}
                     <div className="path">
-                      {doc.spaceName}/{doc.id}
+                      {doc.spaceName}
+                      {doc.folderPath ? ` / ${doc.folderPath}` : ''}/{doc.id}
                       {doc.format === 'markdown' ? '.md' : '.html'}
                     </div>
                   </div>

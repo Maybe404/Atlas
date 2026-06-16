@@ -696,17 +696,79 @@ export { ToastWrap };
 // ─────────────────────────────────────────────────────────────────────────
 // SPACE MANAGER DIALOG — create / edit / delete spaces
 // ─────────────────────────────────────────────────────────────────────────
-function SpaceManagerDialog({ open, editing, onClose, onCreate, onUpdate, onDelete }: Loose) {
+function buildFolderTree(folders: Loose[]) {
+  const byParent = new Map<string, Loose[]>();
+  for (const f of folders) {
+    const key = f.parentId || '__root__';
+    if (!byParent.has(key)) byParent.set(key, []);
+    byParent.get(key)?.push(f);
+  }
+  for (const arr of byParent.values())
+    arr.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
+  const out: Loose[] = [];
+  const walk = (parentKey: string, depth: number) => {
+    for (const f of byParent.get(parentKey) || []) {
+      out.push({ ...f, depth });
+      walk(f.id, depth + 1);
+    }
+  };
+  walk('__root__', 0);
+  return out;
+}
+
+function SpaceManagerDialog({
+  open,
+  editing,
+  spaces = [],
+  mutations,
+  onClose,
+  onCreate,
+  onUpdate,
+  onDelete,
+}: Loose) {
   const isEditing = editing && editing !== 'new';
   const isCreating = editing === 'new';
 
   const [form, setForm] = useState({ name: '', accent: 'accent' });
+  // Folder management state (edit mode only). `creatingUnder`: null = idle,
+  // '__root__' = adding a top-level folder, otherwise the parent folder id.
+  const [creatingUnder, setCreatingUnder] = useState<string | null>(null);
+  const [newName, setNewName] = useState('');
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameVal, setRenameVal] = useState('');
+
   useEffect(() => {
     if (isEditing) setForm({ name: editing.name, accent: editing.accent });
     else if (isCreating) setForm({ name: '', accent: 'accent' });
+    setCreatingUnder(null);
+    setNewName('');
+    setRenamingId(null);
   }, [editing, isEditing, isCreating]);
 
+  // Read the live space from the query cache so the tree re-renders after a
+  // folder mutation invalidates spaces (the `editing` prop is a stale snapshot).
+  const liveSpace = isEditing ? spaces.find((s: Loose) => s.id === editing.id) || editing : null;
+  const folderTree = useMemo(() => buildFolderTree(liveSpace?.folders || []), [liveSpace?.folders]);
+
   if (!open || !editing) return null;
+
+  const submitNewFolder = () => {
+    const name = newName.trim();
+    if (!name || !creatingUnder) return;
+    mutations.createFolder({
+      spaceId: editing.id,
+      name,
+      parentId: creatingUnder === '__root__' ? null : creatingUnder,
+    });
+    setNewName('');
+    setCreatingUnder(null);
+  };
+
+  const commitFolderRename = (id: string) => {
+    const name = renameVal.trim();
+    if (name) mutations.updateFolder(id, { name });
+    setRenamingId(null);
+  };
 
   const submit = () => {
     if (!form.name.trim()) return;
@@ -802,6 +864,145 @@ function SpaceManagerDialog({ open, editing, onClose, onCreate, onUpdate, onDele
               <div style={{ fontSize: 12, color: 'var(--ink-4)' }}>预览 · 显示在侧边栏与目录</div>
             </div>
           </div>
+
+          {isEditing && (
+            <div className="field" style={{ marginTop: 4 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}
+              >
+                <label className="field-label" style={{ marginBottom: 0 }}>
+                  文件夹
+                </label>
+                <button
+                  className="btn ghost"
+                  style={{ padding: '4px 10px', fontSize: 12 }}
+                  onClick={() => {
+                    setCreatingUnder('__root__');
+                    setNewName('');
+                    setRenamingId(null);
+                  }}
+                >
+                  <_I3.plus width="12" height="12" />
+                  <span>新建文件夹</span>
+                </button>
+              </div>
+              <div style={{ fontSize: 12, color: 'var(--ink-4)', margin: '4px 0 8px' }}>
+                组织该空间下的文章。删除文件夹前需先清空其中的子文件夹与文章。
+              </div>
+
+              <div className="folder-mgr">
+                {folderTree.length === 0 && creatingUnder !== '__root__' && (
+                  <div className="folder-mgr-empty">还没有文件夹，文章将直接挂在空间根目录。</div>
+                )}
+                {folderTree.map((f: Loose) => (
+                  <div key={f.id}>
+                    <div className="folder-mgr-row" style={{ paddingLeft: 8 + f.depth * 18 }}>
+                      <_I3.folder width="14" height="14" />
+                      {renamingId === f.id ? (
+                        <input
+                          className="input"
+                          ref={(el: Loose) => el?.focus()}
+                          value={renameVal}
+                          onChange={(e: Loose) => setRenameVal(e.target.value)}
+                          onBlur={() => commitFolderRename(f.id)}
+                          onKeyDown={(e: Loose) => {
+                            if (e.key === 'Enter') commitFolderRename(f.id);
+                            if (e.key === 'Escape') setRenamingId(null);
+                          }}
+                          style={{ padding: '2px 8px', fontSize: 13, flex: 1 }}
+                        />
+                      ) : (
+                        <span className="folder-mgr-name">{f.name}</span>
+                      )}
+                      <div className="folder-mgr-actions">
+                        <button
+                          className="icon-btn"
+                          title="新建子文件夹"
+                          onClick={() => {
+                            setCreatingUnder(f.id);
+                            setNewName('');
+                            setRenamingId(null);
+                          }}
+                        >
+                          <_I3.plus width="13" height="13" />
+                        </button>
+                        <button
+                          className="icon-btn"
+                          title="重命名"
+                          onClick={() => {
+                            setRenamingId(f.id);
+                            setRenameVal(f.name);
+                            setCreatingUnder(null);
+                          }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                            <path
+                              d="M2 12h10M3.5 8.5h2l5-5-2-2-5 5z"
+                              stroke="currentColor"
+                              strokeWidth="1.3"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
+                        <button
+                          className="icon-btn"
+                          title="删除"
+                          onClick={() => {
+                            if (confirm(`删除文件夹「${f.name}」？`)) mutations.deleteFolder(f.id);
+                          }}
+                        >
+                          <_I3.trash width="13" height="13" />
+                        </button>
+                      </div>
+                    </div>
+                    {creatingUnder === f.id && (
+                      <div
+                        className="folder-mgr-row folder-mgr-new"
+                        style={{ paddingLeft: 8 + (f.depth + 1) * 18 }}
+                      >
+                        <_I3.folder width="14" height="14" />
+                        <input
+                          className="input"
+                          ref={(el: Loose) => el?.focus()}
+                          placeholder="子文件夹名称…"
+                          value={newName}
+                          onChange={(e: Loose) => setNewName(e.target.value)}
+                          onBlur={submitNewFolder}
+                          onKeyDown={(e: Loose) => {
+                            if (e.key === 'Enter') submitNewFolder();
+                            if (e.key === 'Escape') setCreatingUnder(null);
+                          }}
+                          style={{ padding: '2px 8px', fontSize: 13, flex: 1 }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ))}
+                {creatingUnder === '__root__' && (
+                  <div className="folder-mgr-row folder-mgr-new" style={{ paddingLeft: 8 }}>
+                    <_I3.folder width="14" height="14" />
+                    <input
+                      className="input"
+                      ref={(el: Loose) => el?.focus()}
+                      placeholder="文件夹名称…"
+                      value={newName}
+                      onChange={(e: Loose) => setNewName(e.target.value)}
+                      onBlur={submitNewFolder}
+                      onKeyDown={(e: Loose) => {
+                        if (e.key === 'Enter') submitNewFolder();
+                        if (e.key === 'Escape') setCreatingUnder(null);
+                      }}
+                      style={{ padding: '2px 8px', fontSize: 13, flex: 1 }}
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
         <div className="dialog-foot">
           {isEditing ? (

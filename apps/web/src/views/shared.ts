@@ -23,3 +23,19 @@ export function flattenFolders(folders: FolderLike[] = []): { id: string; label:
   walk(null, 0);
   return out;
 }
+
+// Resolve a folder's full path (root → leaf) as a " / "-joined label, e.g. "设计规范 / 组件库".
+// Returns '' when the doc sits at the space root (no folderId) or the id is unknown.
+export function folderPathLabel(folders: FolderLike[] = [], folderId?: string | null): string {
+  if (!folderId) return '';
+  const byId = new Map(folders.map((f) => [f.id, f]));
+  const parts: string[] = [];
+  let cur = byId.get(folderId);
+  const seen = new Set<string>();
+  while (cur && !seen.has(cur.id)) {
+    seen.add(cur.id);
+    parts.unshift(cur.name);
+    cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+  }
+  return parts.join(' / ');
+}

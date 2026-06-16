@@ -432,6 +432,8 @@ function App() {
       <SpaceManagerDialog
         open={spaceMgrOpen}
         editing={spaceEditing}
+        spaces={spaces}
+        mutations={mutations}
         onClose={() => {
           setSpaceMgrOpen(false);
           setSpaceEditing(null);
