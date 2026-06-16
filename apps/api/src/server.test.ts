@@ -14,8 +14,9 @@ await import('./db/seed');
 
 const { default: server } = await import('./server');
 const { db } = await import('./db/client');
-const { auditLogs, documents, grants, members, sessions, shareLinks, spaces } =
-  await import('./db/schema');
+const { auditLogs, documents, grants, members, sessions, shareLinks, spaces } = await import(
+  './db/schema'
+);
 const { setMemberDocumentRole } = await import('./lib/grants');
 
 afterAll(() => {

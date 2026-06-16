@@ -10,11 +10,11 @@ import { and, desc, eq, inArray, isNotNull, like, lte, ne, or } from 'drizzle-or
 import { Hono } from 'hono';
 import { db } from '../db/client';
 import { auditLogs, documents, members, shareLinks, spaces } from '../db/schema';
-import { listDocumentMemberGrants, setMemberDocumentRole } from '../lib/grants';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
 import { addDaysToIso, displayDate, nowIso } from '../lib/dates';
+import { listDocumentMemberGrants, setMemberDocumentRole } from '../lib/grants';
 import { validateContentForStorage } from '../lib/html-limits';
 import { badRequest, conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId, makeToken } from '../lib/id';

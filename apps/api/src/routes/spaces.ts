@@ -9,14 +9,10 @@ import { Hono } from 'hono';
 import { db } from '../db/client';
 import { auditLogs, documents, members, spaces } from '../db/schema';
 import { writeAudit } from '../lib/audit';
-import {
-  listSpaceMemberGrants,
-  removeGrantsForTarget,
-  setMemberSpaceRole,
-} from '../lib/grants';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
 import { displayDate } from '../lib/dates';
+import { listSpaceMemberGrants, removeGrantsForTarget, setMemberSpaceRole } from '../lib/grants';
 import { badRequest, conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId } from '../lib/id';
 import {

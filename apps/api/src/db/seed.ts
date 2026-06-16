@@ -117,8 +117,20 @@ await db.insert(grants).values(
 );
 
 await db.insert(grants).values([
-  { subjectType: 'member', subjectId: 'u2', targetType: 'document', targetId: 'd1', role: 'editor' },
-  { subjectType: 'member', subjectId: 'u3', targetType: 'document', targetId: 'd1', role: 'viewer' },
+  {
+    subjectType: 'member',
+    subjectId: 'u2',
+    targetType: 'document',
+    targetId: 'd1',
+    role: 'editor',
+  },
+  {
+    subjectType: 'member',
+    subjectId: 'u3',
+    targetType: 'document',
+    targetId: 'd1',
+    role: 'viewer',
+  },
 ]);
 
 await db.insert(shareLinks).values({
