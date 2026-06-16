@@ -43,6 +43,13 @@
       "when": 1781354357726,
       "tag": "0005_reflective_gorilla_man",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1781582928838,
+      "tag": "0006_groovy_iron_monger",
+      "breakpoints": true
     }
   ]
 }
