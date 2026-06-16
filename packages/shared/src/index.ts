@@ -31,6 +31,7 @@ export const DocumentSchema = z.object({
   spaceId: z.string().optional(),
   spaceName: z.string().optional(),
   spaceAccent: z.string().optional(),
+  folderId: z.string().nullable().optional(),
   title: z.string(),
   desc: z.string().default(''),
   author: z.string(),
@@ -51,6 +52,7 @@ export type Document = z.infer<typeof DocumentSchema>;
 export const LockedDirectoryDocumentSchema = z.object({
   id: z.string(),
   spaceId: z.string(),
+  folderId: z.string().nullable().optional(),
   title: z.string(),
   locked: z.literal(true),
   canRead: z.literal(false),
@@ -60,6 +62,16 @@ export type LockedDirectoryDocument = z.infer<typeof LockedDirectoryDocumentSche
 
 export const DirectoryDocumentSchema = z.union([DocumentSchema, LockedDirectoryDocumentSchema]);
 export type DirectoryDocument = z.infer<typeof DirectoryDocumentSchema>;
+
+export const FolderSchema = z.object({
+  id: z.string(),
+  spaceId: z.string(),
+  parentId: z.string().nullable(),
+  name: z.string(),
+  restricted: z.boolean(),
+  order: z.number().int(),
+});
+export type Folder = z.infer<typeof FolderSchema>;
 
 // Per-member, per-space role; null means "no access".
 export const SpaceMemberRoleSchema = z.enum(['viewer', 'editor']);
@@ -76,6 +88,7 @@ export const SpaceSchema = z.object({
   count: z.number().int().nonnegative(),
   personal: z.boolean().optional(),
   role: SpaceRoleSchema.optional(),
+  folders: z.array(FolderSchema).default([]),
   children: z.array(DirectoryDocumentSchema),
 });
 export type Space = z.infer<typeof SpaceSchema>;
@@ -91,6 +104,7 @@ export const UpdateSpaceSchema = CreateSpaceSchema.partial();
 
 export const CreateDocumentSchema = z.object({
   spaceId: z.string(),
+  folderId: z.string().nullable().optional(),
   title: z.string().trim().max(200).default(''),
   desc: z.string().default(''),
   visibility: VisibilitySchema,
@@ -102,6 +116,7 @@ export const CreateDocumentSchema = z.object({
 
 export const UpdateDocumentSchema = z.object({
   spaceId: z.string().optional(),
+  folderId: z.string().nullable().optional(),
   title: z.string().trim().min(1).max(200).optional(),
   desc: z.string().optional(),
   visibility: VisibilitySchema.optional(),
@@ -130,6 +145,20 @@ export const UpdateMemberSchema = z.object({
 });
 
 const IsoDateTimeSchema = z.string().datetime({ offset: true });
+
+export const CreateFolderSchema = z.object({
+  spaceId: z.string(),
+  name: z.string().trim().min(1).max(80),
+  parentId: z.string().nullable().optional(),
+  restricted: z.boolean().optional(),
+});
+
+export const UpdateFolderSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  parentId: z.string().nullable().optional(),
+  restricted: z.boolean().optional(),
+  order: z.number().int().optional(),
+});
 
 export const SetSpaceMemberRoleSchema = z.object({
   memberId: z.string(),

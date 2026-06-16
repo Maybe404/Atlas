@@ -57,6 +57,13 @@
       "when": 1781583681597,
       "tag": "0007_majestic_star_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1781588063637,
+      "tag": "0008_busy_hellfire_club",
+      "breakpoints": true
     }
   ]
 }

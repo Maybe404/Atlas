@@ -1,13 +1,14 @@
 import {
   BatchSetSpaceMemberRolesSchema,
   CreateSpaceSchema,
+  type Folder,
   SetSpaceMemberRoleSchema,
   UpdateSpaceSchema,
 } from '@atlas/shared';
 import { and, count, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
-import { auditLogs, documents, members, spaces } from '../db/schema';
+import { auditLogs, documents, folders, members, spaces } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
@@ -42,6 +43,7 @@ function toDoc(doc: DocumentRow, author?: User | null, options: { canRead?: bool
   return {
     id: doc.id,
     spaceId: doc.spaceId,
+    folderId: doc.folderId,
     title: doc.title,
     desc: doc.desc,
     author: doc.authorId,
@@ -61,11 +63,35 @@ function toLockedDoc(doc: DocumentRow) {
   return {
     id: doc.id,
     spaceId: doc.spaceId,
+    folderId: doc.folderId,
     title: doc.title,
     locked: true,
     canRead: false,
     canEdit: false,
   };
+}
+
+function toFolder(row: typeof folders.$inferSelect): Folder {
+  return {
+    id: row.id,
+    spaceId: row.spaceId,
+    parentId: row.parentId,
+    name: row.name,
+    restricted: row.restricted,
+    order: row.order,
+  };
+}
+
+async function foldersBySpaceIds(spaceIds: string[]) {
+  const map = new Map<string, Folder[]>();
+  if (spaceIds.length === 0) return map;
+  const rows = await db.select().from(folders).where(inArray(folders.spaceId, spaceIds));
+  for (const row of rows) {
+    const list = map.get(row.spaceId) ?? [];
+    list.push(toFolder(row));
+    map.set(row.spaceId, list);
+  }
+  return map;
 }
 
 async function authorsByIdFor(docs: DocumentRow[]) {
@@ -96,9 +122,11 @@ async function spaceWithChildren(user: User | undefined, sp: SpaceRow, lookup: P
   const docs = await listDirectoryDocuments(user, sp);
   const authorsById = await authorsByIdFor(docs);
   const children = buildChildren(user, docs, authorsById, lookup);
+  const folderMap = await foldersBySpaceIds([sp.id]);
   return {
     ...sp,
     count: children.length,
+    folders: folderMap.get(sp.id) ?? [],
     children,
     role: getSpaceRoleFromLookup(user, lookup, sp.id),
   };
@@ -125,11 +153,13 @@ export const spacesRouter = new Hono<AppEnv>()
       docsBySpaceId.set(doc.spaceId, existing);
     }
 
+    const folderMap = await foldersBySpaceIds(readableSpaces.map((sp) => sp.id));
     const result = readableSpaces.map((sp) => {
       const children = buildChildren(user, docsBySpaceId.get(sp.id) ?? [], authorsById, lookup);
       return {
         ...sp,
         count: children.length,
+        folders: folderMap.get(sp.id) ?? [],
         children,
         role: getSpaceRoleFromLookup(user, lookup, sp.id),
       };

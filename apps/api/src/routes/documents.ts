@@ -9,7 +9,7 @@ import {
 import { and, desc, eq, inArray, isNotNull, like, lte, ne, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
-import { auditLogs, documents, members, shareLinks, spaces } from '../db/schema';
+import { auditLogs, documents, folders, members, shareLinks, spaces } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
@@ -54,6 +54,7 @@ function toDoc(
   return {
     id: row.doc.id,
     spaceId: row.doc.spaceId,
+    folderId: row.doc.folderId,
     spaceName: row.space?.name,
     spaceAccent: row.space?.accent,
     title: row.doc.title,
@@ -118,6 +119,15 @@ function publicShareUrl(token: string | null | undefined) {
   return token ? `/share/${token}` : null;
 }
 
+// A document's folder (if any) must live in the same space as the document.
+async function validateFolder(folderId: string | null | undefined, spaceId: string) {
+  if (!folderId) return null;
+  const [folder] = await db.select().from(folders).where(eq(folders.id, folderId));
+  if (!folder || folder.spaceId !== spaceId)
+    throw badRequest('Folder must belong to the document space.');
+  return folderId;
+}
+
 export const documentsRouter = new Hono<AppEnv>()
   .get('/', async (c) => {
     const user = c.get('user');
@@ -162,6 +172,7 @@ export const documentsRouter = new Hono<AppEnv>()
     const user = requireUser(c.get('user'));
     const body = CreateDocumentSchema.parse(await c.req.json());
     await requireSpaceEditor(user, body.spaceId);
+    const folderId = await validateFolder(body.folderId, body.spaceId);
 
     const checked = validateContentForStorage(body.html);
     const metadata = extractMetadata(body.format, body.html, body.title);
@@ -169,6 +180,7 @@ export const documentsRouter = new Hono<AppEnv>()
     await db.insert(documents).values({
       id,
       spaceId: body.spaceId,
+      folderId,
       authorId: user.id,
       title: body.title || metadata.title || '未命名文章',
       desc: body.desc || metadata.summary,
@@ -259,6 +271,13 @@ export const documentsRouter = new Hono<AppEnv>()
       updated: nowIso(),
     };
     if (body.spaceId !== undefined) patch.spaceId = body.spaceId;
+    // Validate folder against the document's resulting space (new space if moving, else current).
+    if (body.folderId !== undefined) {
+      patch.folderId = await validateFolder(body.folderId, body.spaceId ?? doc.spaceId);
+    } else if (body.spaceId !== undefined && body.spaceId !== doc.spaceId) {
+      // Moving to a different space invalidates the old folder; drop to root.
+      patch.folderId = null;
+    }
     if (body.title !== undefined) patch.title = body.title;
     if (body.desc !== undefined) patch.desc = body.desc;
     if (body.visibility !== undefined) patch.visibility = body.visibility;

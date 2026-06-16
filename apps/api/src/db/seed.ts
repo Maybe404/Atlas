@@ -1,6 +1,7 @@
+import { eq } from 'drizzle-orm';
 import { createPersonalSpace } from '../lib/personal-space';
 import { db } from './client';
-import { documents, grants, members, sessions, shareLinks, spaces } from './schema';
+import { documents, folders, grants, members, sessions, shareLinks, spaces } from './schema';
 import { ATLAS_DATA } from './seed-data';
 
 const DEMO_PASSWORD_HASH = '$2b$04$RhYUNqiT505iO9sAwUaXGO/9c55aKJYZtRSazB2H0mHtPbH.m5eF.';
@@ -9,6 +10,7 @@ await db.delete(sessions);
 await db.delete(grants);
 await db.delete(shareLinks);
 await db.delete(documents);
+await db.delete(folders);
 await db.delete(spaces);
 await db.delete(members);
 
@@ -143,6 +145,28 @@ const personalOwners = new Set(
 for (const member of ATLAS_DATA.members) {
   if (personalOwners.has(member.id)) continue;
   await createPersonalSpace(db, { id: member.id, name: member.name });
+}
+
+// Demo folders (Phase 3): a nested pair in the first shared space, with one doc filed under them.
+const firstShared = ATLAS_DATA.tree.find((sp) => !sp.personal);
+if (firstShared) {
+  await db.insert(folders).values([
+    { id: 'f_demo_parent', spaceId: firstShared.id, parentId: null, name: '设计规范', order: 0 },
+    {
+      id: 'f_demo_child',
+      spaceId: firstShared.id,
+      parentId: 'f_demo_parent',
+      name: '组件库',
+      order: 0,
+    },
+  ]);
+  const firstDoc = firstShared.children[0];
+  if (firstDoc) {
+    await db
+      .update(documents)
+      .set({ folderId: 'f_demo_child' })
+      .where(eq(documents.id, firstDoc.id));
+  }
 }
 
 await db.insert(shareLinks).values({

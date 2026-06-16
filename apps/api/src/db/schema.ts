@@ -40,6 +40,28 @@ export const spaces = sqliteTable('spaces', {
   createdAt: text('created_at').notNull().default(sql`(current_timestamp)`),
 });
 
+export const folders = sqliteTable(
+  'folders',
+  {
+    id: text('id').primaryKey(),
+    spaceId: text('space_id')
+      .notNull()
+      .references(() => spaces.id, { onDelete: 'cascade' }),
+    // Nesting pointer (logical self-reference, validated in the route). No DB FK: folder delete
+    // refuses non-empty folders, and space delete cascades every folder via space_id.
+    parentId: text('parent_id'),
+    name: text('name').notNull(),
+    // Restricted folders are stored now but only ENFORCED in Phase 4 (inherit/restricted chain).
+    restricted: integer('restricted', { mode: 'boolean' }).notNull().default(false),
+    order: integer('order').notNull().default(0),
+    createdAt: text('created_at').notNull().default(sql`(current_timestamp)`),
+  },
+  (table) => ({
+    spaceIdIdx: index('folders_space_id_idx').on(table.spaceId),
+    parentIdIdx: index('folders_parent_id_idx').on(table.parentId),
+  }),
+);
+
 export const documents = sqliteTable(
   'documents',
   {
@@ -47,6 +69,8 @@ export const documents = sqliteTable(
     spaceId: text('space_id')
       .notNull()
       .references(() => spaces.id, { onDelete: 'cascade' }),
+    // Folder the doc lives in (null = space root). Deleting a folder drops its docs to root.
+    folderId: text('folder_id').references(() => folders.id, { onDelete: 'set null' }),
     authorId: text('author_id')
       .notNull()
       .references(() => members.id),

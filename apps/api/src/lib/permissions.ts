@@ -2,7 +2,7 @@ import type { SpaceMemberRole } from '@atlas/shared';
 import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { db } from '../db/client';
-import { documents, grants, members, shareLinks, spaces } from '../db/schema';
+import { documents, folders, grants, members, shareLinks, spaces } from '../db/schema';
 import { nowIso } from './dates';
 import { getMemberDocumentRole, getMemberSpaceRole, listMemberGrants } from './grants';
 import { forbidden, notFound } from './http-error';
@@ -67,6 +67,13 @@ export async function requireSpaceEditor(user: User, spaceId: string) {
   const role = await requireSpaceAccess(user, spaceId);
   if (role !== 'editor') throw forbidden('Editor access is required for this space.');
   return role;
+}
+
+export async function requireFolderEditor(user: User, folderId: string) {
+  const [folder] = await db.select().from(folders).where(eq(folders.id, folderId));
+  if (!folder) throw notFound();
+  await requireSpaceEditor(user, folder.spaceId);
+  return folder;
 }
 
 export function canReadDocumentWithLookup(

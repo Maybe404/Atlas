@@ -6,6 +6,7 @@ import { type AppEnv, authMiddleware, csrfMiddleware } from './lib/auth';
 import { HttpError } from './lib/http-error';
 import { authRouter } from './routes/auth';
 import { documentsRouter } from './routes/documents';
+import { foldersRouter } from './routes/folders';
 import { membersRouter } from './routes/members';
 import { spacesRouter } from './routes/spaces';
 
@@ -26,6 +27,7 @@ const app = new Hono<AppEnv>()
   .route('/auth', authRouter)
   .route('/spaces', spacesRouter)
   .route('/documents', documentsRouter)
+  .route('/folders', foldersRouter)
   .route('/members', membersRouter);
 
 app.onError((err, c) => {

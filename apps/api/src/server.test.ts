@@ -423,6 +423,122 @@ describe('Atlas API', () => {
     expect(single.status).toBe(403);
   });
 
+  test('folders: create, nest, file a doc, move it, and guard deletes', async () => {
+    const admin = await loginAs();
+    const json = (r: Response) => r.json() as Promise<{ id: string }>;
+
+    const parent = await json(
+      await request('/folders', {
+        method: 'POST',
+        body: JSON.stringify({ spaceId: 's1', name: '手册' }),
+        headers: { 'content-type': 'application/json', ...admin.headers },
+      }),
+    );
+    const child = await json(
+      await request('/folders', {
+        method: 'POST',
+        body: JSON.stringify({ spaceId: 's1', name: '章节', parentId: parent.id }),
+        headers: { 'content-type': 'application/json', ...admin.headers },
+      }),
+    );
+
+    const created = await request('/documents', {
+      method: 'POST',
+      body: JSON.stringify({
+        spaceId: 's1',
+        folderId: child.id,
+        title: '入门',
+        visibility: 'public',
+        html: '<p>hi</p>',
+      }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(created.status).toBe(201);
+    const { id: docId } = await json(created);
+
+    // doc reports its folder
+    const docBody = (await (
+      await request(`/documents/${docId}`, { headers: { cookie: admin.cookie } })
+    ).json()) as { folderId: string };
+    expect(docBody.folderId).toBe(child.id);
+
+    // space payload exposes the folder tree
+    const space = (await (
+      await request('/spaces/s1', { headers: { cookie: admin.cookie } })
+    ).json()) as { folders: { id: string; parentId: string | null }[] };
+    expect(space.folders.find((f) => f.id === child.id)?.parentId).toBe(parent.id);
+
+    // move the doc up to the parent
+    expect(
+      (
+        await request(`/documents/${docId}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ folderId: parent.id }),
+          headers: { 'content-type': 'application/json', ...admin.headers },
+        })
+      ).status,
+    ).toBe(200);
+
+    // empty child folder deletes; parent (now holding the doc) refuses
+    expect(
+      (await request(`/folders/${child.id}`, { method: 'DELETE', headers: admin.headers })).status,
+    ).toBe(200);
+    expect(
+      (await request(`/folders/${parent.id}`, { method: 'DELETE', headers: admin.headers })).status,
+    ).toBe(409);
+
+    // drop the doc to root, then the parent deletes
+    await request(`/documents/${docId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ folderId: null }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(
+      (await request(`/folders/${parent.id}`, { method: 'DELETE', headers: admin.headers })).status,
+    ).toBe(200);
+  });
+
+  test('folders: subtree-cycle moves and non-editor writes are rejected', async () => {
+    const admin = await loginAs();
+    const json = (r: Response) => r.json() as Promise<{ id: string }>;
+    const a = await json(
+      await request('/folders', {
+        method: 'POST',
+        body: JSON.stringify({ spaceId: 's1', name: 'A' }),
+        headers: { 'content-type': 'application/json', ...admin.headers },
+      }),
+    );
+    const b = await json(
+      await request('/folders', {
+        method: 'POST',
+        body: JSON.stringify({ spaceId: 's1', name: 'B', parentId: a.id }),
+        headers: { 'content-type': 'application/json', ...admin.headers },
+      }),
+    );
+    // moving A under its own descendant B → 400
+    expect(
+      (
+        await request(`/folders/${a.id}`, {
+          method: 'PATCH',
+          body: JSON.stringify({ parentId: b.id }),
+          headers: { 'content-type': 'application/json', ...admin.headers },
+        })
+      ).status,
+    ).toBe(400);
+
+    // a space viewer (u5 on s1) cannot create folders
+    const viewer = await loginAs('he@atlas.team');
+    expect(
+      (
+        await request('/folders', {
+          method: 'POST',
+          body: JSON.stringify({ spaceId: 's1', name: 'X' }),
+          headers: { 'content-type': 'application/json', ...viewer.headers },
+        })
+      ).status,
+    ).toBe(403);
+  });
+
   test('lists only members assigned to a space', async () => {
     const admin = await loginAs();
 
