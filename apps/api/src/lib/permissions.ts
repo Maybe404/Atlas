@@ -1,22 +1,15 @@
 import type { SpaceMemberRole } from '@atlas/shared';
 import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/sqlite-core';
 import { db } from '../db/client';
-import {
-  documentMembers,
-  documents,
-  members,
-  shareLinks,
-  spaceMembers,
-  spaces,
-} from '../db/schema';
+import { documents, grants, members, shareLinks, spaces } from '../db/schema';
 import { nowIso } from './dates';
+import { getMemberDocumentRole, getMemberSpaceRole, listMemberGrants } from './grants';
 import { forbidden, notFound } from './http-error';
 
 type User = typeof members.$inferSelect;
 type SpaceRow = typeof spaces.$inferSelect;
 type DocumentRow = typeof documents.$inferSelect;
-type SpaceMemberRow = typeof spaceMembers.$inferSelect;
-type DocumentMemberRow = typeof documentMembers.$inferSelect;
 
 export type PermissionLookup = {
   spaceRolesBySpaceId: Map<string, SpaceMemberRole>;
@@ -33,19 +26,15 @@ export function emptyPermissionLookup(): PermissionLookup {
 export async function loadPermissionLookup(user: User | undefined): Promise<PermissionLookup> {
   if (!user || isAdmin(user)) return emptyPermissionLookup();
 
-  const [spaceRows, documentRows] = await Promise.all([
-    db.select().from(spaceMembers).where(eq(spaceMembers.memberId, user.id)),
-    db.select().from(documentMembers).where(eq(documentMembers.memberId, user.id)),
-  ]);
+  const rows = await listMemberGrants(user.id);
 
-  return {
-    spaceRolesBySpaceId: new Map(
-      spaceRows.map((row: SpaceMemberRow) => [row.spaceId, row.role as SpaceMemberRole]),
-    ),
-    documentRolesByDocumentId: new Map(
-      documentRows.map((row: DocumentMemberRow) => [row.documentId, row.role as SpaceMemberRole]),
-    ),
-  };
+  const spaceRolesBySpaceId = new Map<string, SpaceMemberRole>();
+  const documentRolesByDocumentId = new Map<string, SpaceMemberRole>();
+  for (const row of rows) {
+    if (row.targetType === 'space') spaceRolesBySpaceId.set(row.targetId, row.role);
+    else if (row.targetType === 'document') documentRolesByDocumentId.set(row.targetId, row.role);
+  }
+  return { spaceRolesBySpaceId, documentRolesByDocumentId };
 }
 
 export function isAdmin(user?: User) {
@@ -65,11 +54,7 @@ export function getSpaceRoleFromLookup(
 export async function getSpaceRole(user: User | undefined, spaceId: string) {
   if (!user) return null;
   if (isAdmin(user)) return 'editor' as const;
-  const [membership] = await db
-    .select()
-    .from(spaceMembers)
-    .where(and(eq(spaceMembers.spaceId, spaceId), eq(spaceMembers.memberId, user.id)));
-  return membership?.role ?? null;
+  return getMemberSpaceRole(user.id, spaceId);
 }
 
 export async function requireSpaceAccess(user: User, spaceId: string) {
@@ -106,11 +91,8 @@ export async function canReadDocument(user: User | undefined, doc: DocumentRow) 
   if (doc.visibility === 'private') return false;
   const spaceRole = await getSpaceRole(user, doc.spaceId);
   if (spaceRole) return true;
-  const [direct] = await db
-    .select()
-    .from(documentMembers)
-    .where(and(eq(documentMembers.documentId, doc.id), eq(documentMembers.memberId, user.id)));
-  return Boolean(direct);
+  const directRole = await getMemberDocumentRole(user.id, doc.id);
+  return Boolean(directRole);
 }
 
 export async function requireDocumentRead(user: User | undefined, docId: string) {
@@ -142,11 +124,8 @@ export async function canEditDocument(user: User | undefined, doc: DocumentRow) 
   if (doc.visibility === 'private') return false;
   const spaceRole = await getSpaceRole(user, doc.spaceId);
   if (spaceRole === 'editor') return true;
-  const [direct] = await db
-    .select()
-    .from(documentMembers)
-    .where(and(eq(documentMembers.documentId, doc.id), eq(documentMembers.memberId, user.id)));
-  return direct?.role === 'editor';
+  const directRole = await getMemberDocumentRole(user.id, doc.id);
+  return directRole === 'editor';
 }
 
 export function canManageDocumentShare(user: User | undefined, doc: DocumentRow) {
@@ -180,8 +159,15 @@ export async function listReadableSpaces(user: User | undefined) {
   const rows = await db
     .select({ space: spaces })
     .from(spaces)
-    .innerJoin(spaceMembers, eq(spaceMembers.spaceId, spaces.id))
-    .where(eq(spaceMembers.memberId, user.id));
+    .innerJoin(
+      grants,
+      and(
+        eq(grants.targetType, 'space'),
+        eq(grants.targetId, spaces.id),
+        eq(grants.subjectType, 'member'),
+        eq(grants.subjectId, user.id),
+      ),
+    );
 
   return rows.map((row) => row.space);
 }
@@ -206,16 +192,29 @@ export async function listReadableDocuments(user: User | undefined, space?: Spac
     return db.select().from(documents).where(isNull(documents.deletedAt));
   }
 
+  const spaceGrant = alias(grants, 'space_grant');
+  const docGrant = alias(grants, 'doc_grant');
+
   const rows = await db
     .select({ doc: documents })
     .from(documents)
     .leftJoin(
-      spaceMembers,
-      and(eq(spaceMembers.spaceId, documents.spaceId), eq(spaceMembers.memberId, user.id)),
+      spaceGrant,
+      and(
+        eq(spaceGrant.targetType, 'space'),
+        eq(spaceGrant.targetId, documents.spaceId),
+        eq(spaceGrant.subjectType, 'member'),
+        eq(spaceGrant.subjectId, user.id),
+      ),
     )
     .leftJoin(
-      documentMembers,
-      and(eq(documentMembers.documentId, documents.id), eq(documentMembers.memberId, user.id)),
+      docGrant,
+      and(
+        eq(docGrant.targetType, 'document'),
+        eq(docGrant.targetId, documents.id),
+        eq(docGrant.subjectType, 'member'),
+        eq(docGrant.subjectId, user.id),
+      ),
     )
     .where(
       and(
@@ -224,8 +223,8 @@ export async function listReadableDocuments(user: User | undefined, space?: Spac
         or(
           eq(documents.visibility, 'public'),
           eq(documents.authorId, user.id),
-          and(eq(documents.visibility, 'invite'), isNotNull(spaceMembers.memberId)),
-          and(eq(documents.visibility, 'invite'), isNotNull(documentMembers.memberId)),
+          and(eq(documents.visibility, 'invite'), isNotNull(spaceGrant.subjectId)),
+          and(eq(documents.visibility, 'invite'), isNotNull(docGrant.subjectId)),
         ),
       ),
     );
