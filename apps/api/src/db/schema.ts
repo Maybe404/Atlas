@@ -114,6 +114,27 @@ export const documentMembers = sqliteTable(
   }),
 );
 
+// Unified authorization edges. Replaces space_members + document_members.
+// Phase 1 only writes subjectType='member' with targetType in ('space','document');
+// 'group' and 'folder' are accepted now so later phases add rows without a migration.
+export const grants = sqliteTable(
+  'grants',
+  {
+    subjectType: text('subject_type', { enum: ['group', 'member'] }).notNull(),
+    subjectId: text('subject_id').notNull(),
+    targetType: text('target_type', { enum: ['space', 'folder', 'document'] }).notNull(),
+    targetId: text('target_id').notNull(),
+    role: text('role', { enum: ['viewer', 'editor'] }).notNull(),
+  },
+  (table) => ({
+    pk: primaryKey({
+      columns: [table.subjectType, table.subjectId, table.targetType, table.targetId],
+    }),
+    subjectIdx: index('grants_subject_idx').on(table.subjectType, table.subjectId),
+    targetIdx: index('grants_target_idx').on(table.targetType, table.targetId),
+  }),
+);
+
 export const shareLinks = sqliteTable(
   'share_links',
   {
