@@ -556,7 +556,7 @@ const READER_TOC = [
   },
 ];
 
-function TocList({ toc, active, onPick, plain = false }: Loose) {
+function TocList({ toc, active, onPick, plain = false, scrollRef }: Loose) {
   const [topOpacity, setTopOpacity] = useState(0);
   const [botOpacity, setBotOpacity] = useState(1);
   const listRef = useRef<HTMLDivElement>(null);
@@ -570,7 +570,10 @@ function TocList({ toc, active, onPick, plain = false }: Loose) {
   // Keep the highlighted entry in view as the article scrolls past it. Mutate
   // only this list's scrollTop — never scrollIntoView, which would also nudge
   // ancestor/horizontal scroll while the panel is translated off-screen.
+  // Skipped when a parent owns the scroll (scrollRef) — it drives the follow
+  // continuously, so a discrete jump here would fight it.
   useEffect(() => {
+    if (scrollRef) return;
     const list = listRef.current;
     if (!list || !active) return;
     const el = list.querySelector<HTMLElement>('.toc-sec.active, .toc-sub.active');
@@ -579,12 +582,12 @@ function TocList({ toc, active, onPick, plain = false }: Loose) {
     const er = el.getBoundingClientRect();
     if (er.top < lr.top) list.scrollTop -= lr.top - er.top + 8;
     else if (er.bottom > lr.bottom) list.scrollTop += er.bottom - lr.bottom + 8;
-  }, [active]);
+  }, [active, scrollRef]);
 
   let i = 0;
-  // plain mode: render rows directly (no per-item scale/fade). Used by the
-  // reader TOC so following the article is a smooth list scroll with gradient
-  // edges, not items popping in one-by-one as they cross the IO threshold.
+  // plain mode: render rows directly (no per-item scale/fade), for a smooth
+  // list scroll with gradient edges only. The reader TOC keeps the animated
+  // mode; its follow-scroll is driven continuously by the parent via scrollRef.
   const wrap = (node: Loose, key: string) =>
     plain ? (
       <div key={key}>{node}</div>
@@ -595,12 +598,13 @@ function TocList({ toc, active, onPick, plain = false }: Loose) {
     );
   return (
     <div className="tree-scroll toc-scroll">
-      <div className="scroll-list" ref={listRef} onScroll={onScroll}>
+      <div className="scroll-list" ref={scrollRef || listRef} onScroll={onScroll}>
         {toc.map((sec: Loose) => (
           <div key={sec.id}>
             {wrap(
               <div
                 className={`toc-sec ${active === sec.id ? 'active' : ''}`}
+                data-id={sec.id}
                 onClick={() => onPick(sec.id)}
               >
                 <span className="toc-num">{sec.num}</span>
@@ -612,6 +616,7 @@ function TocList({ toc, active, onPick, plain = false }: Loose) {
               wrap(
                 <div
                   className={`toc-sub ${active === sub.id ? 'active' : ''}`}
+                  data-id={sub.id}
                   style={
                     {
                       '--sub-pad': `${24 + (Math.max(sub.depth || 1, 1) - 1) * 16}px`,

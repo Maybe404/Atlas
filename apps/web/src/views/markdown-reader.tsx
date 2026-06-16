@@ -31,6 +31,7 @@ export function MarkdownReader({ content, onScroll, tocPanel = false }: Loose) {
   const [loading, setLoading] = useState(true);
   const ref = useRef<HTMLDivElement>(null); // .md-body
   const scrollRef = useRef<HTMLDivElement>(null); // .md-scroll
+  const tocScrollRef = useRef<HTMLDivElement>(null); // TOC .scroll-list
 
   const [toc, setToc] = useState<Loose[]>([]);
   const [active, setActive] = useState('');
@@ -55,24 +56,48 @@ export function MarkdownReader({ content, onScroll, tocPanel = false }: Loose) {
     }, 3000);
   }, []);
 
-  // Scroll-spy: the active heading is the last one above the fold.
+  // Scroll-spy + continuous TOC follow. The active heading is the last one
+  // above the reading line; we also drive the TOC's own scroll continuously so
+  // it tracks the article as smoothly as a direct scroll — interpolating
+  // between the active row and the next by how far we've read into the section,
+  // instead of the discrete per-active jump that made rows pop in one-by-one.
+  const LINE = 96; // reading line, measured from the scroll container's top
   const updateActive = useCallback(() => {
     const sc = scrollRef.current;
     const body = ref.current;
     if (!sc || !body) return;
-    const heads = body.querySelectorAll<HTMLElement>('h1, h2, h3');
-    const top = sc.getBoundingClientRect().top;
-    let cur = '';
-    for (const h of heads) {
-      if (!h.id) continue;
-      if (h.getBoundingClientRect().top - top <= 96) cur = h.id;
+    const heads = Array.from(body.querySelectorAll<HTMLElement>('h1, h2, h3')).filter((h) => h.id);
+    if (heads.length === 0) return;
+    const scTop = sc.getBoundingClientRect().top;
+    let k = 0;
+    for (let i = 0; i < heads.length; i++) {
+      if (heads[i]!.getBoundingClientRect().top - scTop <= LINE) k = i;
       else break;
     }
-    if (!cur) {
-      const first = heads[0];
-      if (first?.id) cur = first.id;
-    }
-    if (cur) setActive(cur);
+    const activeId = heads[k]!.id;
+    setActive(activeId); // identical string → React bails, no re-render
+
+    const list = tocScrollRef.current;
+    if (!list) return;
+    const max = list.scrollHeight - list.clientHeight;
+    if (max <= 0) return; // TOC fits — nothing to follow
+    // Fraction read into the current section (0 at its heading, 1 at the next).
+    const curTop = heads[k]!.getBoundingClientRect().top - scTop;
+    const next = heads[k + 1];
+    const nextTop = next ? next.getBoundingClientRect().top - scTop : curTop;
+    const span = nextTop - curTop;
+    const f = span > 0 ? Math.min(Math.max((LINE - curTop) / span, 0), 1) : 0;
+    // Content-relative offsets of the matching rows (scrollTop cancels current scroll).
+    const rowK = list.querySelector<HTMLElement>(`[data-id="${CSS.escape(activeId)}"]`);
+    if (!rowK) return;
+    const listTop = list.getBoundingClientRect().top;
+    const offK = rowK.getBoundingClientRect().top - listTop + list.scrollTop;
+    const rowN = next
+      ? list.querySelector<HTMLElement>(`[data-id="${CSS.escape(next.id)}"]`)
+      : null;
+    const offN = rowN ? rowN.getBoundingClientRect().top - listTop + list.scrollTop : offK;
+    const anchor = list.clientHeight * 0.38; // keep the active row ~⅓ down
+    list.scrollTop = Math.min(Math.max(offK + f * (offN - offK) - anchor, 0), max);
   }, []);
 
   useEffect(() => {
@@ -206,7 +231,7 @@ export function MarkdownReader({ content, onScroll, tocPanel = false }: Loose) {
             }}
           >
             <div className="reader-toc-head">目录</div>
-            <TocList toc={toc} active={active} onPick={onPick} />
+            <TocList toc={toc} active={active} onPick={onPick} scrollRef={tocScrollRef} />
           </aside>
         </>
       )}
