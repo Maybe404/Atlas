@@ -7,8 +7,13 @@ import {
 import { and, count, eq, inArray, isNull } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
-import { auditLogs, documents, members, spaceMembers, spaces } from '../db/schema';
+import { auditLogs, documents, members, spaces } from '../db/schema';
 import { writeAudit } from '../lib/audit';
+import {
+  listSpaceMemberGrants,
+  removeGrantsForTarget,
+  setMemberSpaceRole,
+} from '../lib/grants';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
 import { displayDate } from '../lib/dates';
@@ -157,7 +162,7 @@ export const spacesRouter = new Hono<AppEnv>()
       accent: body.accent,
       personal: Boolean(body.personal),
     });
-    await db.insert(spaceMembers).values({ spaceId: id, memberId: user.id, role: 'editor' });
+    await setMemberSpaceRole(db, user.id, id, 'editor');
     await writeAudit({
       actorId: user.id,
       action: 'space.create',
@@ -207,6 +212,7 @@ export const spacesRouter = new Hono<AppEnv>()
       );
     }
 
+    await removeGrantsForTarget(db, 'space', id);
     await db.delete(spaces).where(eq(spaces.id, id));
     await writeAudit({
       actorId: user.id,
@@ -222,16 +228,23 @@ export const spacesRouter = new Hono<AppEnv>()
     await requireSpaceById(spaceId);
     await requireSpaceAccess(user, spaceId);
 
-    const rows = await db
-      .select({ member: members, membership: spaceMembers })
-      .from(spaceMembers)
-      .innerJoin(members, eq(spaceMembers.memberId, members.id))
-      .where(eq(spaceMembers.spaceId, spaceId));
+    const grantRows = await listSpaceMemberGrants(spaceId);
+    if (grantRows.length === 0) return c.json([]);
+    const memberRows = await db
+      .select()
+      .from(members)
+      .where(
+        inArray(
+          members.id,
+          grantRows.map((row) => row.memberId),
+        ),
+      );
+    const roleByMemberId = new Map(grantRows.map((row) => [row.memberId, row.role]));
 
     return c.json(
-      rows.map((row) => ({
-        ...toPublicMember(row.member),
-        spaceRole: row.membership.role,
+      memberRows.map((member) => ({
+        ...toPublicMember(member),
+        spaceRole: roleByMemberId.get(member.id),
       })),
     );
   })
@@ -255,19 +268,7 @@ export const spacesRouter = new Hono<AppEnv>()
 
     await db.transaction(async (tx) => {
       for (const update of updates) {
-        await tx
-          .delete(spaceMembers)
-          .where(
-            and(eq(spaceMembers.spaceId, spaceId), eq(spaceMembers.memberId, update.memberId)),
-          );
-
-        if (update.role) {
-          await tx.insert(spaceMembers).values({
-            spaceId,
-            memberId: update.memberId,
-            role: update.role,
-          });
-        }
+        await setMemberSpaceRole(tx, update.memberId, spaceId, update.role);
         await tx.insert(auditLogs).values({
           id: makeId('audit'),
           actorId: user.id,
@@ -297,13 +298,7 @@ export const spacesRouter = new Hono<AppEnv>()
     if (!member) throw notFound('Member not found.');
 
     await db.transaction(async (tx) => {
-      await tx
-        .delete(spaceMembers)
-        .where(and(eq(spaceMembers.spaceId, spaceId), eq(spaceMembers.memberId, body.memberId)));
-
-      if (body.role) {
-        await tx.insert(spaceMembers).values({ spaceId, memberId: body.memberId, role: body.role });
-      }
+      await setMemberSpaceRole(tx, body.memberId, spaceId, body.role);
       await tx.insert(auditLogs).values({
         id: makeId('audit'),
         actorId: user.id,
