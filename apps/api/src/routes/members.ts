@@ -10,6 +10,7 @@ import { removeGrantsForSubject } from '../lib/grants';
 import { badRequest, conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId } from '../lib/id';
 import { isAdmin } from '../lib/permissions';
+import { createPersonalSpace } from '../lib/personal-space';
 import { toPublicMember } from '../lib/serializers';
 
 function initialsFromName(name: string) {
@@ -62,6 +63,7 @@ export const membersRouter = new Hono<AppEnv>()
 
     const [member] = await db.select().from(members).where(eq(members.id, id));
     if (!member) throw notFound();
+    await createPersonalSpace(db, member);
     await writeAudit({
       actorId: user.id,
       action: 'member.create',

@@ -249,7 +249,8 @@ export const spacesRouter = new Hono<AppEnv>()
     if (!isAdmin(user)) throw forbidden('Only workspace admins can change space permissions.');
 
     const spaceId = c.req.param('id');
-    await requireSpaceById(spaceId);
+    const space = await requireSpaceById(spaceId);
+    if (space.personal) throw forbidden('Personal spaces cannot be shared with other members.');
     await requireSpaceAccess(user, spaceId);
     const body = BatchSetSpaceMemberRolesSchema.parse(await c.req.json());
     const updates = [...new Map(body.updates.map((item) => [item.memberId, item])).values()];
@@ -284,7 +285,8 @@ export const spacesRouter = new Hono<AppEnv>()
 
     const spaceId = c.req.param('id');
     const memberId = c.req.param('memberId');
-    await requireSpaceById(spaceId);
+    const space = await requireSpaceById(spaceId);
+    if (space.personal) throw forbidden('Personal spaces cannot be shared with other members.');
     await requireSpaceAccess(user, spaceId);
     const body = SetSpaceMemberRoleSchema.parse({ ...(await c.req.json()), memberId });
     const [member] = await db

@@ -34,6 +34,9 @@ export const spaces = sqliteTable('spaces', {
   mark: text('mark').notNull(),
   accent: text('accent').notNull(),
   personal: integer('personal', { mode: 'boolean' }).notNull().default(false),
+  // Owner of a personal space (null for shared spaces). Personal spaces are isolated to
+  // their owner + admins; sharing is per-document / public-link only.
+  ownerId: text('owner_id').references(() => members.id, { onDelete: 'set null' }),
   createdAt: text('created_at').notNull().default(sql`(current_timestamp)`),
 });
 

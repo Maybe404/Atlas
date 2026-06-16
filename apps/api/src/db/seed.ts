@@ -1,3 +1,4 @@
+import { createPersonalSpace } from '../lib/personal-space';
 import { db } from './client';
 import { documents, grants, members, sessions, shareLinks, spaces } from './schema';
 import { ATLAS_DATA } from './seed-data';
@@ -75,6 +76,7 @@ for (const sp of ATLAS_DATA.tree) {
     mark: sp.mark,
     accent: sp.accent as string,
     personal: !!sp.personal,
+    ownerId: sp.personal ? (sp.children[0]?.author ?? null) : null,
   });
   for (const doc of sp.children) {
     await db.insert(documents).values({
@@ -132,6 +134,16 @@ await db.insert(grants).values([
     role: 'viewer',
   },
 ]);
+
+// Every member owns exactly one private space. Members who already own a personal space
+// in the fixture tree (e.g. u1 → s4) are skipped; the rest get a generated one.
+const personalOwners = new Set(
+  ATLAS_DATA.tree.filter((sp) => sp.personal).map((sp) => sp.children[0]?.author),
+);
+for (const member of ATLAS_DATA.members) {
+  if (personalOwners.has(member.id)) continue;
+  await createPersonalSpace(db, { id: member.id, name: member.name });
+}
 
 await db.insert(shareLinks).values({
   id: 'link_d1',

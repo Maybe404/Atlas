@@ -350,6 +350,79 @@ describe('Atlas API', () => {
     expect(deleted).toBeUndefined();
   });
 
+  test('newly created members receive an isolated personal space', async () => {
+    const admin = await loginAs();
+    const create = await request('/members', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: '测试者',
+        email: 'tester@atlas.team',
+        password: 'first-password',
+        role: 'editor',
+      }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(create.status).toBe(201);
+    const { id } = (await create.json()) as { id: string };
+
+    const [space] = await db.select().from(spaces).where(eq(spaces.ownerId, id));
+    expect(space?.personal).toBe(true);
+    const personalId = space?.id ?? '';
+    expect(await spaceGrantRows(personalId)).toContainEqual({
+      spaceId: personalId,
+      memberId: id,
+      role: 'editor',
+    });
+  });
+
+  test('personal space contents are readable by owner and admin, hidden from others', async () => {
+    const owner = await loginAs('chen@atlas.team'); // u2, editor of sp_personal_u2
+    const create = await request('/documents', {
+      method: 'POST',
+      body: JSON.stringify({
+        spaceId: 'sp_personal_u2',
+        title: '私人笔记',
+        visibility: 'private',
+        html: '<p>secret</p>',
+      }),
+      headers: { 'content-type': 'application/json', ...owner.headers },
+    });
+    expect(create.status).toBe(201);
+    const { id } = (await create.json()) as { id: string };
+
+    // owner can read it
+    expect((await request(`/documents/${id}`, { headers: { cookie: owner.cookie } })).status).toBe(
+      200,
+    );
+    // an unrelated non-admin member cannot
+    const other = await loginAs('he@atlas.team'); // u5
+    expect((await request(`/documents/${id}`, { headers: { cookie: other.cookie } })).status).toBe(
+      404,
+    );
+    // admin can
+    const admin = await loginAs('lin@atlas.team');
+    expect((await request(`/documents/${id}`, { headers: { cookie: admin.cookie } })).status).toBe(
+      200,
+    );
+  });
+
+  test('personal spaces cannot be shared with other members', async () => {
+    const admin = await loginAs();
+    const batch = await request('/spaces/s4/members', {
+      method: 'PUT',
+      body: JSON.stringify({ updates: [{ memberId: 'u2', role: 'viewer' }] }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(batch.status).toBe(403);
+
+    const single = await request('/spaces/s4/members/u2', {
+      method: 'PUT',
+      body: JSON.stringify({ role: 'viewer' }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(single.status).toBe(403);
+  });
+
   test('lists only members assigned to a space', async () => {
     const admin = await loginAs();
 
