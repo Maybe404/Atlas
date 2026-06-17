@@ -148,44 +148,9 @@ export const documents = sqliteTable(
   }),
 );
 
-// Per-member, per-space role. Absence of a row means "no access".
-export const spaceMembers = sqliteTable(
-  'space_members',
-  {
-    spaceId: text('space_id')
-      .notNull()
-      .references(() => spaces.id, { onDelete: 'cascade' }),
-    memberId: text('member_id')
-      .notNull()
-      .references(() => members.id, { onDelete: 'cascade' }),
-    role: text('role', { enum: ['viewer', 'editor'] }).notNull(),
-  },
-  (table) => ({
-    pk: primaryKey({ columns: [table.spaceId, table.memberId] }),
-    memberIdIdx: index('space_members_member_id_idx').on(table.memberId),
-  }),
-);
-
-export const documentMembers = sqliteTable(
-  'document_members',
-  {
-    documentId: text('document_id')
-      .notNull()
-      .references(() => documents.id, { onDelete: 'cascade' }),
-    memberId: text('member_id')
-      .notNull()
-      .references(() => members.id, { onDelete: 'cascade' }),
-    role: text('role', { enum: ['viewer', 'editor'] }).notNull(),
-  },
-  (table) => ({
-    pk: primaryKey({ columns: [table.documentId, table.memberId] }),
-    memberIdIdx: index('document_members_member_id_idx').on(table.memberId),
-  }),
-);
-
-// Unified authorization edges. Replaces space_members + document_members.
-// Phase 1 only writes subjectType='member' with targetType in ('space','document');
-// 'group' and 'folder' are accepted now so later phases add rows without a migration.
+// Unified authorization edges. Replaced the former space_members + document_members
+// tables (dropped in migration 0012); subjectType 'member'|'group' × targetType
+// 'space'|'folder'|'document' covers every access edge.
 export const grants = sqliteTable(
   'grants',
   {
