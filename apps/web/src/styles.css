@@ -1243,6 +1243,23 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 .skill-row .ver.current::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--blue); }
 .skill-row .status { font-size: 12px; color: var(--ink-3); }
 
+/* Trashed folder groups (expand to reveal the files cascade-deleted with them) */
+.trash-folder-list { display: flex; flex-direction: column; }
+.trash-folder + .trash-folder { border-top: 1px solid var(--hairline-2); }
+.trash-folder-row { display: grid; grid-template-columns: 1fr 220px 100px 32px 32px; align-items: center; gap: 14px; padding: 12px 22px; transition: background var(--dur-fast); }
+.trash-folder-row:hover { background: var(--pearl); }
+.trash-folder-toggle { display: flex; align-items: center; gap: 8px; background: none; border: none; padding: 0; cursor: pointer; color: var(--ink-1); text-align: left; min-width: 0; }
+.trash-folder-toggle .doc-name { font-size: 14px; font-weight: 500; letter-spacing: -0.012em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trash-chev { display: inline-flex; color: var(--ink-4); transition: transform var(--dur-fast); }
+.trash-chev.open { transform: rotate(90deg); }
+.trash-folder-meta { font-size: 12px; color: var(--ink-3); }
+.trash-folder-files { padding: 2px 22px 10px 52px; display: flex; flex-direction: column; gap: 2px; }
+.trash-folder-file { display: flex; align-items: center; gap: 8px; padding: 5px 0; color: var(--ink-3); }
+.trash-folder-file .doc-name { font-size: 13px; font-weight: 400; color: var(--ink-2); }
+.trash-folder-file-meta { margin-left: auto; font-family: var(--font-mono); font-size: 11px; color: var(--ink-4); }
+.trash-folder-empty { font-size: 12px; color: var(--ink-4); padding: 5px 0; }
+.icon-btn.danger:hover { color: #ff3b30; }
+
 /* ─────────────────────────────────────────────────────────────────────────
    OVERLAYS
    ───────────────────────────────────────────────────────────────────────── */

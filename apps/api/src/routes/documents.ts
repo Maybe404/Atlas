@@ -6,7 +6,7 @@ import {
   UpdateDocumentSchema,
   UpdateDocumentShareSchema,
 } from '@atlas/shared';
-import { and, desc, eq, inArray, isNotNull, like, lte, ne, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNotNull, isNull, like, lte, ne, or } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
 import { auditLogs, documents, folders, members, shareLinks, spaces } from '../db/schema';
@@ -144,7 +144,8 @@ export const documentsRouter = new Hono<AppEnv>()
       .from(documents)
       .innerJoin(spaces, eq(documents.spaceId, spaces.id))
       .innerJoin(members, eq(documents.authorId, members.id))
-      .where(isNotNull(documents.deletedAt))
+      // Loose trashed docs only; docs trashed as part of a folder show grouped under /folders/trash.
+      .where(and(isNotNull(documents.deletedAt), isNull(documents.trashedUnderFolderId)))
       .orderBy(desc(documents.deletedAt));
 
     return c.json(rows.map((row) => toDoc(row)));
@@ -391,14 +392,37 @@ export const documentsRouter = new Hono<AppEnv>()
           ),
         );
     }
+    // Purge expired trashed folders too (their cascade docs share the same purgeAfter and were
+    // removed by the documents purge above, so only the folder rows remain).
+    const foldersToPurge = await db
+      .select({ id: folders.id })
+      .from(folders)
+      .where(
+        and(
+          isNotNull(folders.deletedAt),
+          isNotNull(folders.purgeAfter),
+          lte(folders.purgeAfter, now),
+        ),
+      );
+    if (foldersToPurge.length > 0) {
+      await db
+        .delete(folders)
+        .where(
+          and(
+            isNotNull(folders.deletedAt),
+            isNotNull(folders.purgeAfter),
+            lte(folders.purgeAfter, now),
+          ),
+        );
+    }
     await writeAudit({
       actorId: user.id,
       action: 'trash.purge_expired',
       targetType: 'trash',
       targetId: 'expired',
-      details: { count: toPurge.length },
+      details: { count: toPurge.length, folders: foldersToPurge.length },
     });
-    return c.json({ purged: toPurge.length });
+    return c.json({ purged: toPurge.length, folders: foldersToPurge.length });
   })
   .get('/:id/share', async (c) => {
     const user = c.get('user');

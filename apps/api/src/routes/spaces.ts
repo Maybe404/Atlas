@@ -85,7 +85,10 @@ function toFolder(row: typeof folders.$inferSelect): Folder {
 async function foldersBySpaceIds(spaceIds: string[]) {
   const map = new Map<string, Folder[]>();
   if (spaceIds.length === 0) return map;
-  const rows = await db.select().from(folders).where(inArray(folders.spaceId, spaceIds));
+  const rows = await db
+    .select()
+    .from(folders)
+    .where(and(inArray(folders.spaceId, spaceIds), isNull(folders.deletedAt)));
   for (const row of rows) {
     const list = map.get(row.spaceId) ?? [];
     list.push(toFolder(row));

@@ -47,18 +47,28 @@ export const folders = sqliteTable(
     spaceId: text('space_id')
       .notNull()
       .references(() => spaces.id, { onDelete: 'cascade' }),
-    // Nesting pointer (logical self-reference, validated in the route). No DB FK: folder delete
-    // refuses non-empty folders, and space delete cascades every folder via space_id.
+    // Nesting pointer (logical self-reference, validated in the route). No DB FK: space delete
+    // cascades every folder via space_id; folder delete is a soft cascade (see deletedAt below).
     parentId: text('parent_id'),
     name: text('name').notNull(),
     // Restricted folders are stored now but only ENFORCED in Phase 4 (inherit/restricted chain).
     restricted: integer('restricted', { mode: 'boolean' }).notNull().default(false),
     order: integer('order').notNull().default(0),
     createdAt: text('created_at').notNull().default(sql`(current_timestamp)`),
+    // Soft delete to trash (mirrors documents). Deleting a folder soft-deletes its whole subtree
+    // and the docs within, without touching folderId — so restore re-reveals files in place.
+    deletedAt: text('deleted_at'),
+    deletedBy: text('deleted_by').references(() => members.id),
+    purgeAfter: text('purge_after'),
+    // The trash-root folder this row was cascade-deleted under. NULL ⇒ this folder is itself the
+    // root the user deleted (the only kind shown as a top-level trash entry).
+    trashedUnderFolderId: text('trashed_under_folder_id'),
   },
   (table) => ({
     spaceIdIdx: index('folders_space_id_idx').on(table.spaceId),
     parentIdIdx: index('folders_parent_id_idx').on(table.parentId),
+    deletedAtIdx: index('folders_deleted_at_idx').on(table.deletedAt),
+    trashedUnderIdx: index('folders_trashed_under_idx').on(table.trashedUnderFolderId),
   }),
 );
 
@@ -69,7 +79,8 @@ export const documents = sqliteTable(
     spaceId: text('space_id')
       .notNull()
       .references(() => spaces.id, { onDelete: 'cascade' }),
-    // Folder the doc lives in (null = space root). Deleting a folder drops its docs to root.
+    // Folder the doc lives in (null = space root). Folder soft-delete keeps folderId intact (the
+    // doc is soft-deleted alongside), so restore re-reveals the doc in its original folder.
     folderId: text('folder_id').references(() => folders.id, { onDelete: 'set null' }),
     authorId: text('author_id')
       .notNull()
@@ -87,6 +98,9 @@ export const documents = sqliteTable(
     deletedAt: text('deleted_at'),
     deletedBy: text('deleted_by').references(() => members.id),
     purgeAfter: text('purge_after'),
+    // Set when this doc entered trash as part of a folder deletion (= the trash-root folder id);
+    // NULL ⇒ the doc was trashed on its own. Lets the trash group cascade docs under their folder.
+    trashedUnderFolderId: text('trashed_under_folder_id'),
   },
   (table) => ({
     spaceIdIdx: index('documents_space_id_idx').on(table.spaceId),

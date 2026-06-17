@@ -64,6 +64,13 @@
       "when": 1781588063637,
       "tag": "0008_busy_hellfire_club",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1781592050478,
+      "tag": "0009_modern_galactus",
+      "breakpoints": true
     }
   ]
 }

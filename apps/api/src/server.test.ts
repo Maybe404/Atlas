@@ -423,7 +423,7 @@ describe('Atlas API', () => {
     expect(single.status).toBe(403);
   });
 
-  test('folders: create, nest, file a doc, move it, and guard deletes', async () => {
+  test('folders: create, nest, file a doc, move it, soft-delete to trash, and restore', async () => {
     const admin = await loginAs();
     const json = (r: Response) => r.json() as Promise<{ id: string }>;
 
@@ -479,23 +479,52 @@ describe('Atlas API', () => {
       ).status,
     ).toBe(200);
 
-    // empty child folder deletes; parent (now holding the doc) refuses
-    expect(
-      (await request(`/folders/${child.id}`, { method: 'DELETE', headers: admin.headers })).status,
-    ).toBe(200);
-    expect(
-      (await request(`/folders/${parent.id}`, { method: 'DELETE', headers: admin.headers })).status,
-    ).toBe(409);
-
-    // drop the doc to root, then the parent deletes
-    await request(`/documents/${docId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ folderId: null }),
-      headers: { 'content-type': 'application/json', ...admin.headers },
+    // soft-delete the parent → cascades to its (now-empty) child subfolder and the doc it holds
+    const del = await request(`/folders/${parent.id}`, {
+      method: 'DELETE',
+      headers: admin.headers,
     });
+    expect(del.status).toBe(200);
+    expect(await del.json()).toMatchObject({ folders: 2, docs: 1 });
+
+    // the live folder tree drops the trashed folders, and the doc leaves the live directory
+    const afterDel = (await (
+      await request('/spaces/s1', { headers: { cookie: admin.cookie } })
+    ).json()) as { folders: { id: string }[] };
+    expect(afterDel.folders.some((f) => f.id === parent.id || f.id === child.id)).toBe(false);
     expect(
-      (await request(`/folders/${parent.id}`, { method: 'DELETE', headers: admin.headers })).status,
+      (await request(`/documents/${docId}`, { headers: { cookie: admin.cookie } })).status,
+    ).toBe(404);
+
+    // folder trash shows the deleted root, its subfolder counted and its file grouped beneath it
+    const folderTrash = (await (
+      await request('/folders/trash', { headers: { cookie: admin.cookie } })
+    ).json()) as { id: string; subfolderCount: number; files: { id: string }[] }[];
+    const trashed = folderTrash.find((t) => t.id === parent.id);
+    expect(trashed?.subfolderCount).toBe(1);
+    expect(trashed?.files.map((f) => f.id)).toContain(docId);
+
+    // the cascade doc is grouped under the folder, not duplicated in the loose doc trash
+    const docTrash = (await (
+      await request('/documents/trash', { headers: { cookie: admin.cookie } })
+    ).json()) as { id: string }[];
+    expect(docTrash.some((d) => d.id === docId)).toBe(false);
+
+    // restore the folder → folders + doc come back; doc re-revealed in its original folder
+    expect(
+      (await request(`/folders/${parent.id}/restore`, { method: 'POST', headers: admin.headers }))
+        .status,
     ).toBe(200);
+    const afterRestore = (await (
+      await request('/spaces/s1', { headers: { cookie: admin.cookie } })
+    ).json()) as { folders: { id: string }[] };
+    expect(afterRestore.folders.some((f) => f.id === parent.id)).toBe(true);
+    expect(afterRestore.folders.some((f) => f.id === child.id)).toBe(true);
+    const restoredDoc = (await (
+      await request(`/documents/${docId}`, { headers: { cookie: admin.cookie } })
+    ).json()) as { folderId: string; deletedAt: string | null };
+    expect(restoredDoc.folderId).toBe(parent.id);
+    expect(restoredDoc.deletedAt).toBeFalsy();
   });
 
   test('folders: subtree-cycle moves and non-editor writes are rejected', async () => {
@@ -967,7 +996,7 @@ describe('Atlas API', () => {
       headers: admin.headers,
     });
     expect(purge.status).toBe(200);
-    expect(await purge.json()).toEqual({ purged: 1 });
+    expect(await purge.json()).toEqual({ purged: 1, folders: 0 });
     expect((await request('/documents/d3')).status).toBe(404);
   });
 

@@ -736,6 +736,7 @@ function SpaceManagerDialog({
   const [newName, setNewName] = useState('');
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameVal, setRenameVal] = useState('');
+  const [movingId, setMovingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isEditing) setForm({ name: editing.name, accent: editing.accent });
@@ -743,12 +744,36 @@ function SpaceManagerDialog({
     setCreatingUnder(null);
     setNewName('');
     setRenamingId(null);
+    setMovingId(null);
   }, [editing, isEditing, isCreating]);
 
   // Read the live space from the query cache so the tree re-renders after a
   // folder mutation invalidates spaces (the `editing` prop is a stale snapshot).
   const liveSpace = isEditing ? spaces.find((s: Loose) => s.id === editing.id) || editing : null;
-  const folderTree = useMemo(() => buildFolderTree(liveSpace?.folders || []), [liveSpace?.folders]);
+  const liveFolders: Loose[] = liveSpace?.folders || [];
+  const liveDocs: Loose[] = liveSpace?.children || [];
+  const folderTree = useMemo(() => buildFolderTree(liveFolders), [liveFolders]);
+
+  // A folder plus all of its descendants — the move/delete blast radius.
+  const subtreeIds = (rootId: string): Set<string> => {
+    const childrenByParent = new Map<string, Loose[]>();
+    for (const f of liveFolders) {
+      if (!f.parentId) continue;
+      if (!childrenByParent.has(f.parentId)) childrenByParent.set(f.parentId, []);
+      childrenByParent.get(f.parentId)?.push(f);
+    }
+    const ids = new Set<string>();
+    const stack = [rootId];
+    while (stack.length) {
+      const cur = stack.pop();
+      if (!cur) break;
+      ids.add(cur);
+      for (const c of childrenByParent.get(cur) || []) stack.push(c.id);
+    }
+    return ids;
+  };
+  const affectedDocCount = (ids: Set<string>) =>
+    liveDocs.filter((d: Loose) => d.folderId && ids.has(d.folderId)).length;
 
   if (!open || !editing) return null;
 
@@ -768,6 +793,24 @@ function SpaceManagerDialog({
     const name = renameVal.trim();
     if (name) mutations.updateFolder(id, { name });
     setRenamingId(null);
+  };
+
+  const moveFolder = (id: string, target: string) => {
+    mutations.updateFolder(id, { parentId: target === '__root__' ? null : target });
+    setMovingId(null);
+  };
+
+  const confirmDeleteFolder = (f: Loose) => {
+    const ids = subtreeIds(f.id);
+    const docs = affectedDocCount(ids);
+    const subCount = ids.size - 1;
+    const detail = [docs > 0 ? `${docs} 篇文章` : '', subCount > 0 ? `${subCount} 个子文件夹` : '']
+      .filter(Boolean)
+      .join('、');
+    const msg = detail
+      ? `删除文件夹「${f.name}」？其中的 ${detail} 将一并移至回收站，可在回收站恢复。`
+      : `删除空文件夹「${f.name}」？将移至回收站，可恢复。`;
+    if (confirm(msg)) mutations.deleteFolder(f.id);
   };
 
   const submit = () => {
@@ -891,7 +934,7 @@ function SpaceManagerDialog({
                 </button>
               </div>
               <div style={{ fontSize: 12, color: 'var(--ink-4)', margin: '4px 0 8px' }}>
-                组织该空间下的文章。删除文件夹前需先清空其中的子文件夹与文章。
+                组织该空间下的文章。可移动整个文件夹；删除会连同内部文章一并移至回收站，可随时恢复。
               </div>
 
               <div className="folder-mgr">
@@ -937,6 +980,7 @@ function SpaceManagerDialog({
                             setRenamingId(f.id);
                             setRenameVal(f.name);
                             setCreatingUnder(null);
+                            setMovingId(null);
                           }}
                         >
                           <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
@@ -950,15 +994,70 @@ function SpaceManagerDialog({
                         </button>
                         <button
                           className="icon-btn"
-                          title="删除"
+                          title="移动到…"
                           onClick={() => {
-                            if (confirm(`删除文件夹「${f.name}」？`)) mutations.deleteFolder(f.id);
+                            setMovingId((cur: string | null) => (cur === f.id ? null : f.id));
+                            setRenamingId(null);
+                            setCreatingUnder(null);
                           }}
+                        >
+                          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                            <path
+                              d="M1.5 4V11h11V5H7L5.5 3H1.5z"
+                              stroke="currentColor"
+                              strokeWidth="1.2"
+                              strokeLinejoin="round"
+                            />
+                            <path
+                              d="M5.5 8h4m0 0L8 6.5M9.5 8 8 9.5"
+                              stroke="currentColor"
+                              strokeWidth="1.2"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
+                        <button
+                          className="icon-btn"
+                          title="删除"
+                          onClick={() => confirmDeleteFolder(f)}
                         >
                           <_I3.trash width="13" height="13" />
                         </button>
                       </div>
                     </div>
+                    {movingId === f.id && (
+                      <div
+                        className="folder-mgr-row folder-mgr-new"
+                        style={{ paddingLeft: 8 + (f.depth + 1) * 18 }}
+                      >
+                        <span style={{ fontSize: 12, color: 'var(--ink-4)', whiteSpace: 'nowrap' }}>
+                          移动到
+                        </span>
+                        <select
+                          className="input"
+                          ref={(el: Loose) => el?.focus()}
+                          defaultValue=""
+                          onChange={(e: Loose) => {
+                            if (e.target.value) moveFolder(f.id, e.target.value);
+                          }}
+                          style={{ padding: '2px 8px', fontSize: 13, flex: 1 }}
+                        >
+                          <option value="" disabled>
+                            选择目标目录…
+                          </option>
+                          <option value="__root__">空间根目录</option>
+                          {folderTree
+                            .filter((t: Loose) => !subtreeIds(f.id).has(t.id))
+                            .map((t: Loose) => (
+                              <option key={t.id} value={t.id}>
+                                {'　'.repeat(t.depth)}
+                                {t.name}
+                              </option>
+                            ))}
+                        </select>
+                      </div>
+                    )}
                     {creatingUnder === f.id && (
                       <div
                         className="folder-mgr-row folder-mgr-new"

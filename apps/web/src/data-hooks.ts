@@ -37,6 +37,7 @@ export const atlasKeys = {
   permissions: ['permissions'] as const,
   spaceMembers: (spaceId: string) => ['space-members', spaceId] as const,
   trash: ['trash'] as const,
+  trashFolders: ['trash-folders'] as const,
   share: (documentId: string) => ['share', documentId] as const,
   shareMemberSearch: (documentId: string, query: string) =>
     ['share-members', documentId, query] as const,
@@ -99,6 +100,7 @@ export function useAtlasMutations(pushToast?: PushToast) {
       queryClient.invalidateQueries({ queryKey: atlasKeys.permissions }),
       queryClient.invalidateQueries({ queryKey: ['space-members'] }),
       queryClient.invalidateQueries({ queryKey: atlasKeys.trash }),
+      queryClient.invalidateQueries({ queryKey: atlasKeys.trashFolders }),
     ]);
   };
 
@@ -146,12 +148,29 @@ export function useAtlasMutations(pushToast?: PushToast) {
 
   const deleteFolder = useMutation({
     mutationFn: (id: string) => apiJson(`/folders/${id}`, 'DELETE'),
-    onSuccess: async () => {
+    onSuccess: async (data: unknown) => {
       await invalidateCore();
-      pushToast?.({ msg: '文件夹已删除' });
+      const docs = (data as { docs?: number })?.docs ?? 0;
+      pushToast?.({ msg: '文件夹已移至回收站', meta: docs > 0 ? `含 ${docs} 篇文章` : undefined });
     },
     onError: (err: unknown) => {
       pushToast?.({ msg: '无法删除文件夹', meta: (err as Error)?.message });
+    },
+  });
+
+  const restoreFolder = useMutation({
+    mutationFn: (id: string) => apiJson(`/folders/${id}/restore`, 'POST'),
+    onSuccess: async () => {
+      await invalidateCore();
+      pushToast?.({ msg: '文件夹已恢复' });
+    },
+  });
+
+  const permanentDeleteFolder = useMutation({
+    mutationFn: (id: string) => apiJson(`/folders/${id}/permanent`, 'DELETE'),
+    onSuccess: async () => {
+      await invalidateCore();
+      pushToast?.({ msg: '文件夹已永久删除' });
     },
   });
 
@@ -209,10 +228,10 @@ export function useAtlasMutations(pushToast?: PushToast) {
     mutationFn: () => apiJson('/documents/trash/purge-expired', 'POST'),
     onSuccess: async (data: unknown) => {
       await invalidateCore();
-      pushToast?.({
-        msg: '已清理过期项目',
-        meta: `${(data as { purged?: number })?.purged ?? 0} 篇`,
-      });
+      const result = data as { purged?: number; folders?: number };
+      const parts = [`${result?.purged ?? 0} 篇`];
+      if (result?.folders) parts.push(`${result.folders} 个文件夹`);
+      pushToast?.({ msg: '已清理过期项目', meta: parts.join(' · ') });
     },
   });
 
@@ -314,6 +333,8 @@ export function useAtlasMutations(pushToast?: PushToast) {
     createFolder: (data: CreateFolderInput) => createFolder.mutate(data),
     updateFolder: (id: string, patch: UpdateFolderInput) => updateFolder.mutate({ id, patch }),
     deleteFolder: (id: string) => deleteFolder.mutate(id),
+    restoreFolder: (id: string) => restoreFolder.mutate(id),
+    permanentDeleteFolder: (id: string) => permanentDeleteFolder.mutate(id),
     createDocument: (
       data: CreateDocumentInput,
       options?: Parameters<typeof createDocument.mutate>[1],
