@@ -189,7 +189,7 @@ export function useAtlasMutations(pushToast?: PushToast) {
       const directoryFields: (keyof UpdateDocumentInput)[] = [
         'title',
         'desc',
-        'visibility',
+        'access',
         'dot',
         'tags',
         'spaceId',

@@ -89,7 +89,7 @@ export function canRead(doc?: DirectoryDocument | null, _user?: Member | null) {
 export function firstPublicDoc(spaces: Space[] = []) {
   for (const space of spaces) {
     const doc = (space.children || []).find(
-      (candidate: Loose) => 'visibility' in candidate && candidate.visibility === 'public',
+      (candidate: Loose) => 'published' in candidate && candidate.published === true,
     );
     if (doc) return { spaceId: space.id, docId: doc.id };
   }

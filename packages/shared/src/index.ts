@@ -7,8 +7,9 @@ export { extractMarkdownMetadata } from './markdown-metadata';
 export const RoleSchema = z.enum(['admin', 'editor', 'viewer']);
 export type Role = z.infer<typeof RoleSchema>;
 
-export const VisibilitySchema = z.enum(['public', 'invite', 'private']);
-export type Visibility = z.infer<typeof VisibilitySchema>;
+// Site-internal access mode. Public exposure is orthogonal and flows through share_links.
+export const AccessSchema = z.enum(['inherit', 'restricted']);
+export type Access = z.infer<typeof AccessSchema>;
 
 export const FormatSchema = z.enum(['html', 'markdown']);
 export type Format = z.infer<typeof FormatSchema>;
@@ -37,7 +38,9 @@ export const DocumentSchema = z.object({
   author: z.string(),
   authorName: z.string().optional(),
   updated: z.string(),
-  visibility: VisibilitySchema,
+  access: AccessSchema.default('inherit'),
+  // True when an enabled, unexpired public share link exists (derived, not stored on the doc).
+  published: z.boolean().optional(),
   format: FormatSchema.default('html'),
   dot: AccentSchema.or(z.string()),
   tags: z.array(z.string()).default([]),
@@ -107,7 +110,7 @@ export const CreateDocumentSchema = z.object({
   folderId: z.string().nullable().optional(),
   title: z.string().trim().max(200).default(''),
   desc: z.string().default(''),
-  visibility: VisibilitySchema,
+  access: AccessSchema.default('inherit'),
   format: FormatSchema.default('html'),
   html: z.string().default(''),
   dot: AccentSchema.or(z.string()).default('slate'),
@@ -119,7 +122,7 @@ export const UpdateDocumentSchema = z.object({
   folderId: z.string().nullable().optional(),
   title: z.string().trim().min(1).max(200).optional(),
   desc: z.string().optional(),
-  visibility: VisibilitySchema.optional(),
+  access: AccessSchema.optional(),
   format: FormatSchema.optional(),
   html: z.string().optional(),
   dot: AccentSchema.or(z.string()).optional(),

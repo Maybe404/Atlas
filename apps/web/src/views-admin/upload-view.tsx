@@ -1,7 +1,7 @@
 import { extractHtmlMetadata, extractMarkdownMetadata } from '@atlas/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { I } from '../chrome';
-import { visibilityLabel } from '../labels';
+import { accessLabel } from '../labels';
 import type { Loose } from '../loose-types';
 import { MarkdownReader } from '../views/markdown-reader';
 
@@ -25,7 +25,7 @@ export function AdminUploadView({
   const [meta, setMeta] = useState({
     title: '',
     spaceId: editableSpaces[0]?.id || '',
-    visibility: 'invite',
+    access: 'inherit',
     desc: '',
   });
 
@@ -217,17 +217,16 @@ export function AdminUploadView({
                     </select>
                   </div>
                   <div className="field">
-                    <label className="field-label">可见性</label>
+                    <label className="field-label">访问</label>
                     <select
                       className="input"
-                      value={meta.visibility}
+                      value={meta.access}
                       onChange={(e: Loose) =>
-                        setMeta((m: Loose) => ({ ...m, visibility: e.target.value }))
+                        setMeta((m: Loose) => ({ ...m, access: e.target.value }))
                       }
                     >
-                      <option value="private">私密</option>
-                      <option value="invite">受邀</option>
-                      <option value="public">公开</option>
+                      <option value="inherit">继承（跟随文件夹 / 空间）</option>
+                      <option value="restricted">受限（仅作者 / 管理员 / 被授权者）</option>
                     </select>
                   </div>
                 </div>
@@ -398,8 +397,10 @@ export function AdminUploadView({
                       分享设置
                     </div>
                     <div style={{ fontSize: 13.5, display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span className={`vis-chip ${meta.visibility}`}>
-                        {visibilityLabel(meta.visibility)}
+                      <span
+                        className={`vis-chip ${meta.access === 'restricted' ? 'private' : 'invite'}`}
+                      >
+                        {accessLabel(meta.access)}
                       </span>
                       <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
                         {spaces.find((s: Loose) => s.id === meta.spaceId)?.name}
@@ -423,7 +424,7 @@ export function AdminUploadView({
                         formData.set('title', meta.title.trim());
                         formData.set('desc', meta.desc);
                         formData.set('spaceId', meta.spaceId);
-                        formData.set('visibility', meta.visibility);
+                        formData.set('access', meta.access);
                         formData.set('format', selectedFormat);
                         mutations.uploadDocument(formData, {
                           onSuccess: () => {

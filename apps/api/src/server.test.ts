@@ -17,7 +17,7 @@ const { db } = await import('./db/client');
 const { auditLogs, documents, grants, members, sessions, shareLinks, spaces } = await import(
   './db/schema'
 );
-const { setMemberDocumentRole } = await import('./lib/grants');
+const { setMemberDocumentRole, setMemberSpaceRole } = await import('./lib/grants');
 
 afterAll(() => {
   rmSync(testDb, { force: true });
@@ -98,7 +98,8 @@ describe('Atlas API', () => {
     const docs = spaces.flatMap(
       (space) =>
         space.children as {
-          visibility?: string;
+          access?: string;
+          published?: boolean;
           canRead: boolean;
           canEdit?: boolean;
           locked?: boolean;
@@ -113,11 +114,13 @@ describe('Atlas API', () => {
     );
     expect(docs.length).toBeGreaterThan(0);
 
-    const publicDocs = docs.filter((doc) => doc.visibility === 'public');
+    // Guests reach docs only through an enabled public share link (published); everything else is
+    // a locked placeholder.
+    const publishedDocs = docs.filter((doc) => doc.published === true);
     const lockedDocs = docs.filter((doc) => doc.locked);
-    expect(publicDocs.length).toBeGreaterThan(0);
+    expect(publishedDocs.length).toBeGreaterThan(0);
     expect(lockedDocs.length).toBeGreaterThan(0);
-    expect(publicDocs.every((doc) => doc.canRead === true && doc.html === undefined)).toBe(true);
+    expect(publishedDocs.every((doc) => doc.canRead === true && doc.html === undefined)).toBe(true);
 
     for (const doc of lockedDocs) {
       expect(doc.locked).toBe(true);
@@ -128,7 +131,8 @@ describe('Atlas API', () => {
       expect(doc.author).toBeUndefined();
       expect(doc.authorName).toBeUndefined();
       expect(doc.updated).toBeUndefined();
-      expect(doc.visibility).toBeUndefined();
+      expect(doc.access).toBeUndefined();
+      expect(doc.published).toBeUndefined();
       expect(doc.tags).toBeUndefined();
       expect(doc.deletedAt).toBeUndefined();
     }
@@ -141,7 +145,7 @@ describe('Atlas API', () => {
     const form = new FormData();
     form.set('file', new File([rawHtml], 'smoke.html', { type: 'text/html' }));
     form.set('spaceId', 's1');
-    form.set('visibility', 'private');
+    form.set('access', 'restricted');
 
     const upload = await request('/documents/upload', {
       method: 'POST',
@@ -382,7 +386,7 @@ describe('Atlas API', () => {
       body: JSON.stringify({
         spaceId: 'sp_personal_u2',
         title: '私人笔记',
-        visibility: 'private',
+        access: 'restricted',
         html: '<p>secret</p>',
       }),
       headers: { 'content-type': 'application/json', ...owner.headers },
@@ -448,7 +452,7 @@ describe('Atlas API', () => {
         spaceId: 's1',
         folderId: child.id,
         title: '入门',
-        visibility: 'public',
+        access: 'inherit',
         html: '<p>hi</p>',
       }),
       headers: { 'content-type': 'application/json', ...admin.headers },
@@ -1116,7 +1120,7 @@ describe('Atlas API', () => {
 
     const create = await request('/documents', {
       method: 'POST',
-      body: JSON.stringify({ spaceId: 's1', title: '待永久删除', visibility: 'private', html: '' }),
+      body: JSON.stringify({ spaceId: 's1', title: '待永久删除', access: 'restricted', html: '' }),
       headers: { 'content-type': 'application/json', ...admin.headers },
     });
     expect(create.status).toBe(201);
@@ -1131,16 +1135,86 @@ describe('Atlas API', () => {
     expect(gone).toBeUndefined();
   });
 
-  test('rejects member invitations on private documents', async () => {
+  test('allows member invitations on restricted documents (the way to open them up)', async () => {
     const admin = await loginAs();
+    // d2 is a restricted doc; a per-document grant is exactly how a specific member gets in.
+    const before = await request('/documents/d2', {
+      headers: { cookie: (await loginAs('he@atlas.team')).cookie },
+    });
+    expect(before.status).toBe(404);
+
     const res = await request('/documents/d2/share', {
       method: 'PATCH',
       body: JSON.stringify({ members: [{ memberId: 'u5', role: 'viewer' }] }),
       headers: { 'content-type': 'application/json', ...admin.headers },
     });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(200);
     const roster = await docGrantRows('d2');
-    expect(roster.find((row) => row.memberId === 'u5')).toBeUndefined();
+    expect(roster.find((row) => row.memberId === 'u5')?.role).toBe('viewer');
+
+    const after = await request('/documents/d2', {
+      headers: { cookie: (await loginAs('he@atlas.team')).cookie },
+    });
+    expect(after.status).toBe(200);
+  });
+
+  test('restricted folders block space-grant inheritance for inherit docs', async () => {
+    const admin = await loginAs();
+    const json = (r: Response) => r.json() as Promise<{ id: string }>;
+
+    // Give u5 viewer access to s1 so space-level inheritance would normally apply.
+    await setMemberSpaceRole(db, 'u5', 's1', 'viewer');
+
+    // Control: an inherit doc at the space root is readable through the space grant.
+    const open = await json(
+      await request('/documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          spaceId: 's1',
+          title: '可继承文档',
+          access: 'inherit',
+          html: '<p>open</p>',
+        }),
+        headers: { 'content-type': 'application/json', ...admin.headers },
+      }),
+    );
+
+    // A restricted folder with an inherit doc inside: the space grant must NOT penetrate.
+    const folder = await json(
+      await request('/folders', {
+        method: 'POST',
+        body: JSON.stringify({ spaceId: 's1', name: '机密', restricted: true }),
+        headers: { 'content-type': 'application/json', ...admin.headers },
+      }),
+    );
+    const hidden = await json(
+      await request('/documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          spaceId: 's1',
+          folderId: folder.id,
+          title: '机密文档',
+          access: 'inherit',
+          html: '<p>secret</p>',
+        }),
+        headers: { 'content-type': 'application/json', ...admin.headers },
+      }),
+    );
+
+    const viewer = await loginAs('he@atlas.team'); // u5
+    expect(
+      (await request(`/documents/${open.id}`, { headers: { cookie: viewer.cookie } })).status,
+    ).toBe(200);
+    expect(
+      (await request(`/documents/${hidden.id}`, { headers: { cookie: viewer.cookie } })).status,
+    ).toBe(404);
+    // Admin (and the author) still read inside the restricted folder.
+    expect(
+      (await request(`/documents/${hidden.id}`, { headers: { cookie: admin.cookie } })).status,
+    ).toBe(200);
+
+    // Restore u5's seeded s1 grant state so later tests are unaffected.
+    await setMemberSpaceRole(db, 'u5', 's1', null);
   });
 
   test('bearer-token writes do not require a CSRF header', async () => {
@@ -1195,7 +1269,7 @@ describe('Atlas API', () => {
       body: JSON.stringify({
         spaceId: 's1',
         title: '',
-        visibility: 'private',
+        access: 'restricted',
         format: 'markdown',
         html: md,
       }),
@@ -1218,7 +1292,7 @@ describe('Atlas API', () => {
     const form = new FormData();
     form.set('file', new File([md], 'guide.md', { type: 'text/markdown' }));
     form.set('spaceId', 's1');
-    form.set('visibility', 'private');
+    form.set('access', 'restricted');
 
     const upload = await request('/documents/upload', {
       method: 'POST',

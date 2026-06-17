@@ -88,7 +88,11 @@ export const documents = sqliteTable(
     title: text('title').notNull(),
     desc: text('desc').notNull().default(''),
     html: text('html').notNull().default(''),
-    visibility: text('visibility', { enum: ['public', 'invite', 'private'] }).notNull(),
+    // Site-internal access. `inherit` follows the folder/space chain; `restricted` is author +
+    // admin + explicit grant only. Public exposure is orthogonal (share_links), not an access mode.
+    access: text('access', { enum: ['inherit', 'restricted'] })
+      .notNull()
+      .default('inherit'),
     format: text('format', { enum: ['html', 'markdown'] })
       .notNull()
       .default('html'),
@@ -105,17 +109,14 @@ export const documents = sqliteTable(
   (table) => ({
     spaceIdIdx: index('documents_space_id_idx').on(table.spaceId),
     authorIdIdx: index('documents_author_id_idx').on(table.authorId),
-    visibilityIdx: index('documents_visibility_idx').on(table.visibility),
+    accessIdx: index('documents_access_idx').on(table.access),
     deletedAtIdx: index('documents_deleted_at_idx').on(table.deletedAt),
     deletedPurgeAfterIdx: index('documents_deleted_purge_after_idx').on(
       table.deletedAt,
       table.purgeAfter,
     ),
     spaceDeletedIdx: index('documents_space_deleted_idx').on(table.spaceId, table.deletedAt),
-    visibilityDeletedIdx: index('documents_visibility_deleted_idx').on(
-      table.visibility,
-      table.deletedAt,
-    ),
+    accessDeletedIdx: index('documents_access_deleted_idx').on(table.access, table.deletedAt),
     authorDeletedIdx: index('documents_author_deleted_idx').on(table.authorId, table.deletedAt),
   }),
 );

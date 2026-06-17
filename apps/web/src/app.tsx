@@ -137,7 +137,7 @@ function App() {
       returnTo &&
       returnTo.view !== 'login' &&
       !['admin-docs', 'admin-upload', 'admin-settings'].includes(returnTo.view) &&
-      (returnTo.view === 'public' || returnDoc?.visibility === 'public');
+      (returnTo.view === 'public' || returnDoc?.published === true);
     const target = canReturnAsGuest ? returnTo : firstPublicDoc(spaces as never);
     setReturnTo(null);
     navigate(target);

@@ -40,6 +40,7 @@ type ToDocOptions = {
   includeHtml?: boolean;
   canRead?: boolean;
   canEdit?: boolean;
+  published?: boolean;
 };
 
 function toDoc(
@@ -62,13 +63,14 @@ function toDoc(
     author: row.doc.authorId,
     authorName: row.author?.name,
     updated: displayDate(row.doc.updated),
-    visibility: row.doc.visibility,
+    access: row.doc.access,
     format: row.doc.format,
     dot: row.doc.dot,
     tags: row.doc.tags,
     ...(includeHtml ? { html: row.doc.html } : {}),
     deletedAt: row.doc.deletedAt,
     purgeAfter: row.doc.purgeAfter,
+    ...(options.published !== undefined ? { published: options.published } : {}),
     ...(options.canRead !== undefined ? { canRead: options.canRead } : {}),
     ...(options.canEdit !== undefined ? { canEdit: options.canEdit } : {}),
   };
@@ -98,6 +100,7 @@ async function hydrateDocs(
       { doc, space: spacesById.get(doc.spaceId), author: authorsById.get(doc.authorId) },
       {
         ...options,
+        published: options.lookup ? options.lookup.publishedDocIds.has(doc.id) : options.published,
         canEdit:
           options.lookup && options.user
             ? canEditDocumentWithLookup(options.user, doc, options.lookup)
@@ -153,7 +156,10 @@ export const documentsRouter = new Hono<AppEnv>()
   .get('/public/:token', async (c) => {
     const row = await publicDocumentByToken(c.req.param('token'));
     return c.json({
-      ...toDoc({ doc: row.doc, space: row.space, author: row.link.showAuthor ? row.author : null }),
+      ...toDoc(
+        { doc: row.doc, space: row.space, author: row.link.showAuthor ? row.author : null },
+        { published: true },
+      ),
       publicLink: {
         token: row.link.token,
         allowIndexing: row.link.allowIndexing,
@@ -185,7 +191,7 @@ export const documentsRouter = new Hono<AppEnv>()
       authorId: user.id,
       title: body.title || metadata.title || '未命名文章',
       desc: body.desc || metadata.summary,
-      visibility: body.visibility,
+      access: body.access,
       format: body.format,
       html: checked.content,
       dot: body.dot,
@@ -208,7 +214,7 @@ export const documentsRouter = new Hono<AppEnv>()
     const title = String(form.get('title') || '');
     const descText = String(form.get('desc') || '');
     const spaceId = String(form.get('spaceId') || '');
-    const visibility = String(form.get('visibility') || 'private');
+    const access = String(form.get('access') || 'inherit');
 
     if (!(file instanceof File)) throw badRequest('Upload requires a file field.');
     const isMarkdown =
@@ -225,7 +231,7 @@ export const documentsRouter = new Hono<AppEnv>()
       title: title || metadata.title || filenameBase,
       desc: descText,
       spaceId,
-      visibility,
+      access,
       format,
       html: content,
       tags: ['uploaded'],
@@ -241,7 +247,7 @@ export const documentsRouter = new Hono<AppEnv>()
       authorId: user.id,
       title: body.title,
       desc: body.desc || metadata.summary,
-      visibility: body.visibility,
+      access: body.access,
       format: body.format,
       html: checked.content,
       dot: body.dot,
@@ -281,7 +287,7 @@ export const documentsRouter = new Hono<AppEnv>()
     }
     if (body.title !== undefined) patch.title = body.title;
     if (body.desc !== undefined) patch.desc = body.desc;
-    if (body.visibility !== undefined) patch.visibility = body.visibility;
+    if (body.access !== undefined) patch.access = body.access;
     if (body.dot !== undefined) patch.dot = body.dot;
     if (body.tags !== undefined) patch.tags = body.tags;
     if (body.html !== undefined) {
@@ -445,7 +451,7 @@ export const documentsRouter = new Hono<AppEnv>()
 
     return c.json({
       documentId: doc.id,
-      visibility: doc.visibility,
+      access: doc.access,
       canEdit: true,
       canManage: true,
       public: link
@@ -504,15 +510,9 @@ export const documentsRouter = new Hono<AppEnv>()
       ? [...new Map(body.members.map((item) => [item.memberId, item])).values()]
       : [];
 
-    // Private documents are only reachable by admins and the author, so granting a document
-    // member would create access that the permission layer never honors. Reject it instead of
-    // silently writing a no-op membership. (Removing members — role: null — stays allowed.)
-    if (doc.visibility === 'private' && memberUpdates.some((item) => item.role)) {
-      throw badRequest(
-        'Private documents cannot be shared with members. Set the document to invite-only first.',
-      );
-    }
-
+    // A per-document grant is honored for any access mode (it's the most specific authorization),
+    // so member invitations are always allowed here — including for `restricted` documents, which
+    // is exactly how you open a restricted doc to specific people.
     const memberIds = memberUpdates.map((item) => item.memberId);
     if (memberIds.length > 0) {
       const existingMembers = await db

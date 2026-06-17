@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { canRead } from '../auth';
 import { I } from '../chrome';
-import { visibilityLabel } from '../labels';
+import { docCategory, docChip } from '../labels';
 import type { Loose } from '../loose-types';
 import { accentDot, dotClass } from './shared';
 
@@ -16,7 +16,7 @@ export function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }: L
 
   const docs = useMemo(() => {
     let r = [...(space?.children || [])];
-    if (filter !== 'all') r = r.filter((d: Loose) => d.visibility === filter);
+    if (filter !== 'all') r = r.filter((d: Loose) => docCategory(d) === filter);
     return r;
   }, [space, filter]);
 
@@ -63,9 +63,9 @@ export function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }: L
           <div className="segmented">
             {[
               { v: 'all', l: '全部' },
-              { v: 'public', l: '公开' },
-              { v: 'invite', l: '受邀' },
-              { v: 'private', l: '私密' },
+              { v: 'published', l: '公开' },
+              { v: 'restricted', l: '受限' },
+              { v: 'inherit', l: '继承' },
             ].map((t: Loose) => (
               <button
                 key={t.v}
@@ -100,8 +100,8 @@ export function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }: L
               >
                 <div className="card-head">
                   <div className={`dot ${dotClass(doc.dot || 'slate')}`}></div>
-                  <span className={`vis-chip ${locked ? 'locked' : doc.visibility}`}>
-                    {locked ? '需登录' : visibilityLabel(doc.visibility)}
+                  <span className={`vis-chip ${locked ? 'locked' : docChip(doc).cls}`}>
+                    {locked ? '需登录' : docChip(doc).label}
                   </span>
                 </div>
                 <h3>{doc.title}</h3>

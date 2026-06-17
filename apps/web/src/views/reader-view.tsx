@@ -206,12 +206,10 @@ export function ReaderView({
           </>
         ) : null}
         {!allowed ? (
-          <span className={`vis-chip reader-lock-chip ${doc.visibility || 'locked'}`}>
-            {doc.visibility === 'invite'
-              ? '需登录 · 邀请制'
-              : doc.visibility === 'private'
-                ? '需登录 · 私密'
-                : '需登录'}
+          <span
+            className={`vis-chip reader-lock-chip ${doc.access === 'restricted' ? 'private' : 'locked'}`}
+          >
+            {doc.access === 'restricted' ? '需登录 · 受限' : '需登录'}
           </span>
         ) : null}
       </div>
@@ -262,13 +260,9 @@ export function ReaderView({
                 ? '当前账号没有「' +
                   space.name +
                   '」空间中这篇文档的阅读权限。请联系管理员添加空间权限，或让文档所有者单独分享给你。'
-                : doc.visibility === 'private'
-                  ? '这是一篇私密文档。请先登录团队账号，系统会按你的空间和文档权限判断是否可读。'
-                  : doc.visibility === 'invite'
-                    ? '这是一篇邀请制文档，加入「' +
-                      space.name +
-                      '」空间的成员可以阅读。登录后即可查看完整内容。'
-                    : '请先登录团队账号，登录后系统会按你的空间和文档权限判断是否可读。'}
+                : doc.access === 'restricted'
+                  ? '这是一篇受限文档，仅作者、管理员或被显式授权的成员可读。请先登录团队账号查看。'
+                  : '请先登录团队账号，登录后系统会按你的空间和文档权限判断是否可读。'}
             </p>
             <div className="reader-locked-actions">
               {!user && (

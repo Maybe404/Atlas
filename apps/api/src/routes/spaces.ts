@@ -49,7 +49,7 @@ function toDoc(doc: DocumentRow, author?: User | null, options: { canRead?: bool
     author: doc.authorId,
     authorName: author?.name,
     updated: displayDate(doc.updated),
-    visibility: doc.visibility,
+    access: doc.access,
     format: doc.format,
     dot: doc.dot,
     tags: doc.tags,
@@ -116,6 +116,7 @@ function buildChildren(
 
     return {
       ...toDoc(doc, authorsById.get(doc.authorId), { canRead: true }),
+      published: lookup.publishedDocIds.has(doc.id),
       canEdit: canEditDocumentWithLookup(user, doc, lookup),
     };
   });

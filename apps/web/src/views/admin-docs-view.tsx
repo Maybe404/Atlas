@@ -1,7 +1,7 @@
 import { extractHtmlMetadata, extractMarkdownMetadata } from '@atlas/shared';
 import { useEffect, useMemo, useState } from 'react';
 import { AnimatedScrollList, I } from '../chrome';
-import { visibilityLabel } from '../labels';
+import { docCategory, docChip } from '../labels';
 import type { Loose } from '../loose-types';
 import { documentReaderUrl } from '../url-utils';
 import { HTMLEditorDialog } from './html-editor-dialog';
@@ -88,7 +88,7 @@ export function AdminDocsView({
       r = r.filter((d: Loose) =>
         effectiveFolderFilter === '__root__' ? !d.folderId : d.folderId === effectiveFolderFilter,
       );
-    if (visFilter !== 'all') r = r.filter((d: Loose) => d.visibility === visFilter);
+    if (visFilter !== 'all') r = r.filter((d: Loose) => docCategory(d) === visFilter);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       r = r.filter(
@@ -131,7 +131,7 @@ export function AdminDocsView({
       desc: '',
       author: 'u1',
       updated: '刚刚',
-      visibility: 'private',
+      access: 'inherit',
       dot: 'slate',
       tags: ['draft'],
       spaceId: defaultSpace?.id || 's1',
@@ -159,7 +159,7 @@ export function AdminDocsView({
         folderId: patch.folderId ?? editing.folderId ?? null,
         title: patch.title || metadata.title || editing.title || '未命名文章',
         desc: patch.desc || metadata.summary || editing.desc || '',
-        visibility: patch.visibility || editing.visibility || 'private',
+        access: patch.access || editing.access || 'inherit',
         format,
         html: content,
         tags: editing.tags || ['draft'],
@@ -311,9 +311,9 @@ export function AdminDocsView({
             <div className="segmented">
               {[
                 { v: 'all', l: '全部' },
-                { v: 'public', l: '公开' },
-                { v: 'invite', l: '受邀' },
-                { v: 'private', l: '私密' },
+                { v: 'published', l: '公开' },
+                { v: 'restricted', l: '受限' },
+                { v: 'inherit', l: '继承' },
               ].map((o: Loose) => (
                 <button
                   key={o.v}
@@ -394,9 +394,7 @@ export function AdminDocsView({
                   <span>{author?.name}</span>
                 </div>
                 <div className="updated">{doc.updated}</div>
-                <span className={`vis-chip ${doc.visibility}`}>
-                  {visibilityLabel(doc.visibility)}
-                </span>
+                <span className={`vis-chip ${docChip(doc).cls}`}>{docChip(doc).label}</span>
                 <div className="row-actions" style={{ position: 'relative' }}>
                   {doc.canEdit && (
                     <button

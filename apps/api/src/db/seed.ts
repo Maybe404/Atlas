@@ -87,7 +87,7 @@ for (const sp of ATLAS_DATA.tree) {
       authorId: doc.author,
       title: doc.title,
       desc: doc.desc ?? '',
-      visibility: doc.visibility,
+      access: doc.access,
       dot: doc.dot as string,
       tags: doc.tags ?? [],
       format: doc.format ?? 'html',
@@ -180,6 +180,26 @@ await db.insert(shareLinks).values({
   createdAt: now,
   updatedAt: now,
 });
+
+// Published fixtures (former `public` docs) reach the world solely through share links now.
+const publishedDocs = ATLAS_DATA.tree
+  .flatMap((sp) => sp.children)
+  .filter((doc) => doc.published && doc.id !== 'd1');
+if (publishedDocs.length > 0) {
+  await db.insert(shareLinks).values(
+    publishedDocs.map((doc) => ({
+      id: `link_${doc.id}`,
+      documentId: doc.id,
+      token: `demo-${doc.id}-public-link`,
+      enabled: true,
+      showAuthor: true,
+      allowIndexing: false,
+      createdBy: 'u1',
+      createdAt: now,
+      updatedAt: now,
+    })),
+  );
+}
 
 console.log(
   `seeded ${ATLAS_DATA.members.length} members, ${ATLAS_DATA.tree.length} spaces, ${permissions.length} permissions`,

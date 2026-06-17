@@ -1,10 +1,9 @@
 import type { SpaceMemberRole } from '@atlas/shared';
-import { and, eq, isNotNull, isNull, or } from 'drizzle-orm';
-import { alias } from 'drizzle-orm/sqlite-core';
+import { and, eq, isNull } from 'drizzle-orm';
 import { db } from '../db/client';
 import { documents, folders, grants, members, shareLinks, spaces } from '../db/schema';
 import { nowIso } from './dates';
-import { getMemberDocumentRole, getMemberSpaceRole, listMemberGrants } from './grants';
+import { getMemberSpaceRole, listMemberGrants } from './grants';
 import { forbidden, notFound } from './http-error';
 
 type User = typeof members.$inferSelect;
@@ -12,29 +11,73 @@ type SpaceRow = typeof spaces.$inferSelect;
 type DocumentRow = typeof documents.$inferSelect;
 
 export type PermissionLookup = {
+  // Effective member grants by target.
   spaceRolesBySpaceId: Map<string, SpaceMemberRole>;
+  folderRolesByFolderId: Map<string, SpaceMemberRole>;
   documentRolesByDocumentId: Map<string, SpaceMemberRole>;
+  // Folder tree metadata for inherit-chain resolution (lives across deleted state — restricted on a
+  // deleted folder is harmless because its docs are excluded everywhere anyway).
+  folderParentById: Map<string, string | null>;
+  restrictedFolderIds: Set<string>;
+  // Docs reachable through an enabled, unrevoked, unexpired public share link.
+  publishedDocIds: Set<string>;
+  // Personal-space owners (owner reads/edits everything in their space).
+  spaceOwnerById: Map<string, string | null>;
 };
 
 export function emptyPermissionLookup(): PermissionLookup {
   return {
     spaceRolesBySpaceId: new Map(),
+    folderRolesByFolderId: new Map(),
     documentRolesByDocumentId: new Map(),
+    folderParentById: new Map(),
+    restrictedFolderIds: new Set(),
+    publishedDocIds: new Set(),
+    spaceOwnerById: new Map(),
   };
 }
 
+// Loads everything the sync `*WithLookup` resolvers need in one pass. Folder tree, space owners and
+// the published set are user-independent (guests need them too); only the grant maps depend on the
+// member (admins bypass them entirely).
 export async function loadPermissionLookup(user: User | undefined): Promise<PermissionLookup> {
-  if (!user || isAdmin(user)) return emptyPermissionLookup();
+  const lookup = emptyPermissionLookup();
 
-  const rows = await listMemberGrants(user.id);
+  const [folderRows, spaceRows, linkRows] = await Promise.all([
+    db
+      .select({ id: folders.id, parentId: folders.parentId, restricted: folders.restricted })
+      .from(folders),
+    db.select({ id: spaces.id, ownerId: spaces.ownerId }).from(spaces),
+    db
+      .select({ documentId: shareLinks.documentId, expiresAt: shareLinks.expiresAt })
+      .from(shareLinks)
+      .where(and(eq(shareLinks.enabled, true), isNull(shareLinks.revokedAt))),
+  ]);
 
-  const spaceRolesBySpaceId = new Map<string, SpaceMemberRole>();
-  const documentRolesByDocumentId = new Map<string, SpaceMemberRole>();
-  for (const row of rows) {
-    if (row.targetType === 'space') spaceRolesBySpaceId.set(row.targetId, row.role);
-    else if (row.targetType === 'document') documentRolesByDocumentId.set(row.targetId, row.role);
+  for (const folder of folderRows) {
+    lookup.folderParentById.set(folder.id, folder.parentId);
+    if (folder.restricted) lookup.restrictedFolderIds.add(folder.id);
   }
-  return { spaceRolesBySpaceId, documentRolesByDocumentId };
+  for (const space of spaceRows) lookup.spaceOwnerById.set(space.id, space.ownerId);
+  const now = Date.now();
+  for (const link of linkRows) {
+    if (link.expiresAt && new Date(link.expiresAt).getTime() < now) continue;
+    lookup.publishedDocIds.add(link.documentId);
+  }
+
+  // Admins bypass grants; guests hold none.
+  if (user && !isAdmin(user)) {
+    const rows = await listMemberGrants(user.id);
+    for (const row of rows) {
+      if (row.targetType === 'space') lookup.spaceRolesBySpaceId.set(row.targetId, row.role);
+      else if (row.targetType === 'folder')
+        lookup.folderRolesByFolderId.set(row.targetId, row.role);
+      else if (row.targetType === 'document')
+        lookup.documentRolesByDocumentId.set(row.targetId, row.role);
+    }
+  }
+
+  return lookup;
 }
 
 export function isAdmin(user?: User) {
@@ -76,30 +119,45 @@ export async function requireFolderEditor(user: User, folderId: string) {
   return folder;
 }
 
+// Resolve an `inherit` document's effective role by walking its folder chain up to the space.
+// A folder grant anywhere in the chain wins; otherwise a `restricted` folder blocks space-level
+// grants from penetrating; otherwise the space grant applies. Returns null when nothing grants.
+function resolveInheritRole(doc: DocumentRow, lookup: PermissionLookup): SpaceMemberRole | null {
+  let folderRole: SpaceMemberRole | null = null;
+  let blockedByRestricted = false;
+  const seen = new Set<string>();
+  let fid: string | null = doc.folderId ?? null;
+  while (fid && !seen.has(fid)) {
+    seen.add(fid);
+    const role = lookup.folderRolesByFolderId.get(fid);
+    if (role && (role === 'editor' || !folderRole)) folderRole = role;
+    if (lookup.restrictedFolderIds.has(fid)) blockedByRestricted = true;
+    fid = lookup.folderParentById.get(fid) ?? null;
+  }
+  if (folderRole) return folderRole;
+  if (blockedByRestricted) return null;
+  return lookup.spaceRolesBySpaceId.get(doc.spaceId) ?? null;
+}
+
+// Single source of truth for read access. `requireDocumentRead` / `canReadDocument` delegate here
+// after loading the lookup, so the chain stays identical for list rendering and single-doc reads.
 export function canReadDocumentWithLookup(
   user: User | undefined,
   doc: DocumentRow,
   lookup: PermissionLookup,
 ) {
   if (doc.deletedAt) return false;
-  if (doc.visibility === 'public') return true;
+  if (lookup.publishedDocIds.has(doc.id)) return true; // public share link — guest channel
   if (!user) return false;
   if (isAdmin(user) || doc.authorId === user.id) return true;
-  if (doc.visibility === 'private') return false;
-  if (getSpaceRoleFromLookup(user, lookup, doc.spaceId)) return true;
-  return lookup.documentRolesByDocumentId.has(doc.id);
+  if (lookup.spaceOwnerById.get(doc.spaceId) === user.id) return true;
+  if (lookup.documentRolesByDocumentId.has(doc.id)) return true; // explicit per-doc grant
+  if (doc.access === 'restricted') return false; // no inheritance
+  return resolveInheritRole(doc, lookup) !== null;
 }
 
 export async function canReadDocument(user: User | undefined, doc: DocumentRow) {
-  if (doc.deletedAt) return false;
-  if (doc.visibility === 'public') return true;
-  if (!user) return false;
-  if (isAdmin(user) || doc.authorId === user.id) return true;
-  if (doc.visibility === 'private') return false;
-  const spaceRole = await getSpaceRole(user, doc.spaceId);
-  if (spaceRole) return true;
-  const directRole = await getMemberDocumentRole(user.id, doc.id);
-  return Boolean(directRole);
+  return canReadDocumentWithLookup(user, doc, await loadPermissionLookup(user));
 }
 
 export async function requireDocumentRead(user: User | undefined, docId: string) {
@@ -119,20 +177,14 @@ export function canEditDocumentWithLookup(
   if (doc.deletedAt) return false;
   if (!user) return false;
   if (isAdmin(user) || doc.authorId === user.id) return true;
-  if (doc.visibility === 'private') return false;
-  if (getSpaceRoleFromLookup(user, lookup, doc.spaceId) === 'editor') return true;
-  return lookup.documentRolesByDocumentId.get(doc.id) === 'editor';
+  if (lookup.spaceOwnerById.get(doc.spaceId) === user.id) return true;
+  if (lookup.documentRolesByDocumentId.get(doc.id) === 'editor') return true;
+  if (doc.access === 'restricted') return false;
+  return resolveInheritRole(doc, lookup) === 'editor';
 }
 
 export async function canEditDocument(user: User | undefined, doc: DocumentRow) {
-  if (doc.deletedAt) return false;
-  if (!user) return false;
-  if (isAdmin(user) || doc.authorId === user.id) return true;
-  if (doc.visibility === 'private') return false;
-  const spaceRole = await getSpaceRole(user, doc.spaceId);
-  if (spaceRole === 'editor') return true;
-  const directRole = await getMemberDocumentRole(user.id, doc.id);
-  return directRole === 'editor';
+  return canEditDocumentWithLookup(user, doc, await loadPermissionLookup(user));
 }
 
 export function canManageDocumentShare(user: User | undefined, doc: DocumentRow) {
@@ -179,64 +231,29 @@ export async function listReadableSpaces(user: User | undefined) {
   return rows.map((row) => row.space);
 }
 
-export async function listReadableDocuments(user: User | undefined, space?: SpaceRow) {
+export async function listReadableDocuments(
+  user: User | undefined,
+  space?: SpaceRow,
+  lookup?: PermissionLookup,
+) {
   const spaceScope = space ? [eq(documents.spaceId, space.id)] : [];
 
-  if (!user) {
+  if (isAdmin(user)) {
     return db
       .select()
       .from(documents)
-      .where(and(eq(documents.visibility, 'public'), isNull(documents.deletedAt), ...spaceScope));
+      .where(and(isNull(documents.deletedAt), ...spaceScope));
   }
 
-  if (isAdmin(user)) {
-    if (space) {
-      return db
-        .select()
-        .from(documents)
-        .where(and(eq(documents.spaceId, space.id), isNull(documents.deletedAt)));
-    }
-    return db.select().from(documents).where(isNull(documents.deletedAt));
-  }
-
-  const spaceGrant = alias(grants, 'space_grant');
-  const docGrant = alias(grants, 'doc_grant');
-
-  const rows = await db
-    .select({ doc: documents })
+  // The inherit/restricted + folder + share-link chain doesn't reduce to a single SQL predicate, so
+  // we load the candidate set and filter through the one canonical resolver. Callers that already
+  // built a lookup pass it in to avoid reloading the folder/grant maps.
+  const candidates = await db
+    .select()
     .from(documents)
-    .leftJoin(
-      spaceGrant,
-      and(
-        eq(spaceGrant.targetType, 'space'),
-        eq(spaceGrant.targetId, documents.spaceId),
-        eq(spaceGrant.subjectType, 'member'),
-        eq(spaceGrant.subjectId, user.id),
-      ),
-    )
-    .leftJoin(
-      docGrant,
-      and(
-        eq(docGrant.targetType, 'document'),
-        eq(docGrant.targetId, documents.id),
-        eq(docGrant.subjectType, 'member'),
-        eq(docGrant.subjectId, user.id),
-      ),
-    )
-    .where(
-      and(
-        isNull(documents.deletedAt),
-        ...spaceScope,
-        or(
-          eq(documents.visibility, 'public'),
-          eq(documents.authorId, user.id),
-          and(eq(documents.visibility, 'invite'), isNotNull(spaceGrant.subjectId)),
-          and(eq(documents.visibility, 'invite'), isNotNull(docGrant.subjectId)),
-        ),
-      ),
-    );
-
-  return rows.map((row) => row.doc);
+    .where(and(isNull(documents.deletedAt), ...spaceScope));
+  const resolved = lookup ?? (await loadPermissionLookup(user));
+  return candidates.filter((doc) => canReadDocumentWithLookup(user, doc, resolved));
 }
 
 export async function listDirectoryDocuments(user: User | undefined, space?: SpaceRow) {
