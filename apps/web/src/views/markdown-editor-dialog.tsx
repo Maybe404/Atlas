@@ -60,6 +60,9 @@ function MarkdownEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) 
   const [titleTouched, setTitleTouched] = useState<boolean>(Boolean(doc.title));
   const [spaceId, setSpaceId] = useState<string>(doc.spaceId || (doc.isNew ? '' : 's1'));
   const [folderId, setFolderId] = useState<string>(doc.folderId || '');
+  const [access, setAccess] = useState<'inherit' | 'restricted'>(
+    doc.access === 'restricted' ? 'restricted' : 'inherit',
+  );
   const [showSpacePicker, setShowSpacePicker] = useState<boolean>(false);
   const [showSpaceRequired, setShowSpaceRequired] = useState<boolean>(false);
   const [dirty, setDirty] = useState<boolean>(false);
@@ -147,6 +150,7 @@ function MarkdownEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) 
       patch.spaceAccent = selectedSpace.accent;
     }
     if ((folderId || '') !== (doc.folderId || '')) patch.folderId = folderId || null;
+    if (access !== (doc.access === 'restricted' ? 'restricted' : 'inherit')) patch.access = access;
     onSave(md, patch);
   };
 
@@ -327,6 +331,25 @@ function MarkdownEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) 
                         {f.label}
                       </option>
                     ))}
+                  </select>
+                </div>
+              )}
+              {selectedSpace && (
+                <div
+                  className="editor-space-field"
+                  style={{ marginTop: 8, position: 'relative', maxWidth: 320 }}
+                >
+                  <span className="label">访问</span>
+                  <select
+                    className="role-select"
+                    value={access}
+                    onChange={(e: Loose) => {
+                      setAccess(e.target.value);
+                      setDirty(true);
+                    }}
+                  >
+                    <option value="inherit">继承（跟随空间 / 文件夹）</option>
+                    <option value="restricted">受限（仅作者 / 管理员 / 被授权者）</option>
                   </select>
                 </div>
               )}

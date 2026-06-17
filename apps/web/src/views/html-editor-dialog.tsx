@@ -97,6 +97,9 @@ function HTMLEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) {
   const [descTouched, _setDescTouched] = useState(Boolean(doc.desc));
   const [spaceId, setSpaceId] = useState(doc.spaceId || (doc.isNew ? '' : 's1'));
   const [folderId, setFolderId] = useState<string>(doc.folderId || '');
+  const [access, setAccess] = useState<'inherit' | 'restricted'>(
+    doc.access === 'restricted' ? 'restricted' : 'inherit',
+  );
   const [showSpacePicker, setShowSpacePicker] = useState(false);
   const [showSpaceRequired, setShowSpaceRequired] = useState(false);
   const [tab, setTab] = useState(doc.isNew ? 'source' : 'source'); // 'source' | 'preview'
@@ -139,6 +142,7 @@ function HTMLEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) {
       patch.spaceAccent = selectedSpace.accent;
     }
     if ((folderId || '') !== (doc.folderId || '')) patch.folderId = folderId || null;
+    if (access !== (doc.access === 'restricted' ? 'restricted' : 'inherit')) patch.access = access;
     onSave(html, patch);
   };
   // keydown handler binds once; ref keeps it calling the latest save closure
@@ -299,6 +303,25 @@ function HTMLEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) {
                         {f.label}
                       </option>
                     ))}
+                  </select>
+                </div>
+              )}
+              {selectedSpace && (
+                <div
+                  className="editor-space-field"
+                  style={{ marginTop: 8, position: 'relative', maxWidth: 320 }}
+                >
+                  <span className="label">访问</span>
+                  <select
+                    className="role-select"
+                    value={access}
+                    onChange={(e: Loose) => {
+                      setAccess(e.target.value);
+                      setDirty(true);
+                    }}
+                  >
+                    <option value="inherit">继承（跟随空间 / 文件夹）</option>
+                    <option value="restricted">受限（仅作者 / 管理员 / 被授权者）</option>
                   </select>
                 </div>
               )}

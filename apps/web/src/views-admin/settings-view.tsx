@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { I } from '../chrome';
 import type { Loose } from '../loose-types';
 import { GeneralPane } from './general-pane';
+import { GroupsPane } from './groups-pane';
 import { MembersPane } from './members-pane';
 import { PermissionsPane } from './permissions-pane';
 import { SpacesPane } from './spaces-pane';
@@ -15,6 +16,7 @@ export function AdminSettingsView({
   pushToast,
   spaces = [],
   members = [],
+  groups = [],
   permissions = [],
   currentUser,
   mutations,
@@ -74,6 +76,13 @@ export function AdminSettingsView({
             <span>成员</span>
           </div>
           <div
+            className={`settings-nav-item ${pane === 'groups' ? 'active' : ''}`}
+            onClick={() => setPane('groups')}
+          >
+            <_I2.layers />
+            <span>权限组</span>
+          </div>
+          <div
             className={`settings-nav-item ${pane === 'permissions' ? 'active' : ''}`}
             onClick={() => setPane('permissions')}
           >
@@ -114,6 +123,15 @@ export function AdminSettingsView({
               setMemberSpaceRole={setMemberSpaceRole}
               pushToast={pushToast}
               mutations={mutations}
+            />
+          )}
+          {pane === 'groups' && (
+            <GroupsPane
+              groups={groups}
+              spaces={spaces}
+              members={members}
+              mutations={mutations}
+              pushToast={pushToast}
             />
           )}
           {pane === 'permissions' && (

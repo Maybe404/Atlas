@@ -101,7 +101,8 @@ function App() {
     setTimeout(() => setToasts((ts: Loose) => ts.filter((t: Loose) => t.id !== id)), 2200);
   }, []);
 
-  const { spaces, members, permissions, currentUser, session, isLoading, error } = useAtlasData();
+  const { spaces, members, groups, permissions, currentUser, session, isLoading, error } =
+    useAtlasData();
   const auth = useAuth({ currentUser, session });
   const { user, login, logout, switchTo } = auth;
   const isGuest = !user;
@@ -382,6 +383,7 @@ function App() {
             pushToast={pushToast}
             spaces={spaces}
             members={members}
+            groups={groups}
             permissions={permissions}
             currentUser={currentUser}
             mutations={mutations}

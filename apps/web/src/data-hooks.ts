@@ -2,11 +2,15 @@ import type {
   BatchSetSpaceMemberRolesSchema,
   CreateDocumentSchema,
   CreateFolderSchema,
+  CreateGroupSchema,
   CreateMemberSchema,
   CreateSpaceSchema,
+  SetGroupGrantsSchema,
+  SetGroupMembersSchema,
   UpdateDocumentSchema,
   UpdateDocumentShareSchema,
   UpdateFolderSchema,
+  UpdateGroupSchema,
   UpdateMemberSchema,
   UpdateSpaceSchema,
 } from '@atlas/shared';
@@ -24,6 +28,10 @@ type UpdateMemberInput = z.infer<typeof UpdateMemberSchema>;
 type UpdateShareInput = z.infer<typeof UpdateDocumentShareSchema>;
 type CreateFolderInput = z.infer<typeof CreateFolderSchema>;
 type UpdateFolderInput = z.infer<typeof UpdateFolderSchema>;
+type CreateGroupInput = z.infer<typeof CreateGroupSchema>;
+type UpdateGroupInput = z.infer<typeof UpdateGroupSchema>;
+type SetGroupMembersInput = z.infer<typeof SetGroupMembersSchema>;
+type SetGroupGrantsInput = z.infer<typeof SetGroupGrantsSchema>;
 
 type Toast = { msg: string; meta?: string };
 type PushToast = (toast: Toast) => void;
@@ -34,6 +42,7 @@ export const atlasKeys = {
   documents: ['documents'] as const,
   document: (documentId: string) => ['documents', documentId] as const,
   members: ['members'] as const,
+  groups: ['groups'] as const,
   permissions: ['permissions'] as const,
   spaceMembers: (spaceId: string) => ['space-members', spaceId] as const,
   trash: ['trash'] as const,
@@ -65,10 +74,16 @@ export function useAtlasData() {
     queryFn: () => apiGet('/members/permissions'),
     enabled: isWorkspaceAdmin,
   });
+  const groupsQuery = useQuery({
+    queryKey: atlasKeys.groups,
+    queryFn: () => apiGet('/groups'),
+    enabled: isWorkspaceAdmin,
+  });
 
   return {
     spaces: spacesQuery.data || [],
     members: isWorkspaceAdmin ? membersQuery.data || [] : [],
+    groups: isWorkspaceAdmin ? groupsQuery.data || [] : [],
     permissions: isWorkspaceAdmin ? permissionsQuery.data || [] : [],
     currentUser,
     session: meQuery.data?.session,
@@ -326,6 +341,57 @@ export function useAtlasMutations(pushToast?: PushToast) {
     },
   });
 
+  // Group grants/memberships change effective access, so refresh spaces alongside the group list.
+  const invalidateGroups = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: atlasKeys.groups }),
+      queryClient.invalidateQueries({ queryKey: atlasKeys.spaces }),
+    ]);
+  };
+
+  const createGroup = useMutation({
+    mutationFn: (data: CreateGroupInput) => apiJson('/groups', 'POST', data),
+    onSuccess: async (data: unknown) => {
+      await invalidateGroups();
+      pushToast?.({ msg: '权限组已创建', meta: (data as { name?: string })?.name });
+    },
+  });
+
+  const updateGroup = useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateGroupInput }) =>
+      apiJson(`/groups/${id}`, 'PATCH', patch),
+    onSuccess: async () => {
+      await invalidateGroups();
+      pushToast?.({ msg: '权限组已更新' });
+    },
+  });
+
+  const deleteGroup = useMutation({
+    mutationFn: (id: string) => apiJson(`/groups/${id}`, 'DELETE'),
+    onSuccess: async () => {
+      await invalidateGroups();
+      pushToast?.({ msg: '权限组已删除' });
+    },
+  });
+
+  const setGroupMembers = useMutation({
+    mutationFn: ({ id, memberIds }: { id: string } & SetGroupMembersInput) =>
+      apiJson(`/groups/${id}/members`, 'PUT', { memberIds }),
+    onSuccess: async () => {
+      await invalidateGroups();
+      pushToast?.({ msg: '组成员已更新' });
+    },
+  });
+
+  const setGroupGrants = useMutation({
+    mutationFn: ({ id, grants }: { id: string } & SetGroupGrantsInput) =>
+      apiJson(`/groups/${id}/grants`, 'PUT', { grants }),
+    onSuccess: async () => {
+      await invalidateGroups();
+      pushToast?.({ msg: '组授权已更新' });
+    },
+  });
+
   return {
     createSpace: (data: CreateSpaceInput) => createSpace.mutate(data),
     updateSpace: (id: string, patch: UpdateSpaceInput) => updateSpace.mutate({ id, patch }),
@@ -377,5 +443,11 @@ export function useAtlasMutations(pushToast?: PushToast) {
       deleteMember.mutate(id, options),
     updateShare: (documentId: string, patch: UpdateShareInput) =>
       updateShare.mutate({ documentId, patch }),
+    createGroup: (data: CreateGroupInput) => createGroup.mutate(data),
+    updateGroup: (id: string, patch: UpdateGroupInput) => updateGroup.mutate({ id, patch }),
+    deleteGroup: (id: string) => deleteGroup.mutate(id),
+    setGroupMembers: (id: string, memberIds: string[]) => setGroupMembers.mutate({ id, memberIds }),
+    setGroupGrants: (id: string, grants: SetGroupGrantsInput['grants']) =>
+      setGroupGrants.mutate({ id, grants }),
   };
 }

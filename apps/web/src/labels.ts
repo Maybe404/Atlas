@@ -3,6 +3,25 @@ export const ACCESS_LABELS = {
   restricted: '受限',
 } as const;
 
+// Global group capability switches (Phase 5). Order drives the toggle row in the groups pane.
+export const CAPABILITY_LABELS = {
+  createSpace: '创建空间',
+  manageMembers: '管理成员',
+  manageGroups: '管理权限组',
+  publish: '对外发布',
+} as const;
+
+export const CAPABILITY_ORDER = [
+  'createSpace',
+  'manageMembers',
+  'manageGroups',
+  'publish',
+] as const;
+
+export function capabilityLabel(cap: string) {
+  return CAPABILITY_LABELS[cap as keyof typeof CAPABILITY_LABELS] ?? cap;
+}
+
 export function accessLabel(access?: string) {
   return ACCESS_LABELS[access as keyof typeof ACCESS_LABELS] ?? '继承';
 }
