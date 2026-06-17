@@ -32,7 +32,7 @@ const DEMO_LOGIN_ACCOUNTS: DemoLoginAccount[] = IS_DEV_DEMO_LOGIN
         email: 'chen@atlas.team',
         name: '陈夏',
         initials: 'CX',
-        role: 'editor',
+        role: 'member',
         joined: '2024-03',
         tint: '#ff9500',
       },
@@ -41,7 +41,7 @@ const DEMO_LOGIN_ACCOUNTS: DemoLoginAccount[] = IS_DEV_DEMO_LOGIN
         email: 'he@atlas.team',
         name: '何远',
         initials: 'HE',
-        role: 'viewer',
+        role: 'member',
         joined: '2025-01',
         tint: '#34c759',
       },
@@ -52,7 +52,7 @@ function demoPassword() {
   return IS_DEV_DEMO_LOGIN ? 'atlas-demo-password' : '';
 }
 
-const ROLE_LABEL: Record<string, string> = { admin: '管理员', editor: '编辑', viewer: '仅读者' };
+const ROLE_LABEL: Record<string, string> = { admin: '管理员', member: '成员' };
 
 function authErrorMessage(message?: string) {
   if (!message) return '登录失败，请稍后再试。';
@@ -68,7 +68,6 @@ function tintForUser(user?: (Pick<Member, 'id' | 'role'> & { tint?: string }) | 
   if (user.id === 'u2') return '#ff9500';
   if (user.id === 'u5') return '#34c759';
   if (user.role === 'admin') return 'var(--blue)';
-  if (user.role === 'editor') return '#ff9500';
   return '#34c759';
 }
 

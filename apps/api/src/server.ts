@@ -7,6 +7,7 @@ import { HttpError } from './lib/http-error';
 import { authRouter } from './routes/auth';
 import { documentsRouter } from './routes/documents';
 import { foldersRouter } from './routes/folders';
+import { groupsRouter } from './routes/groups';
 import { membersRouter } from './routes/members';
 import { spacesRouter } from './routes/spaces';
 
@@ -28,7 +29,8 @@ const app = new Hono<AppEnv>()
   .route('/spaces', spacesRouter)
   .route('/documents', documentsRouter)
   .route('/folders', foldersRouter)
-  .route('/members', membersRouter);
+  .route('/members', membersRouter)
+  .route('/groups', groupsRouter);
 
 app.onError((err, c) => {
   if (err instanceof ZodError) {

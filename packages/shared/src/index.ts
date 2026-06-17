@@ -4,8 +4,16 @@ export { extractHtmlMetadata } from './html-metadata';
 export { extractMarkdownMetadata } from './markdown-metadata';
 
 // ── Domain ─────────────────────────────────────────────────────────────────
-export const RoleSchema = z.enum(['admin', 'editor', 'viewer']);
+// Global workspace role. `admin` manages everything; everyone else is a plain `member` whose
+// powers come from group capabilities + grants (Phase 5 collapsed the old editor/viewer tiers).
+export const RoleSchema = z.enum(['admin', 'member']);
 export type Role = z.infer<typeof RoleSchema>;
+
+// Global capability switches carried by groups (B-side of the A+B group model). A member's
+// effective capabilities are the union across the groups they belong to; admins hold all.
+export const CapabilitySchema = z.enum(['createSpace', 'manageMembers', 'manageGroups', 'publish']);
+export type Capability = z.infer<typeof CapabilitySchema>;
+export const ALL_CAPABILITIES = CapabilitySchema.options;
 
 // Site-internal access mode. Public exposure is orthogonal and flows through share_links.
 export const AccessSchema = z.enum(['inherit', 'restricted']);
@@ -138,7 +146,7 @@ export const CreateMemberSchema = z.object({
   name: z.string().trim().min(1).max(80),
   email: z.string().trim().toLowerCase().email(),
   password: z.string().min(8).max(128),
-  role: RoleSchema.default('viewer'),
+  role: RoleSchema.default('member'),
 });
 
 export const UpdateMemberSchema = z.object({
@@ -175,6 +183,45 @@ export const BatchSetSpaceMemberRolesSchema = z.object({
 export const SetDocumentMemberRoleSchema = z.object({
   memberId: z.string(),
   role: SpaceRoleSchema,
+});
+
+// ── Groups (Phase 5) ─────────────────────────────────────────────────────────
+// A group grant targets a space or folder (documents are still per-member grants only).
+export const GroupGrantTargetTypeSchema = z.enum(['space', 'folder']);
+export type GroupGrantTargetType = z.infer<typeof GroupGrantTargetTypeSchema>;
+
+export const GroupGrantSchema = z.object({
+  targetType: GroupGrantTargetTypeSchema,
+  targetId: z.string(),
+  role: SpaceMemberRoleSchema,
+});
+export type GroupGrant = z.infer<typeof GroupGrantSchema>;
+
+export const GroupSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  capabilities: z.array(CapabilitySchema).default([]),
+  memberIds: z.array(z.string()).default([]),
+  grants: z.array(GroupGrantSchema).default([]),
+});
+export type Group = z.infer<typeof GroupSchema>;
+
+export const CreateGroupSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  capabilities: z.array(CapabilitySchema).default([]),
+});
+
+export const UpdateGroupSchema = z.object({
+  name: z.string().trim().min(1).max(80).optional(),
+  capabilities: z.array(CapabilitySchema).optional(),
+});
+
+export const SetGroupMembersSchema = z.object({
+  memberIds: z.array(z.string()),
+});
+
+export const SetGroupGrantsSchema = z.object({
+  grants: z.array(GroupGrantSchema),
 });
 
 export const UpdateDocumentShareSchema = z.object({

@@ -19,12 +19,14 @@ import { makeId } from '../lib/id';
 import {
   canEditDocumentWithLookup,
   canReadDocumentWithLookup,
+  getMemberCapabilities,
   getSpaceRoleFromLookup,
   isAdmin,
   listDirectoryDocuments,
   listReadableSpaces,
   loadPermissionLookup,
   type PermissionLookup,
+  requireCapability,
   requireSpaceAccess,
 } from '../lib/permissions';
 import { toPublicMember } from '../lib/serializers';
@@ -181,7 +183,7 @@ export const spacesRouter = new Hono<AppEnv>()
   })
   .post('/', async (c) => {
     const user = requireUser(c.get('user'));
-    if (!isAdmin(user)) throw forbidden('Only workspace admins can create spaces.');
+    requireCapability(await getMemberCapabilities(user), 'createSpace');
 
     const body = CreateSpaceSchema.parse(await c.req.json());
     const id = makeId('s');

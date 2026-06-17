@@ -724,8 +724,8 @@ function AdminAccessDenied({ user, onNavigate }: Loose) {
         </div>
         <h2 className="reader-locked-title">需要管理员权限</h2>
         <p className="reader-locked-desc">
-          {user?.email || '当前账号'} 当前是{user?.role === 'editor' ? '编辑' : '仅读者'}
-          ，不能查看成员、权限和后台维护设置。请切换到管理员账号，或让管理员把这个成员的工作区角色改为管理员。
+          {user?.email || '当前账号'}{' '}
+          当前是成员账号，不能查看成员、权限和后台维护设置。请切换到管理员账号，或让管理员把这个成员的工作区角色改为管理员。
         </p>
         <div className="reader-locked-actions">
           <button

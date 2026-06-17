@@ -9,9 +9,16 @@ import { requireUser } from '../lib/auth';
 import { removeGrantsForSubject } from '../lib/grants';
 import { badRequest, conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId } from '../lib/id';
-import { isAdmin } from '../lib/permissions';
+import { getMemberCapabilities, requireCapability } from '../lib/permissions';
 import { createPersonalSpace } from '../lib/personal-space';
 import { toPublicMember } from '../lib/serializers';
+
+type User = typeof members.$inferSelect;
+
+async function requireManageMembers(user: User) {
+  const caps = await getMemberCapabilities(user);
+  requireCapability(caps, 'manageMembers');
+}
 
 function initialsFromName(name: string) {
   const cleaned = name.trim();
@@ -36,13 +43,13 @@ function joinedMonth() {
 export const membersRouter = new Hono<AppEnv>()
   .get('/', async (c) => {
     const user = requireUser(c.get('user'));
-    if (!isAdmin(user)) throw forbidden('Only workspace admins can list all members.');
+    await requireManageMembers(user);
     const rows = await db.select().from(members);
     return c.json(rows.map(toPublicMember));
   })
   .post('/', async (c) => {
     const user = requireUser(c.get('user'));
-    if (!isAdmin(user)) throw forbidden('Only workspace admins can create members.');
+    await requireManageMembers(user);
 
     const body = CreateMemberSchema.parse(await c.req.json());
     const email = body.email.trim().toLowerCase();
@@ -75,7 +82,7 @@ export const membersRouter = new Hono<AppEnv>()
   })
   .get('/permissions', async (c) => {
     const user = requireUser(c.get('user'));
-    if (!isAdmin(user)) throw forbidden('Only workspace admins can view all permissions.');
+    await requireManageMembers(user);
     const rows = await db
       .select({
         memberId: grants.subjectId,
@@ -88,7 +95,7 @@ export const membersRouter = new Hono<AppEnv>()
   })
   .patch('/:id', async (c) => {
     const user = requireUser(c.get('user'));
-    if (!isAdmin(user)) throw forbidden('Only workspace admins can edit members.');
+    await requireManageMembers(user);
     const id = c.req.param('id');
     const body = UpdateMemberSchema.parse(await c.req.json());
 
@@ -135,7 +142,7 @@ export const membersRouter = new Hono<AppEnv>()
   })
   .delete('/:id', async (c) => {
     const user = requireUser(c.get('user'));
-    if (!isAdmin(user)) throw forbidden('Only workspace admins can delete members.');
+    await requireManageMembers(user);
     const id = c.req.param('id');
     if (id === user.id) throw forbidden('You cannot delete your own member account.');
 

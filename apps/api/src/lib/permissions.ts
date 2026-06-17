@@ -1,9 +1,9 @@
-import type { SpaceMemberRole } from '@atlas/shared';
-import { and, eq, isNull } from 'drizzle-orm';
+import { ALL_CAPABILITIES, type Capability, type SpaceMemberRole } from '@atlas/shared';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '../db/client';
-import { documents, folders, grants, members, shareLinks, spaces } from '../db/schema';
+import { documents, folders, grants, groups, members, shareLinks, spaces } from '../db/schema';
 import { nowIso } from './dates';
-import { getMemberSpaceRole, listMemberGrants } from './grants';
+import { getMemberSpaceRole, listEffectiveGrants, listGroupIdsForMember } from './grants';
 import { forbidden, notFound } from './http-error';
 
 type User = typeof members.$inferSelect;
@@ -23,6 +23,8 @@ export type PermissionLookup = {
   publishedDocIds: Set<string>;
   // Personal-space owners (owner reads/edits everything in their space).
   spaceOwnerById: Map<string, string | null>;
+  // Effective global capabilities (union across the member's groups; admins hold all).
+  capabilities: Set<Capability>;
 };
 
 export function emptyPermissionLookup(): PermissionLookup {
@@ -34,7 +36,13 @@ export function emptyPermissionLookup(): PermissionLookup {
     restrictedFolderIds: new Set(),
     publishedDocIds: new Set(),
     spaceOwnerById: new Map(),
+    capabilities: new Set(),
   };
+}
+
+// Fold a grant into a role map taking the highest role (editor > viewer); never downgrades.
+function foldRole(map: Map<string, SpaceMemberRole>, key: string, role: SpaceMemberRole) {
+  if (map.get(key) !== 'editor') map.set(key, role);
 }
 
 // Loads everything the sync `*WithLookup` resolvers need in one pass. Folder tree, space owners and
@@ -65,19 +73,53 @@ export async function loadPermissionLookup(user: User | undefined): Promise<Perm
     lookup.publishedDocIds.add(link.documentId);
   }
 
-  // Admins bypass grants; guests hold none.
-  if (user && !isAdmin(user)) {
-    const rows = await listMemberGrants(user.id);
-    for (const row of rows) {
-      if (row.targetType === 'space') lookup.spaceRolesBySpaceId.set(row.targetId, row.role);
+  // Admins bypass grants and hold every capability; guests hold none.
+  if (isAdmin(user)) {
+    for (const cap of ALL_CAPABILITIES) lookup.capabilities.add(cap);
+  } else if (user) {
+    const groupIds = await listGroupIdsForMember(user.id);
+    const [grantRows, groupRows] = await Promise.all([
+      listEffectiveGrants(user.id, groupIds),
+      groupIds.length > 0
+        ? db
+            .select({ capabilities: groups.capabilities })
+            .from(groups)
+            .where(inArray(groups.id, groupIds))
+        : Promise.resolve([] as { capabilities: string[] }[]),
+    ]);
+    // Member-direct and group grants are merged taking the highest role per target.
+    for (const row of grantRows) {
+      if (row.targetType === 'space') foldRole(lookup.spaceRolesBySpaceId, row.targetId, row.role);
       else if (row.targetType === 'folder')
-        lookup.folderRolesByFolderId.set(row.targetId, row.role);
+        foldRole(lookup.folderRolesByFolderId, row.targetId, row.role);
       else if (row.targetType === 'document')
-        lookup.documentRolesByDocumentId.set(row.targetId, row.role);
+        foldRole(lookup.documentRolesByDocumentId, row.targetId, row.role);
+    }
+    for (const group of groupRows) {
+      for (const cap of group.capabilities) lookup.capabilities.add(cap as Capability);
     }
   }
 
   return lookup;
+}
+
+// Standalone capability resolution for routes that don't build a full lookup.
+export async function getMemberCapabilities(user: User | undefined): Promise<Set<Capability>> {
+  if (!user) return new Set();
+  if (isAdmin(user)) return new Set(ALL_CAPABILITIES);
+  const groupIds = await listGroupIdsForMember(user.id);
+  if (groupIds.length === 0) return new Set();
+  const rows = await db
+    .select({ capabilities: groups.capabilities })
+    .from(groups)
+    .where(inArray(groups.id, groupIds));
+  const caps = new Set<Capability>();
+  for (const row of rows) for (const cap of row.capabilities) caps.add(cap as Capability);
+  return caps;
+}
+
+export function requireCapability(caps: Set<Capability>, cap: Capability) {
+  if (!caps.has(cap)) throw forbidden('You do not have permission to perform this action.');
 }
 
 export function isAdmin(user?: User) {
@@ -198,8 +240,17 @@ export async function requireDocumentShareManager(user: User | undefined, docId:
     .select()
     .from(documents)
     .where(and(eq(documents.id, docId), isNull(documents.deletedAt)));
-  if (!doc || !canManageDocumentShare(user, doc)) throw notFound();
-  return doc;
+  if (!doc) throw notFound();
+  if (canManageDocumentShare(user, doc)) return doc; // admin or author
+  // Members with the `publish` capability may manage shares on documents they can edit.
+  if (user) {
+    const caps = await getMemberCapabilities(user);
+    if (caps.has('publish')) {
+      const lookup = await loadPermissionLookup(user);
+      if (canEditDocumentWithLookup(user, doc, lookup)) return doc;
+    }
+  }
+  throw notFound();
 }
 
 export async function requireDocumentEditor(user: User, docId: string) {

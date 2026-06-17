@@ -14,9 +14,17 @@ await import('./db/seed');
 
 const { default: server } = await import('./server');
 const { db } = await import('./db/client');
-const { auditLogs, documents, grants, members, sessions, shareLinks, spaces } = await import(
-  './db/schema'
-);
+const {
+  auditLogs,
+  documents,
+  grants,
+  groupMembers,
+  groups,
+  members,
+  sessions,
+  shareLinks,
+  spaces,
+} = await import('./db/schema');
 const { setMemberDocumentRole, setMemberSpaceRole } = await import('./lib/grants');
 
 afterAll(() => {
@@ -186,7 +194,7 @@ describe('Atlas API', () => {
       initials: '无密',
       email: 'passwordless@atlas.team',
       passwordHash: null,
-      role: 'viewer',
+      role: 'member',
       joined: '2026-05',
     });
 
@@ -308,7 +316,7 @@ describe('Atlas API', () => {
         name: '新成员',
         email,
         password: 'first-password',
-        role: 'viewer',
+        role: 'member',
       }),
       headers: { 'content-type': 'application/json', ...admin.headers },
     });
@@ -362,7 +370,7 @@ describe('Atlas API', () => {
         name: '测试者',
         email: 'tester@atlas.team',
         password: 'first-password',
-        role: 'editor',
+        role: 'member',
       }),
       headers: { 'content-type': 'application/json', ...admin.headers },
     });
@@ -1008,7 +1016,7 @@ describe('Atlas API', () => {
     const admin = await loginAs();
     const demote = await request('/members/u1', {
       method: 'PATCH',
-      body: JSON.stringify({ role: 'viewer' }),
+      body: JSON.stringify({ role: 'member' }),
       headers: { 'content-type': 'application/json', ...admin.headers },
     });
     expect(demote.status).toBe(409);
@@ -1307,5 +1315,144 @@ describe('Atlas API', () => {
     expect(body.format).toBe('markdown');
     expect(body.title).toBe('上传的 MD');
     expect(body.html).toBe(md);
+  });
+
+  // ── Phase 5: groups + capabilities ─────────────────────────────────────────
+  async function adminCreateSpaceAndDoc(admin: Awaited<ReturnType<typeof loginAs>>) {
+    const spaceRes = await request('/spaces', {
+      method: 'POST',
+      body: JSON.stringify({ name: '组测试空间', accent: 'slate' }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    const { id: spaceId } = (await spaceRes.json()) as { id: string };
+    const docRes = await request('/documents', {
+      method: 'POST',
+      body: JSON.stringify({ spaceId, title: '组可见文档', access: 'inherit' }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    const { id: docId } = (await docRes.json()) as { id: string };
+    return { spaceId, docId };
+  }
+
+  test('group grants extend access and fold with direct grants taking the highest role', async () => {
+    const admin = await loginAs();
+    const { spaceId, docId } = await adminCreateSpaceAndDoc(admin);
+
+    // u5 (he) holds no grant on the fresh space → cannot read.
+    const he = await loginAs('he@atlas.team');
+    expect((await request(`/documents/${docId}`, { headers: he.headers })).status).toBe(404);
+
+    // Create a group, add u5, grant it VIEWER on the space.
+    const groupRes = await request('/groups', {
+      method: 'POST',
+      body: JSON.stringify({ name: '访问组', capabilities: [] }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    const { id: groupId } = (await groupRes.json()) as { id: string };
+    await request(`/groups/${groupId}/members`, {
+      method: 'PUT',
+      body: JSON.stringify({ memberIds: ['u5'] }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    await request(`/groups/${groupId}/grants`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        grants: [{ targetType: 'space', targetId: spaceId, role: 'viewer' }],
+      }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+
+    // Now readable, but viewer-only (no edit).
+    const asViewer = await request(`/documents/${docId}`, { headers: he.headers });
+    expect(asViewer.status).toBe(200);
+    expect(((await asViewer.json()) as { canEdit: boolean }).canEdit).toBe(false);
+
+    // A direct EDITOR grant folds with the group viewer grant → editor wins.
+    await setMemberSpaceRole(db, 'u5', spaceId, 'editor');
+    const folded = await request(`/documents/${docId}`, { headers: he.headers });
+    expect(((await folded.json()) as { canEdit: boolean }).canEdit).toBe(true);
+
+    // Remove the direct grant; bump the GROUP grant to editor → still editor via group alone.
+    await setMemberSpaceRole(db, 'u5', spaceId, null);
+    await request(`/groups/${groupId}/grants`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        grants: [{ targetType: 'space', targetId: spaceId, role: 'editor' }],
+      }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    const viaGroup = await request(`/documents/${docId}`, { headers: he.headers });
+    expect(((await viaGroup.json()) as { canEdit: boolean }).canEdit).toBe(true);
+  });
+
+  test('createSpace capability lets a non-admin member create a space; others are forbidden', async () => {
+    // u2 (chen) belongs to g1 which carries createSpace; u5 (he) has no capability.
+    const chen = await loginAs('chen@atlas.team');
+    const ok = await request('/spaces', {
+      method: 'POST',
+      body: JSON.stringify({ name: '陈的新空间', accent: 'moss' }),
+      headers: { 'content-type': 'application/json', ...chen.headers },
+    });
+    expect(ok.status).toBe(201);
+
+    const he = await loginAs('he@atlas.team');
+    const denied = await request('/spaces', {
+      method: 'POST',
+      body: JSON.stringify({ name: '何的空间', accent: 'moss' }),
+      headers: { 'content-type': 'application/json', ...he.headers },
+    });
+    expect(denied.status).toBe(403);
+  });
+
+  test('manageGroups capability gates the groups admin surface', async () => {
+    // u6 (zhou) is in g2 which carries manageGroups; u5 (he) is not.
+    const zhou = await loginAs('zhou@atlas.team');
+    expect((await request('/groups', { headers: zhou.headers })).status).toBe(200);
+
+    const he = await loginAs('he@atlas.team');
+    expect((await request('/groups', { headers: he.headers })).status).toBe(403);
+
+    // manageMembers is likewise gated: u6 holds it, u5 does not.
+    expect((await request('/members', { headers: zhou.headers })).status).toBe(200);
+    expect((await request('/members', { headers: he.headers })).status).toBe(403);
+  });
+
+  test('deleting a group removes its grants and memberships', async () => {
+    const admin = await loginAs();
+    const { spaceId } = await adminCreateSpaceAndDoc(admin);
+    const groupRes = await request('/groups', {
+      method: 'POST',
+      body: JSON.stringify({ name: '待删组', capabilities: ['publish'] }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    const { id: groupId } = (await groupRes.json()) as { id: string };
+    await request(`/groups/${groupId}/members`, {
+      method: 'PUT',
+      body: JSON.stringify({ memberIds: ['u5'] }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    await request(`/groups/${groupId}/grants`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        grants: [{ targetType: 'space', targetId: spaceId, role: 'viewer' }],
+      }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+
+    const del = await request(`/groups/${groupId}`, { method: 'DELETE', headers: admin.headers });
+    expect(del.status).toBe(200);
+
+    const remainingMembers = await db
+      .select()
+      .from(groupMembers)
+      .where(eq(groupMembers.groupId, groupId));
+    expect(remainingMembers.length).toBe(0);
+    const remainingGrants = await db
+      .select()
+      .from(grants)
+      .where(and(eq(grants.subjectType, 'group'), eq(grants.subjectId, groupId)));
+    expect(remainingGrants.length).toBe(0);
+    const [gone] = await db.select().from(groups).where(eq(groups.id, groupId));
+    expect(gone).toBeUndefined();
   });
 });

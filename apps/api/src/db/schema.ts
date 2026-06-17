@@ -7,9 +7,36 @@ export const members = sqliteTable('members', {
   initials: text('initials').notNull(),
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash'),
-  role: text('role', { enum: ['admin', 'editor', 'viewer'] }).notNull(),
+  // Global role collapsed to admin/member in Phase 5; capabilities now ride on groups.
+  role: text('role', { enum: ['admin', 'member'] }).notNull(),
   joined: text('joined').notNull(),
 });
+
+// Permission groups (Phase 5). Carry global capability switches (B) and, via `grants` rows with
+// subjectType='group', resource authorizations on spaces/folders (A).
+export const groups = sqliteTable('groups', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  capabilities: text('capabilities', { mode: 'json' }).$type<string[]>().notNull().default([]),
+  createdAt: text('created_at').notNull().default(sql`(current_timestamp)`),
+});
+
+// Many-to-many: which members belong to which group.
+export const groupMembers = sqliteTable(
+  'group_members',
+  {
+    groupId: text('group_id')
+      .notNull()
+      .references(() => groups.id, { onDelete: 'cascade' }),
+    memberId: text('member_id')
+      .notNull()
+      .references(() => members.id, { onDelete: 'cascade' }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.groupId, table.memberId] }),
+    memberIdIdx: index('group_members_member_id_idx').on(table.memberId),
+  }),
+);
 
 export const sessions = sqliteTable(
   'sessions',

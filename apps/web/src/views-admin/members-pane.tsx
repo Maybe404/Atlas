@@ -18,7 +18,7 @@ export function MembersPane({
   const [menuOpenId, setMenuOpenId] = useState<Loose>(null);
   const [passwordMember, setPasswordMember] = useState<Loose>(null);
   const [showNewMember, setShowNewMember] = useState(false);
-  const [newMember, setNewMember] = useState({ name: '', email: '', password: '', role: 'viewer' });
+  const [newMember, setNewMember] = useState({ name: '', email: '', password: '', role: 'member' });
   const [passwordDraft, setPasswordDraft] = useState('');
   const avatarColors = [
     'var(--blue)',
@@ -65,7 +65,7 @@ export function MembersPane({
     }
     mutations.createMember(payload, {
       onSuccess: () => {
-        setNewMember({ name: '', email: '', password: '', role: 'viewer' });
+        setNewMember({ name: '', email: '', password: '', role: 'member' });
         setShowNewMember(false);
       },
       onError: (error: Loose) => pushToast?.({ msg: '新增成员失败', meta: error?.message }),
@@ -180,8 +180,7 @@ export function MembersPane({
                 }
               >
                 <option value="admin">管理员</option>
-                <option value="editor">编辑</option>
-                <option value="viewer">仅读者</option>
+                <option value="member">成员</option>
               </select>
             </div>
             <div className="member-create-actions">
@@ -221,8 +220,7 @@ export function MembersPane({
                       style={{ padding: '6px 32px 6px 10px', fontSize: 13 }}
                     >
                       <option value="admin">管理员</option>
-                      <option value="editor">编辑</option>
-                      <option value="viewer">仅读者</option>
+                      <option value="member">成员</option>
                     </select>
                     <div className="access-cell" style={{ position: 'relative' }}>
                       <button

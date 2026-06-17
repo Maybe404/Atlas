@@ -33,7 +33,7 @@ export const ATLAS_DATA = (() => {
       id: 'u2',
       name: '陈夏',
       initials: 'CX',
-      role: 'editor',
+      role: 'member',
       email: 'chen@atlas.team',
       joined: '2024-03',
     },
@@ -41,7 +41,7 @@ export const ATLAS_DATA = (() => {
       id: 'u3',
       name: '柳明',
       initials: 'LM',
-      role: 'editor',
+      role: 'member',
       email: 'liu@atlas.team',
       joined: '2024-05',
     },
@@ -49,7 +49,7 @@ export const ATLAS_DATA = (() => {
       id: 'u4',
       name: '苏渡',
       initials: 'SD',
-      role: 'editor',
+      role: 'member',
       email: 'su@atlas.team',
       joined: '2024-08',
     },
@@ -57,7 +57,7 @@ export const ATLAS_DATA = (() => {
       id: 'u5',
       name: '何远',
       initials: 'HE',
-      role: 'viewer',
+      role: 'member',
       email: 'he@atlas.team',
       joined: '2025-01',
     },
@@ -65,7 +65,7 @@ export const ATLAS_DATA = (() => {
       id: 'u6',
       name: '周珩',
       initials: 'ZH',
-      role: 'editor',
+      role: 'member',
       email: 'zhou@atlas.team',
       joined: '2025-02',
     },
@@ -73,7 +73,7 @@ export const ATLAS_DATA = (() => {
       id: 'u7',
       name: '黎安',
       initials: 'LA',
-      role: 'editor',
+      role: 'member',
       email: 'li@atlas.team',
       joined: '2025-02',
     },
@@ -81,7 +81,7 @@ export const ATLAS_DATA = (() => {
       id: 'u8',
       name: '吴秋',
       initials: 'WQ',
-      role: 'viewer',
+      role: 'member',
       email: 'wu@atlas.team',
       joined: '2025-03',
     },
@@ -89,7 +89,7 @@ export const ATLAS_DATA = (() => {
       id: 'u9',
       name: '郑书',
       initials: 'ZS',
-      role: 'editor',
+      role: 'member',
       email: 'zheng@atlas.team',
       joined: '2025-04',
     },
@@ -97,7 +97,7 @@ export const ATLAS_DATA = (() => {
       id: 'u10',
       name: '韩奕',
       initials: 'HY',
-      role: 'viewer',
+      role: 'member',
       email: 'han@atlas.team',
       joined: '2025-04',
     },
@@ -105,7 +105,7 @@ export const ATLAS_DATA = (() => {
       id: 'u11',
       name: '叶清',
       initials: 'YQ',
-      role: 'editor',
+      role: 'member',
       email: 'ye@atlas.team',
       joined: '2025-05',
     },
@@ -113,7 +113,7 @@ export const ATLAS_DATA = (() => {
       id: 'u12',
       name: '冯之',
       initials: 'FZ',
-      role: 'viewer',
+      role: 'member',
       email: 'feng@atlas.team',
       joined: '2025-05',
     },
@@ -428,7 +428,25 @@ export const ATLAS_DATA = (() => {
     { id: 'd2', title: 'iframe 沙箱安全笔记' },
   ];
 
-  return { members, tree: tree as unknown as FixtureSpace[], docContent, recent };
+  // Permission groups (Phase 5). Capabilities ride on groups; members inherit them by joining.
+  const groups = [
+    { id: 'g1', name: '内容编辑组', capabilities: ['createSpace', 'publish'] },
+    { id: 'g2', name: '人事组', capabilities: ['manageMembers', 'manageGroups'] },
+  ];
+  const groupMembers = [
+    { groupId: 'g1', memberId: 'u2' },
+    { groupId: 'g1', memberId: 'u3' },
+    { groupId: 'g2', memberId: 'u6' },
+  ];
+
+  return {
+    members,
+    tree: tree as unknown as FixtureSpace[],
+    docContent,
+    recent,
+    groups,
+    groupMembers,
+  };
 })();
 
 export type AtlasData = typeof ATLAS_DATA;

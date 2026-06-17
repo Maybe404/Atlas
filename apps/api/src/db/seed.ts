@@ -1,13 +1,25 @@
 import { eq } from 'drizzle-orm';
 import { createPersonalSpace } from '../lib/personal-space';
 import { db } from './client';
-import { documents, folders, grants, members, sessions, shareLinks, spaces } from './schema';
+import {
+  documents,
+  folders,
+  grants,
+  groupMembers,
+  groups,
+  members,
+  sessions,
+  shareLinks,
+  spaces,
+} from './schema';
 import { ATLAS_DATA } from './seed-data';
 
 const DEMO_PASSWORD_HASH = '$2b$04$RhYUNqiT505iO9sAwUaXGO/9c55aKJYZtRSazB2H0mHtPbH.m5eF.';
 
 await db.delete(sessions);
 await db.delete(grants);
+await db.delete(groupMembers);
+await db.delete(groups);
 await db.delete(shareLinks);
 await db.delete(documents);
 await db.delete(folders);
@@ -18,9 +30,18 @@ await db.insert(members).values(
   ATLAS_DATA.members.map((member) => ({
     ...member,
     passwordHash: DEMO_PASSWORD_HASH,
-    role: member.role as 'admin' | 'editor' | 'viewer',
+    role: member.role as 'admin' | 'member',
   })),
 );
+
+await db.insert(groups).values(
+  ATLAS_DATA.groups.map((group) => ({
+    id: group.id,
+    name: group.name,
+    capabilities: group.capabilities,
+  })),
+);
+await db.insert(groupMembers).values(ATLAS_DATA.groupMembers);
 
 const now = new Date().toISOString();
 const sampleHtml = (doc: { id: string; title: string; desc?: string }) => {
@@ -136,6 +157,20 @@ await db.insert(grants).values([
     role: 'viewer',
   },
 ]);
+
+// Demo group grant: the content-editor group gets editor on the second shared space, so its
+// members read/write there purely through group membership (A-side of the group model).
+const sharedSpaces = ATLAS_DATA.tree.filter((sp) => !sp.personal);
+const groupGrantSpace = sharedSpaces[1] ?? sharedSpaces[0];
+if (groupGrantSpace) {
+  await db.insert(grants).values({
+    subjectType: 'group',
+    subjectId: 'g1',
+    targetType: 'space',
+    targetId: groupGrantSpace.id,
+    role: 'editor',
+  });
+}
 
 // Every member owns exactly one private space. Members who already own a personal space
 // in the fixture tree (e.g. u1 → s4) are skipped; the rest get a generated one.
