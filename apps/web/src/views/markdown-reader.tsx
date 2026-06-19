@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { TocList } from '../chrome';
 import type { Loose } from '../loose-types';
-import { enhance, renderMarkdown } from '../markdown/renderer';
+import { renderMarkdownWithDiagrams } from '../markdown/renderer';
 
 // Build the TocList shape ([{ num, id, title, subs:[{ id, title }] }]) from the
 // rendered headings. The highest heading level present becomes the numbered
@@ -103,7 +103,7 @@ export function MarkdownReader({ content, onScroll, tocPanel = false }: Loose) {
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    renderMarkdown(content || '')
+    renderMarkdownWithDiagrams(content || '')
       .then((out) => {
         if (alive) {
           setHtml(out);
@@ -118,10 +118,11 @@ export function MarkdownReader({ content, onScroll, tocPanel = false }: Loose) {
     };
   }, [content]);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: html triggers enhance + toc rebuild after new content is set
+  // html already has mermaid SVGs inlined by renderMarkdownWithDiagrams, so there
+  // is no post-render DOM mutation to do — just rebuild the TOC from the headings.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: rebuild TOC after new content is set
   useEffect(() => {
     if (loading || !ref.current) return;
-    enhance(ref.current);
     if (tocPanel) {
       setToc(buildToc(ref.current));
       setTocOpen(false);

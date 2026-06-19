@@ -49,7 +49,7 @@ async function getMarkdownIt(): Promise<import('markdown-it').default> {
 
   const highlightFn = (code: string, lang: string): string => {
     if (lang === 'mermaid') {
-      // Preserve as a placeholder for enhance() to replace with SVG
+      // Emit a placeholder that renderDiagrams() resolves into an inline SVG
       return `<pre class="md-mermaid">${md.utils.escapeHtml(code)}</pre>`;
     }
     if (lang && hljs.getLanguage(lang)) {
@@ -123,21 +123,39 @@ export async function renderMarkdown(src: string): Promise<string> {
 
 let mermaidCallCount = 0;
 
-export async function enhance(container: HTMLElement): Promise<void> {
-  const blocks = container.querySelectorAll<HTMLElement>('pre.md-mermaid');
-  if (blocks.length === 0) return;
+// Render any `mermaid` fenced blocks that renderMarkdown left as
+// <pre class="md-mermaid"> placeholders, inlining the resulting SVG directly
+// into the HTML string. Doing this BEFORE the HTML reaches React is deliberate:
+// the reader injects html via dangerouslySetInnerHTML, so any post-render DOM
+// mutation (the old enhance() approach) gets clobbered the next time React
+// re-applies __html (which StrictMode and ordinary re-renders both do). Folding
+// the SVG into the string makes the rendered output React-owned and idempotent.
+//
+// securityLevel:'strict' makes mermaid run its own bundled DOMPurify over every
+// label — stripping event handlers / scripts / javascript: URLs and disabling
+// click bindings — so the SVG is safe to inline. We deliberately do NOT re-run
+// our own DOMPurify over it: mermaid v11 puts node/edge labels in <foreignObject>
+// as XHTML (<div>/<span>/<p>), and DOMPurify's SVG profile strips that
+// HTML-in-SVG content as an mXSS guard, which would leave every diagram a set of
+// empty boxes. Trusting mermaid's strict output is the documented model.
+export async function renderDiagrams(html: string): Promise<string> {
+  if (!html.includes('md-mermaid')) return html;
 
-  const [mermaidMod, dompurifyMod] = await Promise.all([import('mermaid'), import('dompurify')]);
+  // Parse into a detached <template> purely for string surgery — these nodes are
+  // never connected to the document; mermaid renders from the source string and
+  // returns SVG independently of them.
+  const tpl = document.createElement('template');
+  tpl.innerHTML = html;
+  const blocks = tpl.content.querySelectorAll<HTMLElement>('pre.md-mermaid');
+  if (blocks.length === 0) return html;
+
+  const mermaidMod = await import('mermaid');
   // biome-ignore lint/suspicious/noExplicitAny: plugin interop — guard against bundler wrapping
   const mermaid = (mermaidMod as any).default ?? mermaidMod;
-  // biome-ignore lint/suspicious/noExplicitAny: plugin interop — guard against bundler wrapping
-  const DOMPurify = (dompurifyMod as any).default ?? dompurifyMod;
-
   mermaid.initialize({ startOnLoad: false, securityLevel: 'strict', theme: 'neutral' });
 
   const callId = mermaidCallCount++;
   let diagramIndex = 0;
-
   for (const block of blocks) {
     const source = block.textContent ?? '';
     const id = `md-mermaid-${callId}-${diagramIndex++}`;
@@ -145,13 +163,21 @@ export async function enhance(container: HTMLElement): Promise<void> {
       const { svg } = await mermaid.render(id, source);
       const wrap = document.createElement('div');
       wrap.className = 'md-mermaid-rendered';
-      wrap.innerHTML = DOMPurify.sanitize(svg, {
-        USE_PROFILES: { svg: true, svgFilters: true },
-      }) as string;
+      wrap.innerHTML = svg;
       block.replaceWith(wrap);
     } catch (e) {
       console.warn('mermaid render failed', e);
-      block.classList.add('md-mermaid-error');
+      block.className = 'md-mermaid-error';
     }
   }
+
+  const out = document.createElement('div');
+  out.appendChild(tpl.content);
+  return out.innerHTML;
+}
+
+// Convenience: render markdown AND resolve its mermaid diagrams to inline SVG in
+// one step. Returns a self-contained HTML string safe for dangerouslySetInnerHTML.
+export async function renderMarkdownWithDiagrams(src: string): Promise<string> {
+  return renderDiagrams(await renderMarkdown(src));
 }

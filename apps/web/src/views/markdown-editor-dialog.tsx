@@ -4,7 +4,7 @@ import { I } from '../chrome';
 import { useDocument } from '../data-hooks';
 import type { Loose } from '../loose-types';
 import { copyMarkdownRich, copyMarkdownSource } from '../markdown/copy';
-import { enhance, renderMarkdown } from '../markdown/renderer';
+import { renderMarkdownWithDiagrams } from '../markdown/renderer';
 import { accentDot, dotClass, flattenFolders } from './shared';
 
 const _I = I;
@@ -81,21 +81,17 @@ function MarkdownEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) 
   useEffect(() => {
     if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     debounceTimerRef.current = setTimeout(async () => {
-      const html = await renderMarkdown(md);
+      // Resolve mermaid to inline SVG inside the HTML string before it reaches
+      // React: the preview is rendered via dangerouslySetInnerHTML, so mutating
+      // the DOM after the fact (the old enhance() call) was clobbered on the next
+      // re-render. A self-contained string keeps the preview idempotent.
+      const html = await renderMarkdownWithDiagrams(md);
       setPreview(html);
     }, 120);
     return () => {
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     };
   }, [md]);
-
-  // ── enhance after preview HTML updates ───────────────────────────────
-  // biome-ignore lint/correctness/useExhaustiveDependencies: enhance() must re-run whenever the rendered preview HTML changes
-  useEffect(() => {
-    if (previewRef.current) {
-      enhance(previewRef.current);
-    }
-  }, [preview]);
 
   // ── click-outside closes space picker ────────────────────────────────
   useEffect(() => {
