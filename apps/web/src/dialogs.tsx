@@ -242,8 +242,7 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
                     fontSize: 13.5,
                   }}
                 >
-                  没有匹配项 · 试试 <span className="mono">RFC</span>、
-                  <span className="mono">访谈</span> 或 <span className="mono">林</span>
+                  没有匹配项 · 换个关键词试试，可搜索文档标题、命令或成员
                 </div>
               )}
             </div>
@@ -277,6 +276,7 @@ export { CmdK };
 function ShareDialog({
   open,
   documentId,
+  documentTitle,
   members: _workspaceMembers = [],
   currentUser,
   onClose,
@@ -315,7 +315,7 @@ function ShareDialog({
   const shareUnavailable = shareQuery.isError;
   const publicOn = Boolean(share?.public?.enabled);
   const url = share?.public?.url || publicShareUrl(share?.public?.token || '');
-  const docTitle = documentId ? `文档 ${documentId}` : '当前文档';
+  const docTitle = documentTitle || '当前文档';
 
   const addMember = () => {
     if (!emailInput) return;

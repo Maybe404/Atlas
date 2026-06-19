@@ -6,6 +6,7 @@ import { Sidebar, Topbar } from './chrome';
 import { useAtlasData, useAtlasMutations } from './data-hooks';
 import { CmdK, ShareDialog, SpaceManagerDialog, ToastWrap } from './dialogs';
 import type { Loose, RouteState, Toast } from './loose-types';
+import { readerTarget, setLastReader } from './reader-progress';
 import { TweakRadio, TweakSection, TweaksPanel, TweakToggle, useTweaks } from './tweaks-panel';
 import { AdminDocsView, PublicDocumentView, ReaderView } from './views';
 import { AdminSettingsView, AdminUploadView } from './views-admin';
@@ -242,6 +243,9 @@ function App() {
     .flatMap((s: Loose) => s.children || [])
     .find((d: Loose) => d.id === docId);
   const shareDocId = sharingDocId || activeDoc?.id || docId;
+  const shareDocTitle = spaces
+    .flatMap((s: Loose) => s.children || [])
+    .find((d: Loose) => d.id === shareDocId)?.title;
   const openShare = useCallback(
     (targetDocId: string) => {
       setSharingDocId(targetDocId || activeDoc?.id || docId);
@@ -256,6 +260,14 @@ function App() {
       routerNavigate('/login');
     }
   }, [docId, isAdminView, isGuest, isLoading, routerNavigate, spaceId, view]);
+
+  // Remember the document the reader is actually looking at, so the dock's
+  // "阅读" button and "返回阅读" links come back to it instead of the hardcoded
+  // first article. Only record once it resolves to a real doc.
+  useEffect(() => {
+    if (view === 'reader' && activeDoc) setLastReader(spaceId, activeDoc.id);
+  }, [view, activeDoc, spaceId]);
+  const readerHome = readerTarget({ view: 'reader', spaceId: 's1', docId: 'd1' });
 
   if (isLogin) {
     return (
@@ -355,7 +367,9 @@ function App() {
         {view === 'public' && (
           <PublicDocumentView token={routeState.token} onChromeScroll={hideChrome} />
         )}
-        {lacksAdminAccess && <AdminAccessDenied user={user} onNavigate={navigate} />}
+        {lacksAdminAccess && (
+          <AdminAccessDenied user={user} onNavigate={navigate} readerHome={readerHome} />
+        )}
         {!lacksAdminAccess && view === 'admin-docs' && (
           <AdminDocsView
             ctx={ctx}
@@ -405,6 +419,7 @@ function App() {
             visible={chromeVisible}
             magnify={tweaks.dockMagnify}
             isGuest={isGuest}
+            readerHome={readerHome}
           />
         )}
       </main>
@@ -422,6 +437,7 @@ function App() {
       <ShareDialog
         open={shareOpen}
         documentId={shareDocId}
+        documentTitle={shareDocTitle}
         members={members}
         currentUser={currentUser}
         onClose={() => {
@@ -476,7 +492,7 @@ function App() {
         <TweakSection label="跳转视图">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             {[
-              { l: '读者 · 单文档', v: { view: 'reader', spaceId: 's1', docId: 'd1' } },
+              { l: '读者 · 单文档', v: readerHome },
               { l: '团队 · 文档列表', v: { view: 'admin-docs', spaceId: 'all' } },
               { l: '团队 · 上传', v: { view: 'admin-upload' } },
               { l: '管理员 · 设置', v: { view: 'admin-settings' } },
@@ -496,13 +512,13 @@ function App() {
 // ─────────────────────────────────────────────────────────────────────────
 // DOCK — macOS-style magnification, replaces view-switcher
 // ─────────────────────────────────────────────────────────────────────────
-function Dock({ view, onNavigate, visible, magnify, isGuest }: Loose) {
+function Dock({ view, onNavigate, visible, magnify, isGuest, readerHome }: Loose) {
   const allItems = [
     {
       id: 'reader',
       label: '阅读',
       icon: 'book',
-      go: { view: 'reader', spaceId: 's1', docId: 'd1' },
+      go: readerHome || { view: 'reader', spaceId: 's1', docId: 'd1' },
       guest: true,
     },
     { id: 'admin-docs', label: '管理', icon: 'admin', go: { view: 'admin-docs', spaceId: 'all' } },
@@ -700,7 +716,7 @@ function DockGlyph({ kind, size = 18 }: Loose) {
 
 export { App, Dock };
 
-function AdminAccessDenied({ user, onNavigate }: Loose) {
+function AdminAccessDenied({ user, onNavigate, readerHome }: Loose) {
   return (
     <div className="main-card">
       <div className="admin-denied">
@@ -732,7 +748,7 @@ function AdminAccessDenied({ user, onNavigate }: Loose) {
         <div className="reader-locked-actions">
           <button
             className="reader-locked-secondary"
-            onClick={() => onNavigate({ view: 'reader' })}
+            onClick={() => onNavigate(readerHome || { view: 'reader' })}
           >
             返回阅读
           </button>

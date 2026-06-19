@@ -4,6 +4,7 @@ import { I } from '../chrome';
 import { useDocument } from '../data-hooks';
 import type { Loose } from '../loose-types';
 import { copyMarkdownRich, copyMarkdownSource } from '../markdown/copy';
+import { getScroll, setScroll } from '../reader-progress';
 import { MarkdownEditorDialog } from './markdown-editor-dialog';
 import { MarkdownReader } from './markdown-reader';
 import { dotClass } from './shared';
@@ -56,13 +57,44 @@ export function ReaderView({
   };
 
   const iframeRef = useRef<Loose>(null);
+  const scrollKey = detailDoc?.id || doc?.id;
   const bindIframeScroll = useCallback(() => {
     try {
-      iframeRef.current?.contentWindow?.addEventListener('scroll', onChromeScroll, {
-        passive: true,
-      });
+      const win = iframeRef.current?.contentWindow;
+      if (!win) return;
+      const saved = getScroll(scrollKey);
+      if (saved > 0) win.scrollTo(0, saved);
+      win.addEventListener(
+        'scroll',
+        (e: Loose) => {
+          if (scrollKey) setScroll(scrollKey, win.scrollY || 0);
+          onChromeScroll?.(e);
+        },
+        { passive: true },
+      );
     } catch (_e) {}
-  }, [onChromeScroll]);
+  }, [onChromeScroll, scrollKey]);
+
+  // A space that exists but has no documents is not an access problem — show a
+  // dedicated empty state rather than the "need to login / no access" screen.
+  if (requestedSpace && (requestedSpace.children?.length ?? 0) === 0) {
+    return (
+      <div className="main-card reader-card">
+        <div className="reader-locked">
+          <h2 className="reader-locked-title">「{requestedSpace.name}」还没有文档</h2>
+          <p className="reader-locked-desc">这个空间目前是空的。上传或新建文档后会显示在这里。</p>
+          <div className="reader-locked-actions">
+            <button
+              className="reader-locked-secondary"
+              onClick={() => onNavigate({ view: 'reader', ...firstPublicDoc(spaces) })}
+            >
+              浏览其他文档
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (denied || detailDenied || !space || !doc) {
     const earlyDocId = detailDoc?.id || doc?.id || ctx.docId;
@@ -76,10 +108,12 @@ export function ReaderView({
             </>
           )}
           <div style={{ flex: 1 }} />
-          <button className="pill-btn ghost" onClick={copyReaderLink}>
-            {copied ? <_I.check /> : <_I.link />}
-            <span>{copied ? '已复制' : '链接'}</span>
-          </button>
+          {allowed && (
+            <button className="pill-btn ghost" onClick={copyReaderLink}>
+              {copied ? <_I.check /> : <_I.link />}
+              <span>{copied ? '已复制' : '链接'}</span>
+            </button>
+          )}
           {allowed && earlyDocId && (
             <button className="pill-btn" onClick={() => onShare(earlyDocId)}>
               <_I.share />
@@ -175,10 +209,12 @@ export function ReaderView({
         ) : null}
         {doc ? (
           <>
-            <button className="pill-btn ghost" onClick={copyReaderLink}>
-              {copied ? <_I.check /> : <_I.link />}
-              <span>{copied ? '已复制' : '链接'}</span>
-            </button>
+            {allowed && (
+              <button className="pill-btn ghost" onClick={copyReaderLink}>
+                {copied ? <_I.check /> : <_I.link />}
+                <span>{copied ? '已复制' : '链接'}</span>
+              </button>
+            )}
             {allowed && (
               <button className="pill-btn" onClick={() => onShare(doc.id)}>
                 <_I.share />
@@ -219,7 +255,12 @@ export function ReaderView({
           detailQuery.isLoading ? (
             <div className="app-state-banner">正在加载正文…</div>
           ) : isMarkdown ? (
-            <MarkdownReader content={detailDoc.html || ''} onScroll={onChromeScroll} tocPanel />
+            <MarkdownReader
+              content={detailDoc.html || ''}
+              onScroll={onChromeScroll}
+              tocPanel
+              scrollKey={scrollKey}
+            />
           ) : (
             <iframe
               ref={iframeRef}

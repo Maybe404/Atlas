@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { TocList } from '../chrome';
 import type { Loose } from '../loose-types';
 import { renderMarkdownWithDiagrams } from '../markdown/renderer';
+import { getScroll, setScroll } from '../reader-progress';
 
 // Build the TocList shape ([{ num, id, title, subs:[{ id, title }] }]) from the
 // rendered headings. The highest heading level present becomes the numbered
@@ -26,7 +27,7 @@ function buildToc(root: HTMLElement): Loose[] {
   return secs;
 }
 
-export function MarkdownReader({ content, onScroll, tocPanel = false }: Loose) {
+export function MarkdownReader({ content, onScroll, tocPanel = false, scrollKey }: Loose) {
   const [html, setHtml] = useState('');
   const [loading, setLoading] = useState(true);
   const ref = useRef<HTMLDivElement>(null); // .md-body
@@ -123,12 +124,17 @@ export function MarkdownReader({ content, onScroll, tocPanel = false }: Loose) {
   // biome-ignore lint/correctness/useExhaustiveDependencies: rebuild TOC after new content is set
   useEffect(() => {
     if (loading || !ref.current) return;
+    // Restore the saved reading position for this document once it has rendered.
+    if (scrollRef.current && scrollKey) {
+      const saved = getScroll(scrollKey);
+      if (saved > 0) scrollRef.current.scrollTop = saved;
+    }
     if (tocPanel) {
       setToc(buildToc(ref.current));
       setTocOpen(false);
       updateActive();
     }
-  }, [loading, html]);
+  }, [loading, html, scrollKey]);
 
   // Right-edge trigger: opening is intentional (pointer reaches the edge), so
   // plain scrolling never pops the panel. Only armed when there's a TOC.
@@ -157,6 +163,7 @@ export function MarkdownReader({ content, onScroll, tocPanel = false }: Loose) {
     // Suppress the chrome auto-hide while a TOC pick is animating the scroll —
     // otherwise the programmatic jump toggles the top meta bar (flash + jitter).
     if (!pickingRef.current) onScroll?.(e);
+    if (scrollKey) setScroll(scrollKey, e.currentTarget.scrollTop);
     if (!tocPanel) return;
     // Coalesce scroll-spy to one reflow per frame — reading every heading's
     // rect on each raw scroll event is what made following the article stutter.

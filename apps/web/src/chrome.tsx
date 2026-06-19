@@ -486,75 +486,11 @@ function Sidebar({ ctx, spaces, user, collapsed, onToggleCollapse, onNavigate }:
           onNavigate={onNavigate}
         />
       </div>
-
-      <div className="side-card footer">
-        <span className="status-dot"></span>
-        <span>所有变更已同步</span>
-        <span className="mono dim" style={{ marginLeft: 'auto', fontSize: 10.5 }}>
-          17:42
-        </span>
-      </div>
     </aside>
   );
 }
 
 export { Sidebar };
-
-// Sample TOC for the current reader doc — many items so stagger is visible
-const READER_TOC = [
-  {
-    num: '01',
-    id: 's1',
-    title: '前置检查',
-    subs: [
-      { id: 's1-1', title: '依赖版本对齐' },
-      { id: 's1-2', title: '数据库迁移预演' },
-      { id: 's1-3', title: '环境变量审查' },
-      { id: 's1-4', title: 'CDN 缓存预热' },
-    ],
-  },
-  {
-    num: '02',
-    id: 's2',
-    title: '发布执行',
-    subs: [
-      { id: 's2-1', title: '灰度策略' },
-      { id: 's2-2', title: '回滚开关' },
-      { id: 's2-3', title: '5% 阶段观察' },
-      { id: 's2-4', title: '25% 阶段观察' },
-      { id: 's2-5', title: '100% 全量切换' },
-    ],
-  },
-  {
-    num: '03',
-    id: 's3',
-    title: '事后验证',
-    subs: [
-      { id: 's3-1', title: '读者侧抽样' },
-      { id: 's3-2', title: '团队侧巡检' },
-      { id: 's3-3', title: '监控曲线复核' },
-    ],
-  },
-  {
-    num: '04',
-    id: 's4',
-    title: '通知与归档',
-    subs: [
-      { id: 's4-1', title: '发布通告草稿' },
-      { id: 's4-2', title: '归档运行手册' },
-    ],
-  },
-  {
-    num: '05',
-    id: 's5',
-    title: '后续优化项',
-    subs: [
-      { id: 's5-1', title: 'iframe 滚动嵌套' },
-      { id: 's5-2', title: 'skill 版本探测' },
-      { id: 's5-3', title: '深色模式动效' },
-    ],
-  },
-];
 
 function TocList({ toc, active, onPick, plain = false, scrollRef }: Loose) {
   const [topOpacity, setTopOpacity] = useState(0);
@@ -639,7 +575,7 @@ function TocList({ toc, active, onPick, plain = false, scrollRef }: Loose) {
   );
 }
 
-export { READER_TOC, TocList };
+export { TocList };
 
 // ─────────────────────────────────────────────────────────────────────────
 // ANIMATED TREE LIST — items fade+scale in on scroll into view, with
@@ -713,9 +649,7 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
       nodes.push(
         <AnimatedItem key={doc.id} index={counter.n++}>
           <div
-            className={
-              'tree-node ' + (ctx.docId === doc.id ? 'active ' : '') + (locked ? 'locked' : '')
-            }
+            className={`tree-node ${ctx.docId === doc.id ? 'active ' : ''}${locked ? 'locked' : ''}`}
             onClick={(e: Loose) => {
               e.stopPropagation();
               onNavigate({ view: 'reader', spaceId: space.id, docId: doc.id });
@@ -763,11 +697,11 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
                     className={`tree-node ${open ? 'expanded ' : ''}${activeSpace ? 'active' : ''}`}
                     onClick={() => {
                       toggle(space.id);
-                      onNavigate({
-                        view: 'reader',
-                        spaceId: space.id,
-                        docId: space.children[0]?.id,
-                      });
+                      // Only jump into the space when it actually has a document —
+                      // navigating with an undefined docId would keep the previous
+                      // doc id and land on a "need to login / no access" screen.
+                      const first = space.children?.[0]?.id;
+                      if (first) onNavigate({ view: 'reader', spaceId: space.id, docId: first });
                     }}
                   >
                     <span className="chev">
