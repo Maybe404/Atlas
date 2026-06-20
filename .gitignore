@@ -19,8 +19,6 @@ build
 .turbo
 .vite
 .bun
-bun.lock
-bun.lockb
 
 # Local data
 apps/api/data/
