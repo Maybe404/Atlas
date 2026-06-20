@@ -3,9 +3,9 @@ import { mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { drizzle } from 'drizzle-orm/bun-sqlite';
 import { migrate } from 'drizzle-orm/bun-sqlite/migrator';
+import { resolveDbUrl } from './db-path';
 
-const root = join(import.meta.dir, '../..');
-const url = process.env.DATABASE_URL ?? join(root, 'data/atlas.sqlite');
+const url = resolveDbUrl();
 mkdirSync(dirname(url), { recursive: true });
 
 const sqlite = new Database(url, { create: true });

@@ -10,8 +10,7 @@
       "!.turbo",
       "!**/*.html",
       "!apps/web/src/styles.css",
-      "!apps/api/src/db/migrations/meta",
-      "!packages/shared/src/fixtures.ts"
+      "!apps/api/src/db/migrations/meta"
     ]
   },
   "formatter": {
@@ -22,7 +21,19 @@
   },
   "linter": {
     "enabled": true,
-    "rules": { "recommended": true, "style": { "noNonNullAssertion": "off" } }
+    "rules": {
+      "recommended": true,
+      "style": { "noNonNullAssertion": "off" },
+      "a11y": {
+        "useButtonType": "warn",
+        "noSvgWithoutTitle": "warn",
+        "noStaticElementInteractions": "warn",
+        "useKeyWithClickEvents": "warn",
+        "noLabelWithoutControl": "warn",
+        "useSemanticElements": "warn",
+        "useValidAnchor": "warn"
+      }
+    }
   },
   "javascript": { "formatter": { "quoteStyle": "single", "semicolons": "always" } }
 }

@@ -7,9 +7,36 @@ export const members = sqliteTable('members', {
   initials: text('initials').notNull(),
   email: text('email').notNull().unique(),
   passwordHash: text('password_hash'),
-  role: text('role', { enum: ['admin', 'editor', 'viewer'] }).notNull(),
+  // Global role collapsed to admin/member in Phase 5; capabilities now ride on groups.
+  role: text('role', { enum: ['admin', 'member'] }).notNull(),
   joined: text('joined').notNull(),
 });
+
+// Permission groups (Phase 5). Carry global capability switches (B) and, via `grants` rows with
+// subjectType='group', resource authorizations on spaces/folders (A).
+export const groups = sqliteTable('groups', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  capabilities: text('capabilities', { mode: 'json' }).$type<string[]>().notNull().default([]),
+  createdAt: text('created_at').notNull().default(sql`(current_timestamp)`),
+});
+
+// Many-to-many: which members belong to which group.
+export const groupMembers = sqliteTable(
+  'group_members',
+  {
+    groupId: text('group_id')
+      .notNull()
+      .references(() => groups.id, { onDelete: 'cascade' }),
+    memberId: text('member_id')
+      .notNull()
+      .references(() => members.id, { onDelete: 'cascade' }),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.groupId, table.memberId] }),
+    memberIdIdx: index('group_members_member_id_idx').on(table.memberId),
+  }),
+);
 
 export const sessions = sqliteTable(
   'sessions',
@@ -34,8 +61,43 @@ export const spaces = sqliteTable('spaces', {
   mark: text('mark').notNull(),
   accent: text('accent').notNull(),
   personal: integer('personal', { mode: 'boolean' }).notNull().default(false),
+  // Owner of a personal space (null for shared spaces). Personal spaces are isolated to
+  // their owner + admins; sharing is per-document / public-link only.
+  ownerId: text('owner_id').references(() => members.id, { onDelete: 'set null' }),
   createdAt: text('created_at').notNull().default(sql`(current_timestamp)`),
 });
+
+export const folders = sqliteTable(
+  'folders',
+  {
+    id: text('id').primaryKey(),
+    spaceId: text('space_id')
+      .notNull()
+      .references(() => spaces.id, { onDelete: 'cascade' }),
+    // Nesting pointer (logical self-reference, validated in the route). No DB FK: space delete
+    // cascades every folder via space_id; folder delete is a soft cascade (see deletedAt below).
+    parentId: text('parent_id'),
+    name: text('name').notNull(),
+    // Restricted folders are stored now but only ENFORCED in Phase 4 (inherit/restricted chain).
+    restricted: integer('restricted', { mode: 'boolean' }).notNull().default(false),
+    order: integer('order').notNull().default(0),
+    createdAt: text('created_at').notNull().default(sql`(current_timestamp)`),
+    // Soft delete to trash (mirrors documents). Deleting a folder soft-deletes its whole subtree
+    // and the docs within, without touching folderId — so restore re-reveals files in place.
+    deletedAt: text('deleted_at'),
+    deletedBy: text('deleted_by').references(() => members.id),
+    purgeAfter: text('purge_after'),
+    // The trash-root folder this row was cascade-deleted under. NULL ⇒ this folder is itself the
+    // root the user deleted (the only kind shown as a top-level trash entry).
+    trashedUnderFolderId: text('trashed_under_folder_id'),
+  },
+  (table) => ({
+    spaceIdIdx: index('folders_space_id_idx').on(table.spaceId),
+    parentIdIdx: index('folders_parent_id_idx').on(table.parentId),
+    deletedAtIdx: index('folders_deleted_at_idx').on(table.deletedAt),
+    trashedUnderIdx: index('folders_trashed_under_idx').on(table.trashedUnderFolderId),
+  }),
+);
 
 export const documents = sqliteTable(
   'documents',
@@ -44,65 +106,66 @@ export const documents = sqliteTable(
     spaceId: text('space_id')
       .notNull()
       .references(() => spaces.id, { onDelete: 'cascade' }),
+    // Folder the doc lives in (null = space root). Folder soft-delete keeps folderId intact (the
+    // doc is soft-deleted alongside), so restore re-reveals the doc in its original folder.
+    folderId: text('folder_id').references(() => folders.id, { onDelete: 'set null' }),
     authorId: text('author_id')
       .notNull()
       .references(() => members.id),
     title: text('title').notNull(),
     desc: text('desc').notNull().default(''),
     html: text('html').notNull().default(''),
-    visibility: text('visibility', { enum: ['public', 'invite', 'private'] }).notNull(),
+    // Site-internal access. `inherit` follows the folder/space chain; `restricted` is author +
+    // admin + explicit grant only. Public exposure is orthogonal (share_links), not an access mode.
+    access: text('access', { enum: ['inherit', 'restricted'] })
+      .notNull()
+      .default('inherit'),
+    format: text('format', { enum: ['html', 'markdown'] })
+      .notNull()
+      .default('html'),
     dot: text('dot').notNull().default('slate'),
     tags: text('tags', { mode: 'json' }).$type<string[]>().notNull().default([]),
-    skillVersion: text('skill_version').notNull().default('1.2.4'),
     updated: text('updated').notNull().default(sql`(current_timestamp)`),
     deletedAt: text('deleted_at'),
     deletedBy: text('deleted_by').references(() => members.id),
     purgeAfter: text('purge_after'),
+    // Set when this doc entered trash as part of a folder deletion (= the trash-root folder id);
+    // NULL ⇒ the doc was trashed on its own. Lets the trash group cascade docs under their folder.
+    trashedUnderFolderId: text('trashed_under_folder_id'),
   },
   (table) => ({
     spaceIdIdx: index('documents_space_id_idx').on(table.spaceId),
     authorIdIdx: index('documents_author_id_idx').on(table.authorId),
-    visibilityIdx: index('documents_visibility_idx').on(table.visibility),
+    accessIdx: index('documents_access_idx').on(table.access),
     deletedAtIdx: index('documents_deleted_at_idx').on(table.deletedAt),
-    spaceDeletedIdx: index('documents_space_deleted_idx').on(table.spaceId, table.deletedAt),
-    visibilityDeletedIdx: index('documents_visibility_deleted_idx').on(
-      table.visibility,
+    deletedPurgeAfterIdx: index('documents_deleted_purge_after_idx').on(
       table.deletedAt,
+      table.purgeAfter,
     ),
+    spaceDeletedIdx: index('documents_space_deleted_idx').on(table.spaceId, table.deletedAt),
+    accessDeletedIdx: index('documents_access_deleted_idx').on(table.access, table.deletedAt),
     authorDeletedIdx: index('documents_author_deleted_idx').on(table.authorId, table.deletedAt),
   }),
 );
 
-// Per-member, per-space role. Absence of a row means "no access".
-export const spaceMembers = sqliteTable(
-  'space_members',
+// Unified authorization edges. Replaced the former space_members + document_members
+// tables (dropped in migration 0012); subjectType 'member'|'group' × targetType
+// 'space'|'folder'|'document' covers every access edge.
+export const grants = sqliteTable(
+  'grants',
   {
-    spaceId: text('space_id')
-      .notNull()
-      .references(() => spaces.id, { onDelete: 'cascade' }),
-    memberId: text('member_id')
-      .notNull()
-      .references(() => members.id, { onDelete: 'cascade' }),
+    subjectType: text('subject_type', { enum: ['group', 'member'] }).notNull(),
+    subjectId: text('subject_id').notNull(),
+    targetType: text('target_type', { enum: ['space', 'folder', 'document'] }).notNull(),
+    targetId: text('target_id').notNull(),
     role: text('role', { enum: ['viewer', 'editor'] }).notNull(),
   },
   (table) => ({
-    pk: primaryKey({ columns: [table.spaceId, table.memberId] }),
-  }),
-);
-
-export const documentMembers = sqliteTable(
-  'document_members',
-  {
-    documentId: text('document_id')
-      .notNull()
-      .references(() => documents.id, { onDelete: 'cascade' }),
-    memberId: text('member_id')
-      .notNull()
-      .references(() => members.id, { onDelete: 'cascade' }),
-    role: text('role', { enum: ['viewer', 'editor'] }).notNull(),
-  },
-  (table) => ({
-    pk: primaryKey({ columns: [table.documentId, table.memberId] }),
+    pk: primaryKey({
+      columns: [table.subjectType, table.subjectId, table.targetType, table.targetId],
+    }),
+    subjectIdx: index('grants_subject_idx').on(table.subjectType, table.subjectId),
+    targetIdx: index('grants_target_idx').on(table.targetType, table.targetId),
   }),
 );
 
@@ -131,18 +194,6 @@ export const shareLinks = sqliteTable(
     documentIdIdx: index('share_links_document_id_idx').on(table.documentId),
   }),
 );
-
-export const skillVersions = sqliteTable('skill_versions', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull().default('sanitize-html'),
-  version: text('version').notNull().unique(),
-  note: text('note').notNull(),
-  active: integer('active', { mode: 'boolean' }).notNull().default(false),
-  createdBy: text('created_by')
-    .notNull()
-    .references(() => members.id),
-  createdAt: text('created_at').notNull().default(sql`(current_timestamp)`),
-});
 
 export const auditLogs = sqliteTable(
   'audit_logs',

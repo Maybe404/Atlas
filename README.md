@@ -6,15 +6,15 @@
 
 当前是「**可本地使用的全栈 MVP**」状态，核心读写链路已经接到真实 SQLite 数据库：
 
-- ✅ 前端 UI 已接真实 API：React Query 拉取空间、文档、成员、权限、回收站、Skill 版本与分享状态，CRUD 通过 mutation 同步到 SQLite。
+- ✅ 前端 UI 已接真实 API：React Query 拉取空间、文档、成员、权限、回收站与分享状态，CRUD 通过 mutation 同步到 SQLite。
 - ✅ URL 路由已落地：Reader、管理、上传、设置、公开链接都有可刷新地址。
 - ✅ Hono + Drizzle + SQLite 迁移已生成并验证，`db:migrate` / `db:seed` 可直接初始化。
 - ✅ 登录与 session 已有可用实现：密码登录、30 天 cookie session、双提交 CSRF token；未登录时按游客处理，只返回公开文章。
 - ✅ 空间与文档权限真实执行：空间/文档查询按当前用户过滤，写操作要求 editor/admin 权限；文档可额外按成员分享 viewer/editor。
 - ✅ HTML 上传已接后端：`multipart/form-data` 上传、8 MB 大小限制、自动识别标题/摘要，并保存原始 HTML 供 iframe sandbox 原样展示。
-- ✅ 回收站、Skill 版本、分享链接已有表和接口，UI 已接入恢复、过期清理、切换版本、公开链接与成员分享。
+- ✅ 回收站与分享链接已有表和接口，UI 已接入恢复、过期清理、公开链接与成员分享。
 - ✅ 分享链接支持到期、撤销、重置 token、访问计数、最近访问时间和 `allowIndexing` 标记。
-- ✅ 审计日志已记录登录/登出、空间、成员、文档、分享、Skill 变更，可通过管理员接口查看最近 100 条。
+- ✅ 审计日志已记录登录/登出、空间、成员、文档、分享变更，可通过管理员接口查看最近 100 条。
 - ✅ API 核心路径已有 Bun 测试：空间列表、上传原文保存与元数据识别、密码登录、CSRF、权限矩阵、软删除/恢复、公开链接到期/撤销/轮换、回收站过期清理。
 - ⚠️ 仍是 MVP：没有邮箱验证/SSO/组织级邀请流；前端 e2e、生产级 CSP/资源代理、完整审计查询 UI 仍待补。
 
@@ -60,10 +60,10 @@ bun dev:api
 - `http://localhost:5173/spaces/s1/docs/d1`：Reader
 - `http://localhost:5173/admin/docs`：文档管理
 - `http://localhost:5173/admin/upload`：HTML 上传
-- `http://localhost:5173/admin/settings`：空间、成员、权限、回收站、Skill 设置
+- `http://localhost:5173/admin/settings`：空间、成员、权限、回收站设置
 - `http://localhost:5173/share/demo-d1-public-link`：公开分享链接示例
 
-Seed 后示例账号如下，所有账号使用同一个演示密码：
+Seed 后示例账号如下，所有账号使用同一个演示密码。**这些账号和密码是公开的开发/演示数据，只能用于本地 seed 后体验功能；生产环境不要导入 seed 数据，也不要依赖这些账号作为真实成员账号。** 生产构建会隐藏前端的一键 demo 登录/账号切换入口。
 
 | 姓名 | 邮箱 | 角色 | 密码 |
 |---|---|---|---|
@@ -94,7 +94,7 @@ Seed 后示例账号如下，所有账号使用同一个演示密码：
 | `bun test apps/api/src` | 跑 API 测试 |
 | `bun run --filter @atlas/api db:generate` | 根据 Drizzle schema 生成迁移 |
 | `bun run --filter @atlas/api db:migrate` | 应用已提交迁移 |
-| `bun run --filter @atlas/api db:seed` | 用 fixtures 重置并灌入示例数据 |
+| `bun run --filter @atlas/api db:seed` | 用公开开发/演示 fixtures 重置并灌入示例数据 |
 | `bun run lint` | Biome 检查 |
 | `bun run fmt` | Biome 格式化 |
 
@@ -104,8 +104,15 @@ Seed 后示例账号如下，所有账号使用同一个演示密码：
 |---|---|---|
 | `PORT` | `3000` | API 监听端口 |
 | `DATABASE_URL` | `apps/api/data/atlas.sqlite` | SQLite 文件路径。测试会覆盖到 `apps/api/data/test-atlas.sqlite` |
+| `ATLAS_ENV` / `NODE_ENV` / `BUN_ENV` | 未设置 | 任一值为 `production` / `prod` 时，登录 cookie 默认带 `Secure` |
+| `ATLAS_COOKIE_SECURE` | `false` | 非生产环境下手动开启 `Secure` cookie；生产环境始终开启 |
+| `ATLAS_TRUST_PROXY` | `false` | 仅在可信反向代理后设为 `true`，登录限速才会读取 `X-Forwarded-For` / `X-Real-IP` / `CF-Connecting-IP` |
+| `ATLAS_LOGIN_RATE_LIMIT_MAX_FAILURES` | `5` | 同一客户端 IP + email 在窗口内允许的登录失败次数 |
+| `ATLAS_LOGIN_RATE_LIMIT_WINDOW_MS` | `600000` | 登录失败限速窗口，默认 10 分钟 |
 
-生产部署前建议显式设置 `DATABASE_URL`，并把 `secure` cookie、可信 origin、HTTPS、CSP、静态资源策略一起梳理。
+> `db:seed` 会写入公开演示账号与固定演示密码，方便本地体验和测试权限矩阵；它不是生产初始化脚本。
+
+生产部署前建议显式设置 `DATABASE_URL` 和生产环境变量，并把可信 origin、HTTPS、CSP、静态资源策略一起梳理。
 
 ## 目录
 
@@ -114,7 +121,7 @@ Seed 后示例账号如下，所有账号使用同一个演示密码：
 ├── apps/
 │   ├── web/        前端 (Vite + React 19 + TS)
 │   │   ├── index.html
-│   │   ├── public/embedded-sample.html      ReaderView iframe 用
+│   │   ├── public/embedded-sample.html      本地示例 HTML
 │   │   └── src/
 │   │       ├── main.tsx                     入口
 │   │       ├── app.tsx                      根组件 App + Dock
@@ -128,11 +135,11 @@ Seed 后示例账号如下，所有账号使用同一个演示密码：
 │   │       └── data-hooks.ts                React Query 查询与 mutation
 │   └── api/        后端 (Hono + Drizzle + bun:sqlite)
 │       ├── src/server.ts                    Hono app + CORS + logger + error handler
-│       ├── src/routes/{auth,members,spaces,documents,skills}.ts
-│       ├── src/lib/{auth,permissions,sanitize,audit,serializers,...}.ts
+│       ├── src/routes/{auth,members,spaces,documents}.ts
+│       ├── src/lib/{auth,permissions,html-limits,audit,serializers,...}.ts
 │       └── src/db/{schema,client,migrate,seed,migrations}.ts
 ├── packages/
-│   └── shared/     共享 Zod schema、领域类型、ATLAS_DATA fixtures
+│   └── shared/     共享 Zod schema、领域类型与 HTML metadata 工具
 ├── package.json    Bun workspaces 根
 ├── bunfig.toml
 ├── biome.json
@@ -149,12 +156,15 @@ Seed 后示例账号如下，所有账号使用同一个演示密码：
 | `GET` | `/auth/me` | 当前用户、session 与 CSRF 状态 |
 | `POST` | `/auth/login` | 密码登录，body: `{ email, password }` |
 | `POST` | `/auth/logout` | 删除当前 session |
+| `POST` | `/auth/sessions/purge-expired` | 管理员清理过期 session 行 |
 | `GET` | `/auth/audit` | 管理员查看最近 100 条审计日志 |
 | `GET` | `/spaces` | 当前用户可读空间及其文档 |
 | `POST` | `/spaces` | 管理员创建空间 |
-| `PATCH` | `/spaces/:id` | 空间 editor/admin 更新空间 |
-| `DELETE` | `/spaces/:id` | 管理员删除空间 |
+| `GET` | `/spaces/:id` | 读取单个空间及其可见文档 |
+| `PATCH` | `/spaces/:id` | 管理员更新空间元数据 |
+| `DELETE` | `/spaces/:id` | 管理员删除空间（需先清空其下文档） |
 | `GET` | `/spaces/:id/members` | 查看空间成员角色 |
+| `PUT` | `/spaces/:id/members` | 管理员批量设置空间 viewer/editor/null |
 | `PUT` | `/spaces/:id/members/:memberId` | 管理员设置空间 viewer/editor/null |
 | `GET` | `/documents` | 当前用户可读文档 |
 | `GET` | `/documents/trash` | 管理员查看回收站 |
@@ -168,14 +178,14 @@ Seed 后示例账号如下，所有账号使用同一个演示密码：
 | `POST` | `/documents/:id/restore` | 管理员恢复回收站文档 |
 | `DELETE` | `/documents/:id/permanent` | 管理员永久删除文档 |
 | `GET` | `/documents/:id/share` | 查看文档分享状态 |
+| `GET` | `/documents/:id/share/members` | 搜索可邀请成员 |
 | `PATCH` | `/documents/:id/share` | 更新公开链接、成员分享、轮换 token |
 | `PUT` | `/documents/:id/members/:memberId` | 设置文档 viewer/editor/null |
 | `GET` | `/members` | 管理员查看成员 |
 | `GET` | `/members/permissions` | 管理员查看空间权限矩阵 |
-| `PATCH` | `/members/:id` | 管理员更新成员姓名或工作区角色 |
-| `GET` | `/skills` | 查看 Skill 版本 |
-| `POST` | `/skills` | 管理员新增 Skill 版本 |
-| `POST` | `/skills/:version/activate` | 管理员切换启用版本 |
+| `POST` | `/members` | 管理员创建成员 |
+| `PATCH` | `/members/:id` | 管理员更新成员姓名、工作区角色或密码 |
+| `DELETE` | `/members/:id` | 管理员删除成员 |
 
 非 `GET` 请求在 cookie session 下必须带 `X-Atlas-CSRF` header，值来自 `atlas_csrf` cookie。
 
@@ -183,7 +193,7 @@ Seed 后示例账号如下，所有账号使用同一个演示密码：
 
 Atlas 有三层权限：
 
-- 工作区角色：`admin`、`editor`、`viewer`。当前只有 `admin` 能管理成员、空间、回收站、Skill 和审计日志。
+- 工作区角色：`admin`、`editor`、`viewer`。当前只有 `admin` 能管理成员、空间、回收站和审计日志。
 - 空间角色：`editor`、`viewer`、`null`。空间 editor 可在该空间创建/修改文档；viewer 只能读。
 - 文档成员角色：`editor`、`viewer`、`null`。文档成员分享可以给没有空间权限的人单篇访问权。
 
@@ -201,31 +211,34 @@ bun run --filter @atlas/api db:migrate
 bun run --filter @atlas/api db:seed
 ```
 
-`db:seed` 会清空并重灌示例数据、空间权限、文档成员、公开链接和 Skill 版本。测试会创建独立的 `test-atlas.sqlite` 并在结束后删除。
+`db:seed` 会清空并重灌公开开发/演示数据、空间权限、文档成员和公开链接。演示成员共用固定密码，仅用于本地体验与测试；测试会创建独立的 `test-atlas.sqlite` 并在结束后删除。
 
 ## 安全边界
 
 已实现：
 
 - 密码登录使用 `Bun.password` 校验 bcrypt hash。
-- session cookie 为 `HttpOnly`、`SameSite=Lax`，有效期 30 天。
+- 登录失败统一返回 `401 Email or password is incorrect.`，不会区分邮箱不存在、无密码账号或密码错误。
+- 登录失败按客户端 IP + email 做短窗口限速；只有显式设置 `ATLAS_TRUST_PROXY=true` 时才信任代理转发的客户端 IP 头。
+- session cookie 为 `HttpOnly`、`SameSite=Lax`，有效期 30 天；生产运行环境默认带 `Secure`。
 - 真实 session 写请求要求 `X-Atlas-CSRF` header；前端 `api-client.ts` 自动从 `atlas_csrf` cookie 注入。
 - 成员响应会剔除 `passwordHash`。
-- HTML 存储限制大小为 8 MB，阅读页和预览页用 iframe sandbox 隔离原始 HTML，允许文档脚本在沙箱内运行以保持原始交互效果。
+- **HTML 不做服务端清洗（no server-side sanitization）**：上传的 HTML 原样入库（仅做 8 MB 大小校验，见 `apps/api/src/lib/html-limits.ts`），阅读页与预览页用 iframe `sandbox="allow-scripts allow-forms allow-popups"` 隔离原始 HTML。由于沙箱**不含** `allow-same-origin`，文档脚本拿不到父页的 cookie/localStorage——**这个 sandbox iframe 是唯一的隔离边界**。文档脚本被有意允许在沙箱内运行以保持原始交互效果，因此切勿移除 sandbox，也不要给文档来源以 same-origin 信任。
 - 公开链接支持禁用、撤销、到期、token 轮换、访问统计；已删除或过期文档不可公开访问。
+- 管理员可调用 `POST /auth/sessions/purge-expired` 清理过期 session 行。
 - 关键写操作会写入 `audit_logs`。
 
 仍需上线前处理：
 
-- HTTPS 下把 cookie `secure` 打开，并把 CORS origin 从 localhost 改成部署域名白名单。
+- 把 CORS origin 从 localhost 改成部署域名白名单。
 - 增加 CSP、iframe sandbox 策略评审、外链资源代理/下载策略、HTML 恶意样本回归集。
 - 加邮箱验证、找回密码、邀请流、SSO/OIDC 或接入成熟 auth 服务。
 - 给审计日志做筛选、分页和前端查看 UI。
 
 ## 说明
 
-- 前端代码扁平在 `apps/web/src/` 下，大部分 `.tsx` 仍保留 `// @ts-nocheck`，后续可以逐文件补 props/state 类型。
-- `packages/shared/src/fixtures.ts` 现在只用于 `db:seed` 生成示例数据库；运行时前端不再读 fixtures。
+- 前端代码扁平在 `apps/web/src/` 下，`.tsx` 已纳入 typecheck 与 Biome 检查；少量宽松类型集中在 `loose-types.ts`。
+- 演示种子数据在 `apps/api/src/db/seed-data.ts`，由 `db:seed` 写入示例数据库；运行时前端不读 fixtures。
 - API 用 `bun:sqlite` 原生驱动，无需 `better-sqlite3`。
 - 前端 API 调用集中在 `apps/web/src/api-client.ts` 和 `apps/web/src/data-hooks.ts`，避免把后端 `bun:sqlite` 类型拖入浏览器工程。
 
@@ -237,8 +250,8 @@ bun run --filter @atlas/api db:seed
 2. **生产级鉴权体验** —— 邮箱验证、邀请成员、找回密码、SSO/OIDC、session 管理页面和登录 UI。
 3. **HTML 安全加固** —— CSP、资源代理、下载/图片白名单、恶意样本测试集、iframe sandbox 权限复核。
 4. **审计与分享 UI 完整化** —— 审计日志筛选/分页、公开访问统计图、noindex meta 落到公开页面 HTML。
-5. **回收站策略细化** —— 定时任务调度、永久删除确认 UI、空间删除时的文档迁移或阻止策略。
-6. **逐文件去掉 `@ts-nocheck`**，补 props/state 类型，并把前端原型组件拆出更稳定的数据边界。
+5. **回收站策略细化** —— 定时任务调度、永久删除确认 UI；空间删除已改为「非空则阻止」，后续可补充文档迁移到指定空间的选项。
+6. **继续收紧前端类型边界** —— 减少 `Loose` 使用，补齐 props/state 类型，并把前端原型组件拆出更稳定的数据边界。
 
 ## 常见问题
 

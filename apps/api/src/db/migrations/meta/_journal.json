@@ -22,6 +22,76 @@
       "when": 1780030700790,
       "tag": "0002_rare_sandman",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1780033515838,
+      "tag": "0003_calm_sinister_six",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1780387844358,
+      "tag": "0004_tense_tyrannus",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1781354357726,
+      "tag": "0005_reflective_gorilla_man",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1781582928838,
+      "tag": "0006_groovy_iron_monger",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1781583681597,
+      "tag": "0007_majestic_star_brand",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1781588063637,
+      "tag": "0008_busy_hellfire_club",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1781592050478,
+      "tag": "0009_modern_galactus",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1781592100000,
+      "tag": "0010_access_rework",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1781669304678,
+      "tag": "0011_groups_capabilities",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1781672302861,
+      "tag": "0012_lying_celestials",
+      "breakpoints": true
     }
   ]
 }

@@ -1,15 +1,24 @@
 import { CreateMemberSchema, UpdateMemberSchema } from '@atlas/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
-import { documents, members, shareLinks, skillVersions, spaceMembers } from '../db/schema';
+import { documents, grants, members, shareLinks } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
-import { conflict, forbidden, notFound } from '../lib/http-error';
+import { removeGrantsForSubject } from '../lib/grants';
+import { badRequest, conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId } from '../lib/id';
-import { isAdmin } from '../lib/permissions';
+import { getMemberCapabilities, requireCapability } from '../lib/permissions';
+import { createPersonalSpace } from '../lib/personal-space';
 import { toPublicMember } from '../lib/serializers';
+
+type User = typeof members.$inferSelect;
+
+async function requireManageMembers(user: User) {
+  const caps = await getMemberCapabilities(user);
+  requireCapability(caps, 'manageMembers');
+}
 
 function initialsFromName(name: string) {
   const cleaned = name.trim();
@@ -34,13 +43,13 @@ function joinedMonth() {
 export const membersRouter = new Hono<AppEnv>()
   .get('/', async (c) => {
     const user = requireUser(c.get('user'));
-    if (!isAdmin(user)) throw forbidden('Only workspace admins can list all members.');
+    await requireManageMembers(user);
     const rows = await db.select().from(members);
     return c.json(rows.map(toPublicMember));
   })
   .post('/', async (c) => {
     const user = requireUser(c.get('user'));
-    if (!isAdmin(user)) throw forbidden('Only workspace admins can create members.');
+    await requireManageMembers(user);
 
     const body = CreateMemberSchema.parse(await c.req.json());
     const email = body.email.trim().toLowerCase();
@@ -61,6 +70,7 @@ export const membersRouter = new Hono<AppEnv>()
 
     const [member] = await db.select().from(members).where(eq(members.id, id));
     if (!member) throw notFound();
+    await createPersonalSpace(db, member);
     await writeAudit({
       actorId: user.id,
       action: 'member.create',
@@ -72,19 +82,20 @@ export const membersRouter = new Hono<AppEnv>()
   })
   .get('/permissions', async (c) => {
     const user = requireUser(c.get('user'));
-    if (!isAdmin(user)) throw forbidden('Only workspace admins can view all permissions.');
+    await requireManageMembers(user);
     const rows = await db
       .select({
-        memberId: spaceMembers.memberId,
-        spaceId: spaceMembers.spaceId,
-        role: spaceMembers.role,
+        memberId: grants.subjectId,
+        spaceId: grants.targetId,
+        role: grants.role,
       })
-      .from(spaceMembers);
+      .from(grants)
+      .where(and(eq(grants.subjectType, 'member'), eq(grants.targetType, 'space')));
     return c.json(rows);
   })
   .patch('/:id', async (c) => {
     const user = requireUser(c.get('user'));
-    if (!isAdmin(user)) throw forbidden('Only workspace admins can edit members.');
+    await requireManageMembers(user);
     const id = c.req.param('id');
     const body = UpdateMemberSchema.parse(await c.req.json());
 
@@ -95,6 +106,23 @@ export const membersRouter = new Hono<AppEnv>()
     }
     if (body.role !== undefined) patch.role = body.role;
     if (body.password !== undefined) patch.passwordHash = await Bun.password.hash(body.password);
+
+    if (Object.keys(patch).length === 0) throw badRequest('No fields to update.');
+
+    const [target] = await db.select().from(members).where(eq(members.id, id));
+    if (!target) throw notFound();
+
+    // Never let the workspace lose its last admin (which would lock everyone out of member,
+    // space, trash and audit management).
+    if (body.role !== undefined && target.role === 'admin' && body.role !== 'admin') {
+      const admins = await db
+        .select({ id: members.id })
+        .from(members)
+        .where(eq(members.role, 'admin'));
+      if (admins.length <= 1) {
+        throw conflict('The workspace must keep at least one admin.');
+      }
+    }
 
     await db.update(members).set(patch).where(eq(members.id, id));
     const [member] = await db.select().from(members).where(eq(members.id, id));
@@ -114,7 +142,7 @@ export const membersRouter = new Hono<AppEnv>()
   })
   .delete('/:id', async (c) => {
     const user = requireUser(c.get('user'));
-    if (!isAdmin(user)) throw forbidden('Only workspace admins can delete members.');
+    await requireManageMembers(user);
     const id = c.req.param('id');
     if (id === user.id) throw forbidden('You cannot delete your own member account.');
 
@@ -123,10 +151,7 @@ export const membersRouter = new Hono<AppEnv>()
     await db.update(documents).set({ authorId: user.id }).where(eq(documents.authorId, id));
     await db.update(documents).set({ deletedBy: null }).where(eq(documents.deletedBy, id));
     await db.update(shareLinks).set({ createdBy: user.id }).where(eq(shareLinks.createdBy, id));
-    await db
-      .update(skillVersions)
-      .set({ createdBy: user.id })
-      .where(eq(skillVersions.createdBy, id));
+    await removeGrantsForSubject(db, id);
     await db.delete(members).where(eq(members.id, id));
     await writeAudit({
       actorId: user.id,

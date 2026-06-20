@@ -1,24 +1,38 @@
-import { ATLAS_DATA } from '@atlas/shared/fixtures';
+import { eq } from 'drizzle-orm';
+import { isProductionRuntime } from '../lib/env';
+import { createPersonalSpace } from '../lib/personal-space';
 import { db } from './client';
 import {
-  documentMembers,
   documents,
+  folders,
+  grants,
+  groupMembers,
+  groups,
   members,
   sessions,
   shareLinks,
-  skillVersions,
-  spaceMembers,
   spaces,
 } from './schema';
+import { ATLAS_DATA } from './seed-data';
+
+// Hard stop: this script wipes every table and loads demo fixtures. It must never run against a
+// production database. Set ATLAS_ALLOW_SEED=true only if you really mean to reset prod.
+if (isProductionRuntime() && process.env.ATLAS_ALLOW_SEED !== 'true') {
+  throw new Error(
+    'Refusing to run the demo seed in production — it deletes all data. ' +
+      'Use `db:create-admin` to bootstrap, or set ATLAS_ALLOW_SEED=true to override.',
+  );
+}
 
 const DEMO_PASSWORD_HASH = '$2b$04$RhYUNqiT505iO9sAwUaXGO/9c55aKJYZtRSazB2H0mHtPbH.m5eF.';
 
 await db.delete(sessions);
-await db.delete(documentMembers);
+await db.delete(grants);
+await db.delete(groupMembers);
+await db.delete(groups);
 await db.delete(shareLinks);
 await db.delete(documents);
-await db.delete(spaceMembers);
-await db.delete(skillVersions);
+await db.delete(folders);
 await db.delete(spaces);
 await db.delete(members);
 
@@ -26,9 +40,18 @@ await db.insert(members).values(
   ATLAS_DATA.members.map((member) => ({
     ...member,
     passwordHash: DEMO_PASSWORD_HASH,
-    role: member.role as 'admin' | 'editor' | 'viewer',
+    role: member.role as 'admin' | 'member',
   })),
 );
+
+await db.insert(groups).values(
+  ATLAS_DATA.groups.map((group) => ({
+    id: group.id,
+    name: group.name,
+    capabilities: group.capabilities,
+  })),
+);
+await db.insert(groupMembers).values(ATLAS_DATA.groupMembers);
 
 const now = new Date().toISOString();
 const sampleHtml = (doc: { id: string; title: string; desc?: string }) => {
@@ -86,6 +109,7 @@ for (const sp of ATLAS_DATA.tree) {
     mark: sp.mark,
     accent: sp.accent as string,
     personal: !!sp.personal,
+    ownerId: sp.personal ? (sp.children[0]?.author ?? null) : null,
   });
   for (const doc of sp.children) {
     await db.insert(documents).values({
@@ -94,17 +118,17 @@ for (const sp of ATLAS_DATA.tree) {
       authorId: doc.author,
       title: doc.title,
       desc: doc.desc ?? '',
-      visibility: doc.visibility,
+      access: doc.access,
       dot: doc.dot as string,
       tags: doc.tags ?? [],
-      html: sampleHtml(doc),
-      skillVersion: '1.2.4',
+      format: doc.format ?? 'html',
+      html: doc.format === 'markdown' ? (doc.content ?? '') : sampleHtml(doc),
       updated: doc.updated,
     });
   }
 }
 
-const permissions: (typeof spaceMembers.$inferInsert)[] = [];
+const permissions: { memberId: string; spaceId: string; role: 'viewer' | 'editor' }[] = [];
 for (const [memberIndex, member] of ATLAS_DATA.members.entries()) {
   for (const [spaceIndex, space] of ATLAS_DATA.tree.entries()) {
     if (member.id === 'u1' || member.role === 'admin') {
@@ -117,12 +141,78 @@ for (const [memberIndex, member] of ATLAS_DATA.members.entries()) {
   }
 }
 
-await db.insert(spaceMembers).values(permissions);
+await db.insert(grants).values(
+  permissions.map((p) => ({
+    subjectType: 'member' as const,
+    subjectId: p.memberId,
+    targetType: 'space' as const,
+    targetId: p.spaceId,
+    role: p.role,
+  })),
+);
 
-await db.insert(documentMembers).values([
-  { documentId: 'd1', memberId: 'u2', role: 'editor' },
-  { documentId: 'd1', memberId: 'u3', role: 'viewer' },
+await db.insert(grants).values([
+  {
+    subjectType: 'member',
+    subjectId: 'u2',
+    targetType: 'document',
+    targetId: 'd1',
+    role: 'editor',
+  },
+  {
+    subjectType: 'member',
+    subjectId: 'u3',
+    targetType: 'document',
+    targetId: 'd1',
+    role: 'viewer',
+  },
 ]);
+
+// Demo group grant: the content-editor group gets editor on the second shared space, so its
+// members read/write there purely through group membership (A-side of the group model).
+const sharedSpaces = ATLAS_DATA.tree.filter((sp) => !sp.personal);
+const groupGrantSpace = sharedSpaces[1] ?? sharedSpaces[0];
+if (groupGrantSpace) {
+  await db.insert(grants).values({
+    subjectType: 'group',
+    subjectId: 'g1',
+    targetType: 'space',
+    targetId: groupGrantSpace.id,
+    role: 'editor',
+  });
+}
+
+// Every member owns exactly one private space. Members who already own a personal space
+// in the fixture tree (e.g. u1 → s4) are skipped; the rest get a generated one.
+const personalOwners = new Set(
+  ATLAS_DATA.tree.filter((sp) => sp.personal).map((sp) => sp.children[0]?.author),
+);
+for (const member of ATLAS_DATA.members) {
+  if (personalOwners.has(member.id)) continue;
+  await createPersonalSpace(db, { id: member.id, name: member.name });
+}
+
+// Demo folders (Phase 3): a nested pair in the first shared space, with one doc filed under them.
+const firstShared = ATLAS_DATA.tree.find((sp) => !sp.personal);
+if (firstShared) {
+  await db.insert(folders).values([
+    { id: 'f_demo_parent', spaceId: firstShared.id, parentId: null, name: '设计规范', order: 0 },
+    {
+      id: 'f_demo_child',
+      spaceId: firstShared.id,
+      parentId: 'f_demo_parent',
+      name: '组件库',
+      order: 0,
+    },
+  ]);
+  const firstDoc = firstShared.children[0];
+  if (firstDoc) {
+    await db
+      .update(documents)
+      .set({ folderId: 'f_demo_child' })
+      .where(eq(documents.id, firstDoc.id));
+  }
+}
 
 await db.insert(shareLinks).values({
   id: 'link_d1',
@@ -136,40 +226,25 @@ await db.insert(shareLinks).values({
   updatedAt: now,
 });
 
-await db.insert(skillVersions).values([
-  {
-    id: 'skill_124',
-    version: '1.2.4',
-    note: '修复 SVG <use> 处理；表格保留行高样式',
-    active: true,
-    createdBy: 'u1',
-    createdAt: '2025-05-14T10:00:00.000Z',
-  },
-  {
-    id: 'skill_123',
-    version: '1.2.3',
-    note: '代理 google-fonts；外链 CSS 内联化',
-    active: false,
-    createdBy: 'u1',
-    createdAt: '2025-05-02T10:00:00.000Z',
-  },
-  {
-    id: 'skill_122',
-    version: '1.2.2',
-    note: '放宽 data-* 属性白名单',
-    active: false,
-    createdBy: 'u2',
-    createdAt: '2025-04-19T10:00:00.000Z',
-  },
-  {
-    id: 'skill_121',
-    version: '1.2.1',
-    note: '初次稳定版本',
-    active: false,
-    createdBy: 'u1',
-    createdAt: '2025-04-04T10:00:00.000Z',
-  },
-]);
+// Published fixtures (former `public` docs) reach the world solely through share links now.
+const publishedDocs = ATLAS_DATA.tree
+  .flatMap((sp) => sp.children)
+  .filter((doc) => doc.published && doc.id !== 'd1');
+if (publishedDocs.length > 0) {
+  await db.insert(shareLinks).values(
+    publishedDocs.map((doc) => ({
+      id: `link_${doc.id}`,
+      documentId: doc.id,
+      token: `demo-${doc.id}-public-link`,
+      enabled: true,
+      showAuthor: true,
+      allowIndexing: false,
+      createdBy: 'u1',
+      createdAt: now,
+      updatedAt: now,
+    })),
+  );
+}
 
 console.log(
   `seeded ${ATLAS_DATA.members.length} members, ${ATLAS_DATA.tree.length} spaces, ${permissions.length} permissions`,

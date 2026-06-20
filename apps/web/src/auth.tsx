@@ -1,84 +1,95 @@
-// @ts-nocheck — auth UI migrated from the JSX prototype and wired to the API.
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { DirectoryDocument, Member, Space } from '@atlas/shared';
 import { useQueryClient } from '@tanstack/react-query';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiJson } from './api-client';
+import type { Loose } from './loose-types';
 
-const DEMO_PASSWORD = 'atlas-demo-password';
+const IS_DEV_DEMO_LOGIN = import.meta.env.DEV;
 
-const DEMO_LOGIN_ACCOUNTS = [
-  {
-    id: 'u1',
-    email: 'lin@atlas.team',
-    name: '林知远',
-    initials: 'LZ',
-    role: 'admin',
-    joined: '2024-02',
-    tint: 'var(--blue)',
-  },
-  {
-    id: 'u2',
-    email: 'chen@atlas.team',
-    name: '陈夏',
-    initials: 'CX',
-    role: 'editor',
-    joined: '2024-03',
-    tint: '#ff9500',
-  },
-  {
-    id: 'u5',
-    email: 'he@atlas.team',
-    name: '何远',
-    initials: 'HE',
-    role: 'viewer',
-    joined: '2025-01',
-    tint: '#34c759',
-  },
-];
+type DemoLoginAccount = {
+  id: string;
+  email: string;
+  name: string;
+  initials: string;
+  role: Member['role'];
+  joined: string;
+  tint: string;
+};
 
-const ROLE_LABEL = { admin: '管理员', editor: '编辑', viewer: '仅读者' };
+const DEMO_LOGIN_ACCOUNTS: DemoLoginAccount[] = IS_DEV_DEMO_LOGIN
+  ? [
+      {
+        id: 'u1',
+        email: 'lin@atlas.team',
+        name: '林知远',
+        initials: 'LZ',
+        role: 'admin',
+        joined: '2024-02',
+        tint: 'var(--blue)',
+      },
+      {
+        id: 'u2',
+        email: 'chen@atlas.team',
+        name: '陈夏',
+        initials: 'CX',
+        role: 'member',
+        joined: '2024-03',
+        tint: '#ff9500',
+      },
+      {
+        id: 'u5',
+        email: 'he@atlas.team',
+        name: '何远',
+        initials: 'HE',
+        role: 'member',
+        joined: '2025-01',
+        tint: '#34c759',
+      },
+    ]
+  : [];
 
-function authErrorMessage(message) {
+function demoPassword() {
+  return IS_DEV_DEMO_LOGIN ? 'atlas-demo-password' : '';
+}
+
+const ROLE_LABEL: Record<string, string> = { admin: '管理员', member: '成员' };
+
+function authErrorMessage(message?: string) {
   if (!message) return '登录失败，请稍后再试。';
-  if (message.includes('no password configured')) {
-    return '这个账号还没有配置密码登录。请先更新本地 seed 数据，或换一个已配置密码的账号。';
-  }
+  if (message.includes('Too many login attempts')) return '尝试次数过多，请稍后再试。';
   if (message.includes('Email or password') || message.includes('password is incorrect')) {
     return '邮箱或密码不正确。';
   }
-  if (message.includes('Password is required')) return '请输入密码。';
-  if (message.includes('No member exists')) return '找不到这个邮箱。';
   return message;
 }
 
-function tintForUser(user) {
+function tintForUser(user?: (Pick<Member, 'id' | 'role'> & { tint?: string }) | null) {
   if (!user) return 'var(--blue)';
   if (user.id === 'u2') return '#ff9500';
   if (user.id === 'u5') return '#34c759';
   if (user.role === 'admin') return 'var(--blue)';
-  if (user.role === 'editor') return '#ff9500';
   return '#34c759';
 }
 
-function presentUser(user) {
+function presentUser(user?: (Member & { tint?: string }) | null) {
   return user ? { ...user, tint: user.tint || tintForUser(user) } : null;
 }
 
-export function isDemoSession(session) {
+export function isDemoSession(session: Loose) {
   return Boolean(session?.demo);
 }
 
-export function canRead(doc, user) {
+export function canRead(doc?: DirectoryDocument | null, _user?: Member | null) {
   if (!doc) return true;
-  if (doc.visibility === 'public') return true;
-  if (!user) return false;
-  if (user.role === 'admin') return true;
-  if (doc.author === user.id) return true;
-  return doc.visibility === 'invite';
+  if (typeof doc.canRead === 'boolean') return doc.canRead;
+  return false;
 }
 
-export function firstPublicDoc(spaces = []) {
+export function firstPublicDoc(spaces: Space[] = []) {
   for (const space of spaces) {
-    const doc = (space.children || []).find((candidate) => candidate.visibility === 'public');
+    const doc = (space.children || []).find(
+      (candidate: Loose) => 'published' in candidate && candidate.published === true,
+    );
     if (doc) return { spaceId: space.id, docId: doc.id };
   }
   const firstSpace = spaces[0];
@@ -86,32 +97,38 @@ export function firstPublicDoc(spaces = []) {
   return firstDoc ? { spaceId: firstSpace.id, docId: firstDoc.id } : { spaceId: 's1', docId: 'd4' };
 }
 
-export function useAuth({ currentUser, session }) {
+export function useAuth({
+  currentUser,
+  session,
+}: {
+  currentUser?: (Member & { tint?: string }) | null;
+  session?: Loose;
+}) {
   const queryClient = useQueryClient();
   const derivedUser = useMemo(
     () => (isDemoSession(session) ? null : presentUser(currentUser)),
     [currentUser, session],
   );
-  const [overrideUser, setOverrideUser] = useState(undefined);
+  const [overrideUser, setOverrideUser] = useState<Loose>(undefined);
 
   useEffect(() => {
     setOverrideUser(undefined);
-  }, [currentUser?.id, session?.id, session?.demo]);
+  }, []);
 
   const refreshAuthQueries = useCallback(async () => {
     await queryClient.invalidateQueries();
   }, [queryClient]);
 
   const login = useCallback(
-    async (email, password) => {
+    async (email: string, password: string) => {
       try {
         const data = await apiJson('/auth/login', 'POST', { email, password });
         const nextUser = presentUser(data?.user);
         setOverrideUser(nextUser);
         await refreshAuthQueries();
         return { ok: true, user: nextUser };
-      } catch (error) {
-        return { ok: false, msg: authErrorMessage(error?.message) };
+      } catch (error: unknown) {
+        return { ok: false, msg: authErrorMessage((error as Loose)?.message) };
       }
     },
     [refreshAuthQueries],
@@ -127,10 +144,11 @@ export function useAuth({ currentUser, session }) {
   }, [refreshAuthQueries]);
 
   const switchTo = useCallback(
-    async (id) => {
+    async (id: string) => {
+      if (!IS_DEV_DEMO_LOGIN) return { ok: false, msg: '演示账号切换仅在开发环境可用。' };
       const account = DEMO_LOGIN_ACCOUNTS.find((candidate) => candidate.id === id);
       if (!account) return { ok: false, msg: '找不到这个账号。' };
-      return login(account.email, DEMO_PASSWORD);
+      return login(account.email, demoPassword());
     },
     [login],
   );
@@ -148,7 +166,7 @@ export function useAuth({ currentUser, session }) {
 
 function UserGlyph() {
   return (
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+    <svg aria-hidden="true" width="15" height="15" viewBox="0 0 16 16" fill="none">
       <circle cx="8" cy="6" r="2.6" stroke="currentColor" strokeWidth="1.4" />
       <path
         d="M2.8 13.5c0.6-2.6 2.7-4.1 5.2-4.1s4.6 1.5 5.2 4.1"
@@ -162,7 +180,7 @@ function UserGlyph() {
 
 function LogoutGlyph() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
       <path
         d="M6 2.5H4A1.5 1.5 0 0 0 2.5 4v6A1.5 1.5 0 0 0 4 11.5h2M8.5 4 11.5 7l-3 3M5 7h6.4"
         stroke="currentColor"
@@ -176,7 +194,7 @@ function LogoutGlyph() {
 
 function InfoGlyph() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
       <circle cx="7" cy="7" r="5.4" stroke="currentColor" strokeWidth="1.3" />
       <path d="M7 6v3.6M7 4.5v0.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
@@ -185,7 +203,7 @@ function InfoGlyph() {
 
 function SwitchGlyph() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
       <path
         d="M3 5h7l-1.6-1.6M11 9H4l1.6 1.6"
         stroke="currentColor"
@@ -199,13 +217,21 @@ function SwitchGlyph() {
 
 function PlusGlyph() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
       <path d="M7 3v8M3 7h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
 }
 
-function UserAvatar({ user, className = '', size }) {
+function UserAvatar({
+  user,
+  className = '',
+  size,
+}: {
+  user?: (Member & { tint?: string }) | null;
+  className?: string;
+  size?: number;
+}) {
   return (
     <span
       className={className}
@@ -219,21 +245,31 @@ function UserAvatar({ user, className = '', size }) {
   );
 }
 
-export function UserMenu({ user, onLogin, onLogout, onSwitch }) {
+export function UserMenu({
+  user,
+  onLogin,
+  onLogout,
+  onSwitch,
+}: {
+  user?: (Member & { tint?: string }) | null;
+  onLogin: () => void;
+  onLogout: () => void | Promise<void>;
+  onSwitch: (id: string) => Promise<Loose> | Loose;
+}) {
   const [open, setOpen] = useState(false);
   const [pane, setPane] = useState('main');
-  const [switchingId, setSwitchingId] = useState(null);
-  const wrapRef = useRef(null);
+  const [switchingId, setSwitchingId] = useState<Loose>(null);
+  const wrapRef = useRef<Loose>(null);
 
   useEffect(() => {
     if (!open) return;
-    const onDocClick = (event) => {
+    const onDocClick = (event: MouseEvent) => {
       if (!wrapRef.current?.contains(event.target)) {
         setOpen(false);
         setPane('main');
       }
     };
-    const onEsc = (event) => {
+    const onEsc = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         setOpen(false);
         setPane('main');
@@ -252,7 +288,7 @@ export function UserMenu({ user, onLogin, onLogout, onSwitch }) {
     setPane('main');
   };
 
-  const switchAccount = async (account) => {
+  const switchAccount = async (account: Loose) => {
     if (account.id === user?.id || switchingId) return;
     setSwitchingId(account.id);
     const result = await onSwitch?.(account.id);
@@ -262,16 +298,17 @@ export function UserMenu({ user, onLogin, onLogout, onSwitch }) {
 
   return (
     <div
-      className={'user-menu-wrap ' + (open ? 'open ' : '') + (user ? 'is-member' : 'is-guest')}
+      className={`user-menu-wrap ${open ? 'open ' : ''}${user ? 'is-member' : 'is-guest'}`}
       ref={wrapRef}
     >
       {user ? (
         <button
+          type="button"
           className="user-menu-trigger"
           style={{ background: user.tint || tintForUser(user) }}
-          onClick={(event) => {
+          onClick={(event: Loose) => {
             event.stopPropagation();
-            setOpen((value) => !value);
+            setOpen((value: Loose) => !value);
             setPane('main');
           }}
           title={user.name}
@@ -281,10 +318,11 @@ export function UserMenu({ user, onLogin, onLogout, onSwitch }) {
         </button>
       ) : (
         <button
+          type="button"
           className="user-menu-trigger guest"
-          onClick={(event) => {
+          onClick={(event: Loose) => {
             event.stopPropagation();
-            setOpen((value) => !value);
+            setOpen((value: Loose) => !value);
             setPane('main');
           }}
           title="游客, 点击登录"
@@ -295,7 +333,9 @@ export function UserMenu({ user, onLogin, onLogout, onSwitch }) {
       )}
 
       {open && (
-        <div className="user-menu-pop" onClick={(event) => event.stopPropagation()}>
+        // biome-ignore lint/a11y/noStaticElementInteractions: menu wrapper only stops trigger-click propagation; its items are the real controls
+        // biome-ignore lint/a11y/useKeyWithClickEvents: menu wrapper only stops trigger-click propagation; its items are the real controls
+        <div className="user-menu-pop" onClick={(event: Loose) => event.stopPropagation()}>
           {!user && (
             <div className="um-pane um-pane-guest">
               <div className="um-guest-head">
@@ -308,6 +348,7 @@ export function UserMenu({ user, onLogin, onLogout, onSwitch }) {
                 </div>
               </div>
               <button
+                type="button"
                 className="um-cta"
                 onClick={() => {
                   close();
@@ -332,27 +373,30 @@ export function UserMenu({ user, onLogin, onLogout, onSwitch }) {
                   <div className="um-name">{user.name}</div>
                   <div className="um-sub">{user.email}</div>
                 </div>
-                <span className={'um-role role-' + user.role}>
+                <span className={`um-role role-${user.role}`}>
                   {ROLE_LABEL[user.role] || user.role}
                 </span>
               </div>
               <div className="um-sep" />
-              <button className="um-item" onClick={() => setPane('info')}>
+              <button type="button" className="um-item" onClick={() => setPane('info')}>
                 <span className="um-item-glyph">
                   <InfoGlyph />
                 </span>
                 <span>查看信息</span>
                 <span className="um-chev">›</span>
               </button>
-              <button className="um-item" onClick={() => setPane('switch')}>
-                <span className="um-item-glyph">
-                  <SwitchGlyph />
-                </span>
-                <span>切换账号</span>
-                <span className="um-chev">›</span>
-              </button>
+              {IS_DEV_DEMO_LOGIN && (
+                <button type="button" className="um-item" onClick={() => setPane('switch')}>
+                  <span className="um-item-glyph">
+                    <SwitchGlyph />
+                  </span>
+                  <span>切换账号</span>
+                  <span className="um-chev">›</span>
+                </button>
+              )}
               <div className="um-sep" />
               <button
+                type="button"
                 className="um-item um-item-danger"
                 onClick={() => {
                   close();
@@ -370,7 +414,12 @@ export function UserMenu({ user, onLogin, onLogout, onSwitch }) {
           {user && pane === 'info' && (
             <div className="um-pane">
               <div className="um-pane-head">
-                <button className="um-back" onClick={() => setPane('main')} aria-label="返回">
+                <button
+                  type="button"
+                  className="um-back"
+                  onClick={() => setPane('main')}
+                  aria-label="返回"
+                >
                   ‹
                 </button>
                 <span className="um-pane-title">账号信息</span>
@@ -378,7 +427,7 @@ export function UserMenu({ user, onLogin, onLogout, onSwitch }) {
               <div className="um-info-block">
                 <UserAvatar user={user} className="um-info-avatar" />
                 <div className="um-info-name">{user.name}</div>
-                <span className={'um-role role-' + user.role}>
+                <span className={`um-role role-${user.role}`}>
                   {ROLE_LABEL[user.role] || user.role}
                 </span>
               </div>
@@ -394,6 +443,7 @@ export function UserMenu({ user, onLogin, onLogout, onSwitch }) {
               </dl>
               <div className="um-sep" />
               <button
+                type="button"
                 className="um-item um-item-danger"
                 onClick={() => {
                   close();
@@ -411,18 +461,24 @@ export function UserMenu({ user, onLogin, onLogout, onSwitch }) {
           {user && pane === 'switch' && (
             <div className="um-pane">
               <div className="um-pane-head">
-                <button className="um-back" onClick={() => setPane('main')} aria-label="返回">
+                <button
+                  type="button"
+                  className="um-back"
+                  onClick={() => setPane('main')}
+                  aria-label="返回"
+                >
                   ‹
                 </button>
                 <span className="um-pane-title">切换账号</span>
               </div>
               <div className="um-switch-list">
-                {DEMO_LOGIN_ACCOUNTS.map((account) => {
+                {DEMO_LOGIN_ACCOUNTS.map((account: Loose) => {
                   const active = account.id === user.id;
                   return (
                     <button
+                      type="button"
                       key={account.id}
-                      className={'um-switch-row ' + (active ? 'active' : '')}
+                      className={`um-switch-row ${active ? 'active' : ''}`}
                       onClick={() => switchAccount(account)}
                       disabled={active || switchingId === account.id}
                     >
@@ -433,7 +489,7 @@ export function UserMenu({ user, onLogin, onLogout, onSwitch }) {
                         <span className="um-switch-name">{account.name}</span>
                         <span className="um-switch-email">{account.email}</span>
                       </span>
-                      <span className={'um-role role-' + account.role}>
+                      <span className={`um-role role-${account.role}`}>
                         {ROLE_LABEL[account.role]}
                       </span>
                       {active && <span className="um-switch-check">✓</span>}
@@ -443,6 +499,7 @@ export function UserMenu({ user, onLogin, onLogout, onSwitch }) {
               </div>
               <div className="um-sep" />
               <button
+                type="button"
                 className="um-item"
                 onClick={() => {
                   close();
@@ -462,18 +519,26 @@ export function UserMenu({ user, onLogin, onLogout, onSwitch }) {
   );
 }
 
-export function LoginView({ onLogin, onContinueAsGuest, returnTo }) {
+export function LoginView({
+  onLogin,
+  onContinueAsGuest,
+  returnTo,
+}: {
+  onLogin: (email: string, password: string) => Promise<{ ok: boolean; msg?: string }>;
+  onContinueAsGuest: () => void;
+  returnTo?: Loose;
+}) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
-  const emailRef = useRef(null);
+  const emailRef = useRef<Loose>(null);
 
   useEffect(() => {
     emailRef.current?.focus();
   }, []);
 
-  const submit = async (event) => {
+  const submit = async (event: Loose) => {
     event?.preventDefault?.();
     setError('');
     const nextEmail = email.trim();
@@ -497,9 +562,9 @@ export function LoginView({ onLogin, onContinueAsGuest, returnTo }) {
     }
   };
 
-  const fillDemo = (account) => {
+  const fillDemo = (account: Loose) => {
     setEmail(account.email);
-    setPassword(DEMO_PASSWORD);
+    setPassword(demoPassword());
     setError('');
     setTimeout(() => emailRef.current?.form?.requestSubmit?.(), 60);
   };
@@ -515,7 +580,7 @@ export function LoginView({ onLogin, onContinueAsGuest, returnTo }) {
       <div className="login-stage">
         <div className="login-brand">
           <div className="login-brand-mark">
-            <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+            <svg aria-hidden="true" width="44" height="44" viewBox="0 0 44 44" fill="none">
               <rect
                 x="6"
                 y="6"
@@ -573,15 +638,15 @@ export function LoginView({ onLogin, onContinueAsGuest, returnTo }) {
                   placeholder="name@atlas.team"
                   autoComplete="email"
                   value={email}
-                  onChange={(event) => setEmail(event.target.value)}
+                  onChange={(event: Loose) => setEmail(event.target.value)}
                 />
               </label>
               <label className="login-field">
                 <span className="login-label">
                   密码
-                  <a className="login-forgot" onClick={(event) => event.preventDefault()} href="#">
+                  <button type="button" className="login-forgot">
                     忘记密码？
-                  </a>
+                  </button>
                 </span>
                 <input
                   type="password"
@@ -589,14 +654,14 @@ export function LoginView({ onLogin, onContinueAsGuest, returnTo }) {
                   placeholder="至少 8 位"
                   autoComplete="current-password"
                   value={password}
-                  onChange={(event) => setPassword(event.target.value)}
+                  onChange={(event: Loose) => setPassword(event.target.value)}
                 />
               </label>
 
               {error && <div className="login-error">{error}</div>}
 
               <button
-                className={'login-submit ' + (loading ? 'loading' : '')}
+                className={`login-submit ${loading ? 'loading' : ''}`}
                 type="submit"
                 disabled={loading}
               >
@@ -611,33 +676,39 @@ export function LoginView({ onLogin, onContinueAsGuest, returnTo }) {
               </div>
             </form>
 
-            <div className="login-divider">
-              <span className="login-divider-line" />
-              <span className="login-divider-text mono">DEMO 账号</span>
-              <span className="login-divider-line" />
-            </div>
+            {IS_DEV_DEMO_LOGIN && (
+              <>
+                <div className="login-divider">
+                  <span className="login-divider-line" />
+                  <span className="login-divider-text mono">DEMO 账号</span>
+                  <span className="login-divider-line" />
+                </div>
 
-            <div className="login-demo-list">
-              {DEMO_LOGIN_ACCOUNTS.map((account) => (
-                <button
-                  key={account.id}
-                  type="button"
-                  className="login-demo-card"
-                  onClick={() => fillDemo(account)}
-                  title={'点击以 ' + account.name + ' 身份登录'}
-                >
-                  <span className="login-demo-avatar" style={{ background: account.tint }}>
-                    {account.initials}
-                  </span>
-                  <span className="login-demo-meta">
-                    <span className="login-demo-name">{account.name}</span>
-                    <span className="login-demo-email mono">{account.email}</span>
-                  </span>
-                  <span className={'um-role role-' + account.role}>{ROLE_LABEL[account.role]}</span>
-                </button>
-              ))}
-              {returnTo && <div className="login-return-hint">登录后回到刚才的页面</div>}
-            </div>
+                <div className="login-demo-list">
+                  {DEMO_LOGIN_ACCOUNTS.map((account) => (
+                    <button
+                      key={account.id}
+                      type="button"
+                      className="login-demo-card"
+                      onClick={() => fillDemo(account)}
+                      title={`点击以 ${account.name} 身份登录`}
+                    >
+                      <span className="login-demo-avatar" style={{ background: account.tint }}>
+                        {account.initials}
+                      </span>
+                      <span className="login-demo-meta">
+                        <span className="login-demo-name">{account.name}</span>
+                        <span className="login-demo-email mono">{account.email}</span>
+                      </span>
+                      <span className={`um-role role-${account.role}`}>
+                        {ROLE_LABEL[account.role]}
+                      </span>
+                    </button>
+                  ))}
+                  {returnTo && <div className="login-return-hint">登录后回到刚才的页面</div>}
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>

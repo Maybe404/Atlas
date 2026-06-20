@@ -26,3 +26,9 @@ bun.lockb
 apps/api/data/
 apps/api/*.sqlite
 apps/api/*.sqlite-*
+
+# Brainstorming visual companion
+.superpowers/
+
+# codegragh
+.codegraph/
