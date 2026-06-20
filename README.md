@@ -1,268 +1,209 @@
+<div align="center">
+
 # Atlas
 
-空间管理与权限的管理后台。前端 React 19 + Vite 6 + TypeScript；后端 Hono + Drizzle + SQLite（`bun:sqlite`）；运行时与包管理统一用 **Bun 1.3.14**；Bun workspaces 把 `apps/*` 和 `packages/*` 串起来。
+**自托管的团队知识库与文档协作平台 —— 以细粒度授权为核心的权限引擎**
 
-## 完成度
+把 HTML / Markdown 文档组织进「空间 → 文件夹」目录树，用 *grants（授权边）+ 分组能力* 精确控制谁能读、谁能写、谁能对外发布。
 
-当前是「**可本地使用的全栈 MVP**」状态，核心读写链路已经接到真实 SQLite 数据库：
+<br/>
 
-- ✅ 前端 UI 已接真实 API：React Query 拉取空间、文档、成员、权限、回收站与分享状态，CRUD 通过 mutation 同步到 SQLite。
-- ✅ URL 路由已落地：Reader、管理、上传、设置、公开链接都有可刷新地址。
-- ✅ Hono + Drizzle + SQLite 迁移已生成并验证，`db:migrate` / `db:seed` 可直接初始化。
-- ✅ 登录与 session 已有可用实现：密码登录、30 天 cookie session、双提交 CSRF token；未登录时按游客处理，只返回公开文章。
-- ✅ 空间与文档权限真实执行：空间/文档查询按当前用户过滤，写操作要求 editor/admin 权限；文档可额外按成员分享 viewer/editor。
-- ✅ HTML 上传已接后端：`multipart/form-data` 上传、8 MB 大小限制、自动识别标题/摘要，并保存原始 HTML 供 iframe sandbox 原样展示。
-- ✅ 回收站与分享链接已有表和接口，UI 已接入恢复、过期清理、公开链接与成员分享。
-- ✅ 分享链接支持到期、撤销、重置 token、访问计数、最近访问时间和 `allowIndexing` 标记。
-- ✅ 审计日志已记录登录/登出、空间、成员、文档、分享变更，可通过管理员接口查看最近 100 条。
-- ✅ API 核心路径已有 Bun 测试：空间列表、上传原文保存与元数据识别、密码登录、CSRF、权限矩阵、软删除/恢复、公开链接到期/撤销/轮换、回收站过期清理。
-- ⚠️ 仍是 MVP：没有邮箱验证/SSO/组织级邀请流；前端 e2e、生产级 CSP/资源代理、完整审计查询 UI 仍待补。
+[![Bun](https://img.shields.io/badge/Bun-1.3.14-000000?logo=bun&logoColor=white)](https://bun.sh)
+[![React](https://img.shields.io/badge/React-19-20232a?logo=react&logoColor=61dafb)](https://react.dev)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.7-3178c6?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
+[![Hono](https://img.shields.io/badge/Hono-4-e36002?logo=hono&logoColor=white)](https://hono.dev)
+[![Drizzle](https://img.shields.io/badge/Drizzle_ORM-SQLite-c5f74f?logo=drizzle&logoColor=black)](https://orm.drizzle.team)
+[![Biome](https://img.shields.io/badge/Biome-2-60a5fa?logo=biome&logoColor=white)](https://biomejs.dev)
+[![License](https://img.shields.io/badge/License-MIT-22c55e)](LICENSE)
 
-## 本地环境要求
+</div>
 
-| 工具 | 版本 | 说明 |
+---
+
+## 这是什么
+
+Atlas 是一个 **端到端可自托管** 的文档管理后台：成员把 Markdown 或整页 HTML 上传/撰写为文档，归入按空间与多级文件夹组织的目录树，再通过一套统一的授权模型决定每个人的可见范围与编辑权限，并可一键生成对外公开的分享链接。
+
+整个项目是一个 **Bun workspaces 单仓库**，前后端共享同一套 Zod 领域模型，运行时、包管理、测试器全部由 Bun 一手包办——**不需要 Node.js、不需要 `better-sqlite3` 编译链、不需要 Docker**。
+
+## 核心特性
+
+| 特性 | 说明 |
+|---|---|
+| **Grants 授权引擎** | `主体(成员/分组) → 目标(空间/文件夹/文档)` 的授权边模型，自动取最高权限合并，文件夹沿继承链解析 |
+| **分组 + 能力（A+B 模型）** | 分组既携带全局能力（建空间 / 管成员 / 管分组 / 发布），又承载对目标的授权；成员能力为所在分组的并集 |
+| **空间与多级文件夹** | 文档归入空间下的嵌套目录树；`restricted` 文件夹可阻断空间级权限向下穿透 |
+| **Markdown / HTML 双格式** | Markdown 内置 KaTeX 公式、Mermaid 流程图、代码高亮、GitHub Alerts、脚注、任务列表、目录；HTML 在沙箱 iframe 中原样呈现 |
+| **公开分享链接** | 支持启用 / 到期 / 撤销 / token 轮换 / 访问计数；与站内权限正交，独立的访客通道 |
+| **回收站 + 软删除** | 删除进回收站、可恢复、可永久删除，支持到期自动清理 |
+| **会话与防护** | `Bun.password` 校验、30 天 HttpOnly Session、双提交 CSRF、登录失败按 IP+邮箱限速、审计日志 |
+| **一键生产部署** | 单端口同时托管 SPA + API、纯环境变量配置、dev/prod 数据隔离、内置严格 CSP |
+
+## 架构概览
+
+```mermaid
+flowchart LR
+    subgraph Browser["浏览器"]
+        UI["React 19 + Vite 6<br/>React Query · React Router"]
+    end
+    subgraph Server["Bun 运行时（单端口）"]
+        API["Hono API<br/>auth · spaces · folders<br/>documents · groups · members"]
+        STATIC["静态 SPA 托管<br/>(生产模式)"]
+        DB[("SQLite<br/>bun:sqlite + Drizzle ORM")]
+    end
+    SHARED["@atlas/shared<br/>Zod schema · 领域类型"]
+
+    UI -- "/api/*" --> API
+    UI -. 生产同源 .-> STATIC
+    API --> DB
+    UI -.类型共享.- SHARED
+    API -.类型共享.- SHARED
+```
+
+- **前端** `apps/web` — React 19 + Vite 6 + TypeScript，React Query 管理数据、React Router 落地可刷新 URL。
+- **后端** `apps/api` — Hono 路由 + Drizzle ORM + 原生 `bun:sqlite`，所有内容落在单个 SQLite 文件。
+- **共享** `packages/shared` — Zod schema 与领域类型，前后端单一事实来源，避免把 `bun:sqlite` 类型拖进浏览器工程。
+
+## 权限模型
+
+Atlas 的权限不是简单的角色枚举，而是一张可组合的授权图。读取一篇文档时的判定链路如下：
+
+```mermaid
+flowchart TD
+    A["请求读取文档"] --> B{已发布公开链接?}
+    B -- 是 --> OK["✅ 允许（访客通道）"]
+    B -- 否 --> C{管理员 / 作者 / 空间所有者?}
+    C -- 是 --> OK
+    C -- 否 --> D{该文档有显式授权?}
+    D -- 是 --> OK
+    D -- 否 --> E{access = restricted?}
+    E -- 是 --> NO["❌ 拒绝（不继承）"]
+    E -- 否（inherit） --> F["沿文件夹链向上解析"]
+    F --> G{链路上有<br/>文件夹/空间授权?}
+    G -- 有 --> OK
+    G -- 被 restricted 阻断 / 无 --> NO
+```
+
+| 维度 | 取值 | 含义 |
 |---|---|---|
-| **Bun** | **≥ 1.3.14** | 必需。运行时 + 包管理 + 测试器。`brew install oven-sh/bun/bun` 或 `curl -fsSL https://bun.sh/install \| bash` |
-| 操作系统 | macOS / Linux / WSL2 | Windows 原生不支持 `bun:sqlite`，请用 WSL2 |
-| Git | 任意 | 仅用于版本管理 |
-| 浏览器 | 现代 Evergreen | 前端依赖原生 ES2023、CSS backdrop-filter；Safari ≥ 17 / Chrome ≥ 120 |
-| 字体 | 系统装好 SF Pro / -apple-system 即可 | 中文走在线 Noto Sans SC（首屏需要外网） |
+| **全局角色** | `admin` / `member` | admin 拥有一切；member 的能力来自分组 |
+| **分组能力** | `createSpace` · `manageMembers` · `manageGroups` · `publish` | 成员有效能力 = 所在分组能力的并集 |
+| **授权角色** | `viewer` / `editor` | 主体对目标的读 / 读写权限，合并时取最高 |
+| **文档访问模式** | `inherit` / `restricted` | inherit 沿目录树继承；restricted 仅显式授权可达 |
 
-**不需要装：** Node.js、npm/pnpm/yarn、Python、Docker、SQLite CLI、`better-sqlite3` 编译工具链。Bun 自带 SQLite，依赖由 workspace 统一安装。
+> 个人空间的所有者对自己空间内的全部文档拥有读写权限；公开暴露始终经由独立的 `share_links`，与站内授权解耦。
 
-可选：
+## 快速开始
 
-- 装 **Biome** VS Code 扩展（`biomejs.biome`）获得保存即格式化。
-- 装 **TablePlus** / DBeaver / `sqlite3` 命令行，方便查看 `apps/api/data/atlas.sqlite`。
-
-## 启动
+> **环境要求：** [Bun](https://bun.sh) ≥ 1.3.14（运行时 + 包管理 + 测试器三合一）。macOS / Linux / WSL2。Windows 原生不支持 `bun:sqlite`，请用 WSL2。
 
 ```bash
-# 1. 装依赖
+# 1. 安装依赖（Bun 自动 link workspace）
 bun install
 
 # 2. 初始化数据库并灌入示例数据
 bun run --filter @atlas/api db:migrate
 bun run --filter @atlas/api db:seed
 
-# 3. 起开发服（会先自动应用已提交迁移）
+# 3. 启动开发服（会先自动应用已提交迁移）
 bun dev
-
-# 或分别启动
-bun dev:web
-bun dev:api
 ```
 
-前端在 `http://localhost:5173`，API 在 `http://localhost:3000`。开发时 Vite proxy 会把 `/api/*` 转发到 `:3000`，所以前端代码统一调用 `/api/...`。
+前端默认在 `http://localhost:5173`，API 在 `http://localhost:3000`；Vite 会把 `/api/*` 代理到后端，所以前端代码统一调用 `/api/...`。
 
-示例入口：
+`db:seed` 会写入一批共用固定密码的 **公开演示账号**，仅用于本地体验权限矩阵，**切勿在生产环境运行**。
 
-- `http://localhost:5173/spaces/s1/docs/d1`：Reader
-- `http://localhost:5173/admin/docs`：文档管理
-- `http://localhost:5173/admin/upload`：HTML 上传
-- `http://localhost:5173/admin/settings`：空间、成员、权限、回收站设置
-- `http://localhost:5173/share/demo-d1-public-link`：公开分享链接示例
+## 生产部署
 
-Seed 后示例账号如下，所有账号使用同一个演示密码。**这些账号和密码是公开的开发/演示数据，只能用于本地 seed 后体验功能；生产环境不要导入 seed 数据，也不要依赖这些账号作为真实成员账号。** 生产构建会隐藏前端的一键 demo 登录/账号切换入口。
+生产模式下 Bun 用 **单端口同时托管编译后的 SPA 与 API**（同源，无需 CORS），配置全部来自环境变量，dev / prod 数据目录自动隔离。
 
-| 姓名 | 邮箱 | 角色 | 密码 |
-|---|---|---|---|
-| 林知远 | `lin@atlas.team` | `admin` | `atlas-demo-password` |
-| 陈夏 | `chen@atlas.team` | `editor` | `atlas-demo-password` |
-| 柳明 | `liu@atlas.team` | `editor` | `atlas-demo-password` |
-| 苏渡 | `su@atlas.team` | `editor` | `atlas-demo-password` |
-| 何远 | `he@atlas.team` | `viewer` | `atlas-demo-password` |
-| 周珩 | `zhou@atlas.team` | `editor` | `atlas-demo-password` |
-| 黎安 | `li@atlas.team` | `editor` | `atlas-demo-password` |
-| 吴秋 | `wu@atlas.team` | `viewer` | `atlas-demo-password` |
-| 郑书 | `zheng@atlas.team` | `editor` | `atlas-demo-password` |
-| 韩奕 | `han@atlas.team` | `viewer` | `atlas-demo-password` |
-| 叶清 | `ye@atlas.team` | `editor` | `atlas-demo-password` |
-| 冯之 | `feng@atlas.team` | `viewer` | `atlas-demo-password` |
+```bash
+cp .env.example .env        # 按注释填写：NODE_ENV、PORT、数据目录、首个管理员凭据
+bun run build               # 构建所有 workspace
+bun run --filter @atlas/api db:migrate
+bun run --filter @atlas/api db:create-admin   # 用 .env 中的凭据创建首个管理员
+bun run start               # 单端口启动（先迁移，再托管 SPA + API）
+```
 
-未带 session cookie 时，API 会按游客处理：只能读取公开文章。通过 `/auth/login` 登录后会设置真实 `atlas_session` cookie 和 `atlas_csrf` cookie。
+关键环境变量（完整列表见 [`.env.example`](.env.example)）：
+
+| 变量 | 作用 |
+|---|---|
+| `NODE_ENV=production` | 启用 Secure Cookie、单端口托管、禁用演示 seed、选用 prod 数据目录 |
+| `ATLAS_DATA_DIR` / `DATABASE_URL` | 把 SQLite 数据放到代码目录之外的持久路径（**记得备份这个文件**） |
+| `ATLAS_ADMIN_*` | 首个管理员的邮箱 / 姓名 / 密码，仅 `db:create-admin` 使用 |
+| `ATLAS_TRUST_PROXY` | 反向代理后置 `1`，登录限速才会读取真实客户端 IP |
+| `ATLAS_CSP` | 覆盖内置的严格同源 CSP（默认已含 Google Fonts） |
 
 ## 常用脚本
 
 | 命令 | 作用 |
 |---|---|
-| `bun dev` | 应用已提交迁移，然后同时启动 web 和 api |
-| `bun dev:web` | 只启动 Vite 前端 |
-| `bun dev:api` | 应用已提交迁移，然后只启动 Hono API |
+| `bun dev` | 应用迁移后同时启动 web 与 api |
 | `bun run build` | 构建所有 workspace |
-| `bun run typecheck` | 跑所有 TypeScript 类型检查 |
-| `bun test apps/api/src` | 跑 API 测试 |
-| `bun run --filter @atlas/api db:generate` | 根据 Drizzle schema 生成迁移 |
+| `bun run typecheck` | 全量 TypeScript 类型检查 |
+| `bun test apps/api/src` | 运行 API 测试 |
+| `bun run lint` / `bun run fmt` | Biome 检查 / 格式化 |
+| `bun run --filter @atlas/api db:generate` | 改完 schema 后生成迁移 |
 | `bun run --filter @atlas/api db:migrate` | 应用已提交迁移 |
-| `bun run --filter @atlas/api db:seed` | 用公开开发/演示 fixtures 重置并灌入示例数据 |
-| `bun run lint` | Biome 检查 |
-| `bun run fmt` | Biome 格式化 |
+| `bun run --filter @atlas/api db:create-admin` | 用环境凭据创建/重置首个管理员 |
 
-## 环境变量
-
-| 变量 | 默认值 | 说明 |
-|---|---|---|
-| `PORT` | `3000` | API 监听端口 |
-| `DATABASE_URL` | `apps/api/data/atlas.sqlite` | SQLite 文件路径。测试会覆盖到 `apps/api/data/test-atlas.sqlite` |
-| `ATLAS_ENV` / `NODE_ENV` / `BUN_ENV` | 未设置 | 任一值为 `production` / `prod` 时，登录 cookie 默认带 `Secure` |
-| `ATLAS_COOKIE_SECURE` | `false` | 非生产环境下手动开启 `Secure` cookie；生产环境始终开启 |
-| `ATLAS_TRUST_PROXY` | `false` | 仅在可信反向代理后设为 `true`，登录限速才会读取 `X-Forwarded-For` / `X-Real-IP` / `CF-Connecting-IP` |
-| `ATLAS_LOGIN_RATE_LIMIT_MAX_FAILURES` | `5` | 同一客户端 IP + email 在窗口内允许的登录失败次数 |
-| `ATLAS_LOGIN_RATE_LIMIT_WINDOW_MS` | `600000` | 登录失败限速窗口，默认 10 分钟 |
-
-> `db:seed` 会写入公开演示账号与固定演示密码，方便本地体验和测试权限矩阵；它不是生产初始化脚本。
-
-生产部署前建议显式设置 `DATABASE_URL` 和生产环境变量，并把可信 origin、HTTPS、CSP、静态资源策略一起梳理。
-
-## 目录
+## 目录结构
 
 ```text
 .
 ├── apps/
-│   ├── web/        前端 (Vite + React 19 + TS)
-│   │   ├── index.html
-│   │   ├── public/embedded-sample.html      本地示例 HTML
+│   ├── web/                  前端 (Vite + React 19 + TS)
 │   │   └── src/
-│   │       ├── main.tsx                     入口
-│   │       ├── app.tsx                      根组件 App + Dock
-│   │       ├── chrome.tsx                   Topbar / Sidebar / 图标 / 动画列表
-│   │       ├── views.tsx                    ReaderView / PublicDocumentView / AdminDocsView
-│   │       ├── views-admin.tsx              AdminUploadView / AdminSettingsView
-│   │       ├── dialogs.tsx                  CmdK / ShareDialog / SpaceManagerDialog / ToastWrap
-│   │       ├── tweaks-panel.tsx             浮层调参面板
-│   │       ├── styles.css
-│   │       ├── api-client.ts                fetch API helper + CSRF header
-│   │       └── data-hooks.ts                React Query 查询与 mutation
-│   └── api/        后端 (Hono + Drizzle + bun:sqlite)
-│       ├── src/server.ts                    Hono app + CORS + logger + error handler
-│       ├── src/routes/{auth,members,spaces,documents}.ts
-│       ├── src/lib/{auth,permissions,html-limits,audit,serializers,...}.ts
-│       └── src/db/{schema,client,migrate,seed,migrations}.ts
-├── packages/
-│   └── shared/     共享 Zod schema、领域类型与 HTML metadata 工具
-├── package.json    Bun workspaces 根
-├── bunfig.toml
-├── biome.json
-└── tsconfig.base.json
+│   │       ├── views/        Reader / 公开页 / Markdown·HTML 编辑器
+│   │       ├── views-admin/  空间 / 文件夹 / 成员 / 分组 / 权限 / 回收站
+│   │       ├── markdown/     markdown-it 渲染管线 (KaTeX·Mermaid·高亮)
+│   │       ├── api-client.ts fetch 封装 + CSRF header 注入
+│   │       └── data-hooks.ts React Query 查询与 mutation
+│   └── api/                  后端 (Hono + Drizzle + bun:sqlite)
+│       └── src/
+│           ├── routes/       auth · spaces · folders · documents · groups · members
+│           ├── lib/          grants · permissions · auth · audit · env · html-limits
+│           └── db/           schema · client · migrate · seed · create-admin
+└── packages/
+    └── shared/               共享 Zod schema、领域类型与 HTML/Markdown 元数据工具
 ```
 
-## API 速查
+数据库共 10 张表：`members` · `groups` · `groupMembers` · `sessions` · `spaces` · `folders` · `documents` · `grants` · `shareLinks` · `auditLogs`。
 
-所有前端请求都走 `/api` 前缀；下面列的是后端真实路由。
+## API 速览
 
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| `GET` | `/health` | 健康检查 |
-| `GET` | `/auth/me` | 当前用户、session 与 CSRF 状态 |
-| `POST` | `/auth/login` | 密码登录，body: `{ email, password }` |
-| `POST` | `/auth/logout` | 删除当前 session |
-| `POST` | `/auth/sessions/purge-expired` | 管理员清理过期 session 行 |
-| `GET` | `/auth/audit` | 管理员查看最近 100 条审计日志 |
-| `GET` | `/spaces` | 当前用户可读空间及其文档 |
-| `POST` | `/spaces` | 管理员创建空间 |
-| `GET` | `/spaces/:id` | 读取单个空间及其可见文档 |
-| `PATCH` | `/spaces/:id` | 管理员更新空间元数据 |
-| `DELETE` | `/spaces/:id` | 管理员删除空间（需先清空其下文档） |
-| `GET` | `/spaces/:id/members` | 查看空间成员角色 |
-| `PUT` | `/spaces/:id/members` | 管理员批量设置空间 viewer/editor/null |
-| `PUT` | `/spaces/:id/members/:memberId` | 管理员设置空间 viewer/editor/null |
-| `GET` | `/documents` | 当前用户可读文档 |
-| `GET` | `/documents/trash` | 管理员查看回收站 |
-| `POST` | `/documents/trash/purge-expired` | 管理员清理到期回收站项目 |
-| `GET` | `/documents/public/:token` | 公开分享链接读取文档 |
-| `GET` | `/documents/:id` | 读取单篇文档 |
-| `POST` | `/documents` | 在可编辑空间创建文档 |
-| `POST` | `/documents/upload` | 上传 HTML、识别标题摘要并保存原文 |
-| `PATCH` | `/documents/:id` | 文档 editor 更新文档 |
-| `DELETE` | `/documents/:id` | 文档 editor 移入回收站 |
-| `POST` | `/documents/:id/restore` | 管理员恢复回收站文档 |
-| `DELETE` | `/documents/:id/permanent` | 管理员永久删除文档 |
-| `GET` | `/documents/:id/share` | 查看文档分享状态 |
-| `GET` | `/documents/:id/share/members` | 搜索可邀请成员 |
-| `PATCH` | `/documents/:id/share` | 更新公开链接、成员分享、轮换 token |
-| `PUT` | `/documents/:id/members/:memberId` | 设置文档 viewer/editor/null |
-| `GET` | `/members` | 管理员查看成员 |
-| `GET` | `/members/permissions` | 管理员查看空间权限矩阵 |
-| `POST` | `/members` | 管理员创建成员 |
-| `PATCH` | `/members/:id` | 管理员更新成员姓名、工作区角色或密码 |
-| `DELETE` | `/members/:id` | 管理员删除成员 |
+所有前端请求走 `/api` 前缀；非 `GET` 的会话写请求必须带 `X-Atlas-CSRF` header（值取自 `atlas_csrf` cookie）。主要路由分组：
 
-非 `GET` 请求在 cookie session 下必须带 `X-Atlas-CSRF` header，值来自 `atlas_csrf` cookie。
-
-## 权限模型
-
-Atlas 有三层权限：
-
-- 工作区角色：`admin`、`editor`、`viewer`。当前只有 `admin` 能管理成员、空间、回收站和审计日志。
-- 空间角色：`editor`、`viewer`、`null`。空间 editor 可在该空间创建/修改文档；viewer 只能读。
-- 文档成员角色：`editor`、`viewer`、`null`。文档成员分享可以给没有空间权限的人单篇访问权。
-
-读取文档时，公开文章对任何人可读；受邀文章对管理员、作者、空间成员或文档成员可读；私密文章仅管理员和作者可读。编辑文档时，公开/受邀文章允许管理员、作者、空间 editor 或文档 editor 可写；私密文章仅管理员和作者可写。软删除后的文档不再从普通读取接口返回，只能由管理员从回收站恢复或永久删除。
-
-## 数据库与迁移
-
-Drizzle schema 在 `apps/api/src/db/schema.ts`，迁移文件在 `apps/api/src/db/migrations/`。默认数据库文件在 `apps/api/data/atlas.sqlite`，`client.ts` 和 `migrate.ts` 都按 API 包目录定位默认路径，所以无论从仓库根目录还是 `apps/api` 目录执行脚本都一致。
-
-改 schema 后：
-
-```bash
-bun run --filter @atlas/api db:generate
-bun run --filter @atlas/api db:migrate
-bun run --filter @atlas/api db:seed
-```
-
-`db:seed` 会清空并重灌公开开发/演示数据、空间权限、文档成员和公开链接。演示成员共用固定密码，仅用于本地体验与测试；测试会创建独立的 `test-atlas.sqlite` 并在结束后删除。
+| 分组 | 端点示例 |
+|---|---|
+| **会话** | `POST /auth/login` · `POST /auth/logout` · `GET /auth/me` · `GET /auth/audit` |
+| **空间** | `GET /spaces` · `POST /spaces` · `PATCH/DELETE /spaces/:id` · `PUT /spaces/:id/members` |
+| **文件夹** | 在空间下创建 / 移动 / 软删除嵌套文件夹 |
+| **文档** | `POST /documents/upload` · `PATCH /documents/:id` · `GET /documents/trash` · `PATCH /documents/:id/share` · `GET /documents/public/:token` |
+| **分组** | 分组增删改、能力配置、成员归属、对目标授权 |
+| **成员** | `GET/POST /members` · `GET /members/permissions`（权限矩阵） |
 
 ## 安全边界
 
-已实现：
+- 密码用 `Bun.password` 校验 bcrypt hash；登录失败统一返回 `401`，不区分邮箱不存在 / 密码错误。
+- Session cookie 为 `HttpOnly` + `SameSite=Lax`，30 天有效，生产环境默认带 `Secure`；写请求要求双提交 CSRF token。
+- **上传的 HTML 不做服务端清洗**：原样入库（仅 8 MB 大小校验），阅读/预览页用 `sandbox="allow-scripts allow-forms allow-popups"` 的 iframe 隔离。沙箱**不含** `allow-same-origin`，文档脚本拿不到父页 cookie/localStorage——**这个 sandbox 是唯一的隔离边界，切勿移除**。
+- 关键写操作写入 `audit_logs`；管理员可清理过期 session 与回收站。
 
-- 密码登录使用 `Bun.password` 校验 bcrypt hash。
-- 登录失败统一返回 `401 Email or password is incorrect.`，不会区分邮箱不存在、无密码账号或密码错误。
-- 登录失败按客户端 IP + email 做短窗口限速；只有显式设置 `ATLAS_TRUST_PROXY=true` 时才信任代理转发的客户端 IP 头。
-- session cookie 为 `HttpOnly`、`SameSite=Lax`，有效期 30 天；生产运行环境默认带 `Secure`。
-- 真实 session 写请求要求 `X-Atlas-CSRF` header；前端 `api-client.ts` 自动从 `atlas_csrf` cookie 注入。
-- 成员响应会剔除 `passwordHash`。
-- **HTML 不做服务端清洗（no server-side sanitization）**：上传的 HTML 原样入库（仅做 8 MB 大小校验，见 `apps/api/src/lib/html-limits.ts`），阅读页与预览页用 iframe `sandbox="allow-scripts allow-forms allow-popups"` 隔离原始 HTML。由于沙箱**不含** `allow-same-origin`，文档脚本拿不到父页的 cookie/localStorage——**这个 sandbox iframe 是唯一的隔离边界**。文档脚本被有意允许在沙箱内运行以保持原始交互效果，因此切勿移除 sandbox，也不要给文档来源以 same-origin 信任。
-- 公开链接支持禁用、撤销、到期、token 轮换、访问统计；已删除或过期文档不可公开访问。
-- 管理员可调用 `POST /auth/sessions/purge-expired` 清理过期 session 行。
-- 关键写操作会写入 `audit_logs`。
+## 路线图
 
-仍需上线前处理：
+- [ ] **前端 e2e** —— Playwright 覆盖登录 / 上传 / 分享 / 回收站 / 权限切换关键路径
+- [ ] **生产级鉴权体验** —— 邮箱验证、邀请成员、找回密码、SSO/OIDC、Session 管理页
+- [ ] **HTML 安全加固** —— 资源代理、图片/下载白名单、恶意样本回归集、iframe 权限复核
+- [ ] **审计与分享 UI 完整化** —— 审计日志筛选/分页、公开访问统计、noindex 落到公开页
 
-- 把 CORS origin 从 localhost 改成部署域名白名单。
-- 增加 CSP、iframe sandbox 策略评审、外链资源代理/下载策略、HTML 恶意样本回归集。
-- 加邮箱验证、找回密码、邀请流、SSO/OIDC 或接入成熟 auth 服务。
-- 给审计日志做筛选、分页和前端查看 UI。
+## 许可证
 
-## 说明
+本项目以 [MIT License](LICENSE) 开源。
 
-- 前端代码扁平在 `apps/web/src/` 下，`.tsx` 已纳入 typecheck 与 Biome 检查；少量宽松类型集中在 `loose-types.ts`。
-- 演示种子数据在 `apps/api/src/db/seed-data.ts`，由 `db:seed` 写入示例数据库；运行时前端不读 fixtures。
-- API 用 `bun:sqlite` 原生驱动，无需 `better-sqlite3`。
-- 前端 API 调用集中在 `apps/web/src/api-client.ts` 和 `apps/web/src/data-hooks.ts`，避免把后端 `bun:sqlite` 类型拖入浏览器工程。
+---
 
-## 还没做的事
-
-按优先级排：
-
-1. **前端 e2e** —— 用 Playwright 覆盖登录、上传、分享、回收站、权限切换和公开链接关键路径。
-2. **生产级鉴权体验** —— 邮箱验证、邀请成员、找回密码、SSO/OIDC、session 管理页面和登录 UI。
-3. **HTML 安全加固** —— CSP、资源代理、下载/图片白名单、恶意样本测试集、iframe sandbox 权限复核。
-4. **审计与分享 UI 完整化** —— 审计日志筛选/分页、公开访问统计图、noindex meta 落到公开页面 HTML。
-5. **回收站策略细化** —— 定时任务调度、永久删除确认 UI；空间删除已改为「非空则阻止」，后续可补充文档迁移到指定空间的选项。
-6. **继续收紧前端类型边界** —— 减少 `Loose` 使用，补齐 props/state 类型，并把前端原型组件拆出更稳定的数据边界。
-
-## 常见问题
-
-**Q: `bun install` 报 `Cannot find module '@atlas/shared'`?**
-不会发生 —— Bun 自动 link workspace。如果真碰到，删掉 `node_modules` 和 `bun.lock` 重装。
-
-**Q: `bun:sqlite` 在 Windows 报错？**
-原生不支持，必须用 WSL2。
-
-**Q: 不登录可以看到什么？**
-未登录时是游客身份，只能查看公开文章。受邀和私密文章需要登录后按空间权限、单篇邀请、作者或管理员身份判断。
-
-**Q: 改了 `apps/api/src/db/schema.ts` 后怎么办？**
-跑 `bun run --filter @atlas/api db:generate` 生成新迁移，再 `db:migrate` 应用。改完建议接着跑 `bun test apps/api/src`。
+<div align="center">
+<sub>使用 Bun · React 19 · Hono · Drizzle 构建 · 不依赖 Node.js / Docker</sub>
+</div>
