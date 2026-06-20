@@ -11,12 +11,19 @@ import { groupsRouter } from './routes/groups';
 import { membersRouter } from './routes/members';
 import { spacesRouter } from './routes/spaces';
 
+// Allowed browser origins. Comma-separated in ATLAS_CORS_ORIGIN; defaults to the Vite dev server.
+// In production set this to the real frontend origin(s), e.g. https://atlas.example.com.
+const corsOrigins = (process.env.ATLAS_CORS_ORIGIN ?? 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const app = new Hono<AppEnv>()
   .use('*', logger())
   .use(
     '*',
     cors({
-      origin: ['http://localhost:5173'],
+      origin: corsOrigins,
       credentials: true,
       allowHeaders: ['Content-Type', 'Authorization', 'X-Atlas-CSRF'],
       allowMethods: ['GET', 'HEAD', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
