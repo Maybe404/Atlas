@@ -18,10 +18,14 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/ {
   dockMagnify: true,
 } /*EDITMODE-END*/;
 
-// Persisted across reloads under atlas_tweaks. The theme is read-once from here
-// on boot so the user's explicit choice survives, and a missing entry means
-// "never picked" — in that case we follow the OS color scheme (T5).
+// Persisted across reloads under atlas_tweaks (framedDoc, dockMagnify, and the
+// last-applied theme for fast restore). Whether the user *explicitly* picked a
+// theme is tracked SEPARATELY under atlas_theme_explicit — that flag, not the
+// mere presence of a persisted theme, is what locks the OS-follow behaviour.
+// (Persisting the theme alone used to lock OS-follow after the very first load;
+// the separate flag is the fix — T5.)
 const TWEAKS_STORAGE_KEY = 'atlas_tweaks';
+const THEME_EXPLICIT_KEY = 'atlas_theme_explicit';
 
 function prefersDarkScheme(): boolean {
   return (
@@ -29,6 +33,23 @@ function prefersDarkScheme(): boolean {
     typeof window.matchMedia === 'function' &&
     window.matchMedia('(prefers-color-scheme: dark)').matches
   );
+}
+
+// True only once the user has actively chosen a theme (toolbar toggle / tweaks
+// panel). An OS-followed value never sets this, so follow-the-system keeps
+// working until there's a real choice to respect.
+function themeChosenExplicitly(): boolean {
+  try {
+    return localStorage.getItem(THEME_EXPLICIT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markThemeExplicit() {
+  try {
+    localStorage.setItem(THEME_EXPLICIT_KEY, '1');
+  } catch {}
 }
 
 function readSavedTweaks(): Partial<typeof TWEAK_DEFAULTS> | null {
@@ -127,36 +148,34 @@ function App() {
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
   const [tweakInitialized, setTweakInitialized] = useState(false);
 
-  // Boot: on first render, hydrate from localStorage (or follow the OS color
-  // scheme when nothing is saved yet). useTweaks seeds from defaults, so this
-  // is the one moment we override them. Runs once.
+  // Boot: hydrate once. Non-theme prefs always restore from storage. The theme
+  // restores from storage ONLY if it was an explicit choice — otherwise we take
+  // the current OS scheme, never a stale OS-followed value that happened to be
+  // persisted last session. useTweaks seeds from defaults, so this is the one
+  // moment we override them.
   useEffect(() => {
     if (tweakInitialized) return;
     setTweakInitialized(true);
     const saved = readSavedTweaks();
-    if (saved?.theme) {
-      // Respect an explicit prior choice — restore every persisted key.
-      setTweak({ ...TWEAK_DEFAULTS, ...saved });
-    } else if (prefersDarkScheme()) {
-      setTweak({ theme: 'dark' });
-    }
-    // else: defaults (warm) already win
+    const theme =
+      themeChosenExplicitly() && saved?.theme ? saved.theme : prefersDarkScheme() ? 'dark' : 'warm';
+    setTweak({ ...TWEAK_DEFAULTS, ...(saved ?? {}), theme });
   }, [setTweak, tweakInitialized]);
 
   // Persist whenever tweaks change (after the initial hydration settles in).
+  // Safe to persist the theme here even when it's OS-followed — boot only reuses
+  // a persisted theme when the explicit flag is set.
   useEffect(() => {
     if (!tweakInitialized) return;
     writeSavedTweaks(tweaks as typeof TWEAK_DEFAULTS);
   }, [tweaks, tweakInitialized]);
 
-  // Follow OS color-scheme changes ONLY while the user has not explicitly
-  // picked a theme — once they have (saved.theme exists), their choice is
-  // locked and system flips no longer override it.
+  // Follow OS color-scheme changes until the user explicitly picks a theme.
   useEffect(() => {
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     const handler = (e: MediaQueryListEvent) => {
-      if (readSavedTweaks()?.theme) return;
+      if (themeChosenExplicitly()) return;
       setTweak({ theme: e.matches ? 'dark' : 'warm' });
     };
     mq.addEventListener('change', handler);
@@ -243,6 +262,7 @@ function App() {
 
   const cycleTheme = useCallback(
     (to: string) => {
+      markThemeExplicit();
       setTweak({ theme: to });
     },
     [setTweak],
@@ -567,7 +587,10 @@ function App() {
           <TweakRadio
             label="模式"
             value={tweaks.theme}
-            onChange={(v: Loose) => setTweak({ theme: v })}
+            onChange={(v: Loose) => {
+              markThemeExplicit();
+              setTweak({ theme: v });
+            }}
             options={[
               { label: '浅', value: 'light' },
               { label: '暖', value: 'warm' },

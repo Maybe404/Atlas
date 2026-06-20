@@ -694,9 +694,9 @@ html { transition: background 0.3s var(--ease-soft); }
 .page-head h1 {
   font-family: var(--font-display);
   font-weight: 600;
-  font-size: 34px;
-  line-height: 1.1;
-  letter-spacing: -0.022em;
+  font-size: 28px;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
   margin: 0 0 10px;
   color: var(--ink);
 }
@@ -795,6 +795,7 @@ html { transition: background 0.3s var(--ease-soft); }
   padding: 24px 36px 48px;
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  align-content: start;
   gap: 18px;
 }
 .doc-card {
@@ -806,9 +807,22 @@ html { transition: background 0.3s var(--ease-soft); }
   display: flex; flex-direction: column;
   gap: 10px;
   position: relative;
+  overflow: hidden;
   transition: transform var(--dur) var(--ease-soft), box-shadow var(--dur) var(--ease-soft);
   border: 1px solid var(--hairline-2);
 }
+/* Category strip — a 3px left edge tinted by the doc's colour. The colour comes
+   in as an inline --card-strip custom property (set from theme-tokens spaceColor
+   in space-index-view); a missing value falls back to a neutral. Using a var
+   rather than a colour class avoids colliding with the global .dot-* fills. */
+.doc-card::before {
+  content: '';
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 3px;
+  background: var(--card-strip, #c7c7cc);
+}
+[data-theme="dark"] .doc-card::before { background: var(--card-strip, #48484a); }
 .doc-card:hover {
   transform: translateY(-3px);
   box-shadow: var(--shadow-card-h);
@@ -851,7 +865,7 @@ html { transition: background 0.3s var(--ease-soft); }
   letter-spacing: -0.012em;
   flex: 1;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }

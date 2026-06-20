@@ -3,6 +3,7 @@ import { canRead } from '../auth';
 import { I } from '../chrome';
 import { docCategory, docChip } from '../labels';
 import type { Loose } from '../loose-types';
+import { spaceColor } from '../theme-tokens';
 import { clickableProps, EmptyState } from '../ui-kit';
 import { accentDot, dotClass } from './shared';
 
@@ -165,6 +166,7 @@ export function SpaceIndexView({ ctx, spaces = [], members = [], user, onNavigat
                     () => onNavigate({ view: 'reader', spaceId: space.id, docId: doc.id }),
                     { label: doc.title },
                   )}
+                  style={{ '--card-strip': doc.dot ? spaceColor(doc.dot) : undefined } as Loose}
                 >
                   <div className="card-head">
                     <div className={`dot ${dotClass(doc.dot || 'slate')}`}></div>
