@@ -32,7 +32,5 @@ apps/api/*.sqlite-*
 .codegraph/
 
 # AI collaboration / internal dev notes (not for public repo)
-CLAUDE.md
-AGENTS.md
 todo.md
 docs/superpowers/
