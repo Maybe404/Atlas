@@ -18,6 +18,35 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/ {
   dockMagnify: true,
 } /*EDITMODE-END*/;
 
+// Persisted across reloads under atlas_tweaks. The theme is read-once from here
+// on boot so the user's explicit choice survives, and a missing entry means
+// "never picked" — in that case we follow the OS color scheme (T5).
+const TWEAKS_STORAGE_KEY = 'atlas_tweaks';
+
+function prefersDarkScheme(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+}
+
+function readSavedTweaks(): Partial<typeof TWEAK_DEFAULTS> | null {
+  try {
+    const raw = localStorage.getItem(TWEAKS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') return parsed;
+  } catch {}
+  return null;
+}
+
+function writeSavedTweaks(tweaks: typeof TWEAK_DEFAULTS) {
+  try {
+    localStorage.setItem(TWEAKS_STORAGE_KEY, JSON.stringify(tweaks));
+  } catch {}
+}
+
 // Views that keep the directory sidebar (reader + the per-space index — admin
 // pages are full-width). Clicking a space name navigates to its index without
 // losing the tree.
@@ -96,6 +125,43 @@ function App() {
   const [chromeVisible, setChromeVisible] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [tweakInitialized, setTweakInitialized] = useState(false);
+
+  // Boot: on first render, hydrate from localStorage (or follow the OS color
+  // scheme when nothing is saved yet). useTweaks seeds from defaults, so this
+  // is the one moment we override them. Runs once.
+  useEffect(() => {
+    if (tweakInitialized) return;
+    setTweakInitialized(true);
+    const saved = readSavedTweaks();
+    if (saved?.theme) {
+      // Respect an explicit prior choice — restore every persisted key.
+      setTweak({ ...TWEAK_DEFAULTS, ...saved });
+    } else if (prefersDarkScheme()) {
+      setTweak({ theme: 'dark' });
+    }
+    // else: defaults (warm) already win
+  }, [setTweak, tweakInitialized]);
+
+  // Persist whenever tweaks change (after the initial hydration settles in).
+  useEffect(() => {
+    if (!tweakInitialized) return;
+    writeSavedTweaks(tweaks as typeof TWEAK_DEFAULTS);
+  }, [tweaks, tweakInitialized]);
+
+  // Follow OS color-scheme changes ONLY while the user has not explicitly
+  // picked a theme — once they have (saved.theme exists), their choice is
+  // locked and system flips no longer override it.
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => {
+      if (readSavedTweaks()?.theme) return;
+      setTweak({ theme: e.matches ? 'dark' : 'warm' });
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [setTweak]);
 
   useEffect(() => {
     document.documentElement.setAttribute(

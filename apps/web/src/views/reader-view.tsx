@@ -5,6 +5,7 @@ import { useDocument } from '../data-hooks';
 import type { Loose } from '../loose-types';
 import { copyMarkdownRich, copyMarkdownSource } from '../markdown/copy';
 import { getScroll, setScroll } from '../reader-progress';
+import { Skeleton } from '../ui-kit';
 import { MarkdownEditorDialog } from './markdown-editor-dialog';
 import { MarkdownReader } from './markdown-reader';
 import { dotClass } from './shared';
@@ -101,7 +102,7 @@ export function ReaderView({
     const earlyDocId = detailDoc?.id || doc?.id || ctx.docId;
     return (
       <div className="main-card reader-card">
-        <div className={`reader-meta-bar ${chromeVisible ? '' : 'meta-bar-hidden'}`}>
+        <div className={`reader-meta-bar corner ${chromeVisible ? '' : 'meta-bar-hidden'}`}>
           {doc && (
             <>
               <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
@@ -116,7 +117,7 @@ export function ReaderView({
             </button>
           )}
           {allowed && earlyDocId && (
-            <button type="button" className="pill-btn" onClick={() => onShare(earlyDocId)}>
+            <button type="button" className="pill-btn ghost" onClick={() => onShare(earlyDocId)}>
               <_I.share />
               <span>分享</span>
             </button>
@@ -197,7 +198,7 @@ export function ReaderView({
 
   return (
     <div className="main-card reader-card">
-      <div className={`reader-meta-bar ${chromeVisible ? '' : 'meta-bar-hidden'}`}>
+      <div className={`reader-meta-bar corner ${chromeVisible ? '' : 'meta-bar-hidden'}`}>
         <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
         <span className="doc-title">{doc.title}</span>
         {allowed ? (
@@ -220,7 +221,7 @@ export function ReaderView({
               </button>
             )}
             {allowed && (
-              <button type="button" className="pill-btn" onClick={() => onShare(doc.id)}>
+              <button type="button" className="pill-btn ghost" onClick={() => onShare(doc.id)}>
                 <_I.share />
                 <span>分享</span>
               </button>
@@ -228,7 +229,7 @@ export function ReaderView({
             {allowed && isMarkdown && (
               <>
                 <button type="button" className="pill-btn ghost" onClick={() => doCopy('source')}>
-                  {copiedMode === 'source' ? <_I.check /> : <_I.copy />}
+                  {copiedMode === 'source' ? <_I.check /> : <_I.code />}
                   <span>{copiedMode === 'source' ? '已复制' : '复制源码'}</span>
                 </button>
                 <button type="button" className="pill-btn ghost" onClick={() => doCopy('rich')}>
@@ -236,7 +237,11 @@ export function ReaderView({
                   <span>{copiedMode === 'rich' ? '已复制' : '带格式'}</span>
                 </button>
                 {detailDoc?.canEdit && (
-                  <button type="button" className="pill-btn" onClick={() => setEditing(true)}>
+                  <button
+                    type="button"
+                    className="pill-btn accent"
+                    onClick={() => setEditing(true)}
+                  >
                     <_I.edit />
                     <span>编辑</span>
                   </button>
@@ -257,7 +262,17 @@ export function ReaderView({
       <div className={`reader-iframe-wrap ${framedDoc ? 'framed' : ''}`} onScroll={onChromeScroll}>
         {allowed ? (
           detailQuery.isLoading ? (
-            <div className="app-state-banner">正在加载正文…</div>
+            <div className="reader-skeleton" role="status" aria-label="正在加载正文">
+              <Skeleton w="60%" h={28} r={6} />
+              <Skeleton w="40%" h={14} r={4} />
+              <div className="reader-skeleton-body">
+                <Skeleton w="100%" h={12} />
+                <Skeleton w="92%" h={12} />
+                <Skeleton w="78%" h={12} />
+                <Skeleton w="85%" h={12} />
+                <Skeleton w="60%" h={12} />
+              </div>
+            </div>
           ) : isMarkdown ? (
             <MarkdownReader
               content={detailDoc.html || ''}

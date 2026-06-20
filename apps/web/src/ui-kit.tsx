@@ -1,6 +1,8 @@
 // Shared UI primitives — a themed dropdown and a confirm dialog that replace the
 // native <select> / window.confirm() controls, so every surface matches Atlas's
 // design instead of falling back to the small, system-styled browser widgets.
+
+import type { CSSProperties, ReactNode } from 'react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Loose } from './loose-types';
@@ -331,6 +333,56 @@ export function ConfirmRoot() {
           </button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── Skeleton ────────────────────────────────────────────────────────────────
+// Content-shaped placeholder block with a soft shimmer. Renders as an inline
+// <span> (so it can sit in text flow) but is sized via width/height so it
+// works anywhere a content rectangle is needed. aria-hidden so screen readers
+// skip the placeholder noise.
+export function Skeleton({
+  w,
+  h = 14,
+  r = 6,
+  className = '',
+}: {
+  w?: string | number;
+  h?: number;
+  r?: number;
+  className?: string;
+}) {
+  const style: CSSProperties = {
+    width: w,
+    height: h,
+    borderRadius: r,
+    display: 'block',
+  };
+  return <span className={`skeleton ${className}`.trim()} style={style} aria-hidden="true" />;
+}
+
+// ── EmptyState ──────────────────────────────────────────────────────────────
+// Centered "nothing here yet" panel — a glyph (optional), a title, a hint, and
+// an optional CTA. role="status" so ATs announce the empty state, which beats
+// a silently blank grid.
+export function EmptyState({
+  glyph,
+  title,
+  desc,
+  action,
+}: {
+  glyph?: ReactNode;
+  title: string;
+  desc?: string;
+  action?: ReactNode;
+}) {
+  return (
+    <div className="empty-state" role="status">
+      {glyph && <div className="empty-state-glyph">{glyph}</div>}
+      <div className="empty-state-title">{title}</div>
+      {desc && <div className="empty-state-desc">{desc}</div>}
+      {action && <div className="empty-state-action">{action}</div>}
     </div>
   );
 }

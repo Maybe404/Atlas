@@ -158,6 +158,12 @@ html { transition: background 0.3s var(--ease-soft); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  /* The global rule above would make the infinite shimmer flash rapidly; pin
+     it to a static fill instead. Same for the stagger entrance — a 0.001ms
+     duration with backwards fill still works, but being explicit avoids any
+     render glitch from the keyframe mid-state. */
+  .skeleton { animation: none; }
+  .tree-anim-item { animation: none; }
 }
 
 /* utility */
@@ -558,6 +564,83 @@ html { transition: background 0.3s var(--ease-soft); }
   white-space: nowrap;
 }
 
+/* Top-right corner toolbar variant — replaces the top-center glass pill so it
+   stops covering the first line of the article, and stays clear of the right
+   edge (which the markdown TOC handle + panel already own). Buttons collapse to
+   icon-only circles; title/author/separator are hidden (the topbar breadcrumb
+   already carries the title). Hides fully with the chrome instead of leaving a
+   sliver — it's out of the reading column, so no permanent hover-handle needed. */
+.reader-meta-bar.corner {
+  left: auto;
+  right: 14px;
+  transform: none;
+  gap: 2px;
+  padding: 4px;
+  max-width: none;
+  animation: none;
+}
+.reader-meta-bar.corner .dot,
+.reader-meta-bar.corner .doc-title,
+.reader-meta-bar.corner .author,
+.reader-meta-bar.corner .sep,
+.reader-meta-bar.corner .mono,
+.reader-meta-bar.corner > [style*='flex: 1'],
+.reader-meta-bar.corner .reader-lock-chip { display: none; }
+.reader-meta-bar.corner .pill-btn {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  border-radius: 50%;
+}
+.reader-meta-bar.corner .pill-btn span { display: none; }
+.reader-meta-bar.corner .pill-btn svg { width: 15px; height: 15px; }
+/* Edit is the single accented action — coral fill (follows the theme accent),
+   everything else stays muted ghost. */
+.reader-meta-bar.corner .pill-btn.accent {
+  background: var(--accent);
+  color: #fff;
+}
+.reader-meta-bar.corner .pill-btn.accent:hover {
+  background: var(--accent);
+  filter: brightness(0.94);
+}
+
+/* Hidden (chrome collapsed): slide up and out, fully gone — matches the dock's
+   auto-hide so the whole reading surface clears together. */
+.reader-meta-bar.corner.meta-bar-hidden {
+  transform: translateY(-130%);
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Narrow screens: a top-right cluster overlaps the now full-width article, so
+   fall back to a centered bottom bar with visible labels — out of the way of
+   the first paragraph and clear of the TOC. */
+@media (max-width: 760px) {
+  .reader-meta-bar.corner {
+    top: auto;
+    bottom: 16px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    max-width: calc(100% - 32px);
+    overflow-x: auto;
+  }
+  .reader-meta-bar.corner .pill-btn {
+    width: auto;
+    height: auto;
+    padding: 6px 12px;
+    border-radius: var(--r-pill);
+  }
+  .reader-meta-bar.corner .pill-btn span { display: inline; }
+  .reader-meta-bar.corner .pill-btn svg { width: 13px; height: 13px; }
+  .reader-meta-bar.corner.meta-bar-hidden {
+    transform: translateX(-50%) translateY(140%);
+  }
+}
+
 /* iframe border toggle (Tweak) */
 .reader-iframe-wrap.framed {
   padding: 24px;
@@ -568,6 +651,17 @@ html { transition: background 0.3s var(--ease-soft); }
   box-shadow: var(--shadow-card-h);
   height: calc(100% - 0px);
 }
+
+/* Loading skeleton — mimics the rendered article's proportions so the load
+   transition into MarkdownReader / iframe doesn't visibly jump. */
+.reader-skeleton {
+  padding: 48px 64px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.reader-skeleton > * + * { margin-top: 10px; }
+.reader-skeleton-body { margin-top: 24px; }
+.reader-skeleton-body > * + * { margin-top: 14px; }
 
 /* ─────────────────────────────────────────────────────────────────────────
    SPACE INDEX — card grid
@@ -1673,18 +1767,19 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   background: linear-gradient(to top, var(--canvas), transparent);
 }
 
-/* animated list items (sub-tree leaves) — scale+fade in/out as they enter and
-   leave the viewport (React Bits AnimatedList). The per-item stagger is capped
-   in AnimatedItem so scrolling never has to wait out a long cascade. */
+/* animated list items (sub-tree leaves) — scale+fade in on mount with a capped
+   per-item stagger (driven by --anim-delay, set per node in AnimatedItem).
+   This used to be IntersectionObserver-driven; it is now CSS-only so a 50+
+   node tree doesn't pay one observer + setTimeout per node on the first frame.
+   The trade-off: scrolling no longer re-triggers the animation — the cascade
+   plays once on mount / page-change, which is the only time it's useful. */
 .tree-anim-item {
-  opacity: 0;
-  transform: scale(0.7);
-  transition: opacity 0.22s var(--ease-soft), transform 0.28s var(--ease-spring);
-  transition-delay: var(--anim-delay, 0ms);
+  animation: tree-anim-in 0.28s var(--ease-spring) backwards;
+  animation-delay: var(--anim-delay, 0ms);
 }
-.tree-anim-item.in {
-  opacity: 1;
-  transform: scale(1);
+@keyframes tree-anim-in {
+  from { opacity: 0; transform: scale(0.7); }
+  to   { opacity: 1; transform: scale(1); }
 }
 
 /* space row actions — only visible on hover (within space header) */
@@ -2029,11 +2124,9 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
     opacity 0.32s var(--ease-soft);
   will-change: transform, opacity;
 }
-.reader-meta-bar.meta-bar-hidden {
-  transform: translateX(-50%) translateY(-130%);
-  opacity: 0;
-  pointer-events: none;
-}
+/* The .corner variant + its .meta-bar-hidden state live next to the toolbar
+   rules above. The bar no longer parks at the top center — it sits top-right
+   and slides fully up/out when chrome hides. */
 
 /* When chrome is hidden, the app pulls the main grid up — softens the gap */
 .app.chrome-hidden {
@@ -2049,6 +2142,7 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 .cmdk-results,
 .card-body-scroll,
 .scroll-list,
+.md-scroll,
 .rows-scroll .scroll-list,
 .doc-list-scroll .scroll-list {
   scrollbar-width: none;
@@ -2061,6 +2155,7 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 .cmdk-results::-webkit-scrollbar,
 .card-body-scroll::-webkit-scrollbar,
 .scroll-list::-webkit-scrollbar,
+.md-scroll::-webkit-scrollbar,
 .rows-scroll .scroll-list::-webkit-scrollbar,
 .doc-list-scroll .scroll-list::-webkit-scrollbar {
   width: 0;
@@ -3394,11 +3489,9 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   white-space: nowrap;
 }
 .um-role.role-admin  { background: rgba(20, 110, 220, 0.10); color: #1a6bcc; }
-.um-role.role-editor { background: rgba(180, 95, 30, 0.12);  color: #b25f1e; }
-.um-role.role-viewer { background: rgba(80, 95, 110, 0.12);  color: #5b6776; }
+.um-role.role-member { background: rgba(80, 95, 110, 0.12);  color: #5b6776; }
 [data-theme="dark"] .um-role.role-admin  { background: rgba(60, 140, 255, 0.18); color: #7eb6ff; }
-[data-theme="dark"] .um-role.role-editor { background: rgba(255, 160, 80, 0.18);  color: #ffb47a; }
-[data-theme="dark"] .um-role.role-viewer { background: rgba(160, 175, 195, 0.18); color: #c8d0dc; }
+[data-theme="dark"] .um-role.role-member { background: rgba(160, 175, 195, 0.18); color: #c8d0dc; }
 .um-sep {
   height: 1px;
   background: var(--hairline-2);
@@ -4494,3 +4587,63 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 .share-suggest-row .avatar { background: var(--parchment); color: var(--ink-2); }
 .share-suggest-row .name { font-size: 13.5px; color: var(--ink); }
 .share-suggest-row .email { font-size: 12px; color: var(--ink-4); }
+
+/* ─────────────────────────────────────────────────────────────────────────
+   SKELETON — shimmer placeholder (ui-kit Skeleton)
+   ───────────────────────────────────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(90deg,
+    var(--hairline-2) 0%,
+    rgba(0,0,0,0.06) 50%,
+    var(--hairline-2) 100%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s infinite linear;
+}
+[data-theme="dark"] .skeleton {
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.04) 0%,
+    rgba(255,255,255,0.10) 50%,
+    rgba(255,255,255,0.04) 100%);
+  background-size: 200% 100%;
+}
+[data-theme="warm"] .skeleton {
+  background: linear-gradient(90deg,
+    var(--hairline-2) 0%,
+    rgba(80,50,20,0.07) 50%,
+    var(--hairline-2) 100%);
+  background-size: 200% 100%;
+}
+@keyframes skeleton-shimmer {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────
+   EMPTY STATE — centered "nothing here yet" (ui-kit EmptyState)
+   ───────────────────────────────────────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 80px 24px;
+  text-align: center;
+}
+.empty-state-glyph {
+  width: 56px;
+  height: 56px;
+  opacity: 0.45;
+  color: var(--ink-3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.empty-state-glyph svg { width: 100%; height: 100%; }
+.empty-state-title { font-size: 16px; font-weight: 500; color: var(--ink-2); }
+.empty-state-desc {
+  font-size: 13.5px;
+  color: var(--ink-4);
+  line-height: 1.6;
+  max-width: 320px;
+}
+.empty-state-action { margin-top: 4px; }

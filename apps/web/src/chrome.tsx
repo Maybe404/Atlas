@@ -252,6 +252,17 @@ const I = {
       />
     </svg>
   ),
+  code: (p: IconProps = {}) => (
+    <svg aria-hidden="true" width="13" height="13" viewBox="0 0 13 13" fill="none" {...p}>
+      <path
+        d="M4.8 3.8 2 6.5l2.8 2.7M8.2 3.8 11 6.5l-2.8 2.7"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
 };
 
 export { I };
@@ -749,49 +760,17 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
   );
 }
 
+// AnimatedItem — CSS-only staggered entrance. The old version attached one
+// IntersectionObserver + setTimeout per tree node, which on a 50+ node tree
+// meant 50+ observers and a noticeable first-frame reflow. The entrance is now
+// driven entirely by CSS (animation-delay from --anim-delay, capped at 8 so a
+// long list doesn't make trailing items wait). Scrolling no longer re-triggers
+// the animation, which is the intended trade-off — the cascade only plays on
+// mount / page-change, exactly when the user benefits from it.
 function AnimatedItem({ children, index = 0 }: Loose) {
-  const ref = useRef<Loose>(null);
-  const [inView, setInView] = useState(false);
-  // Capped stagger: keep the cascade on mount / page-change, but never let the
-  // delay grow with the index — otherwise items far down the list sat at
-  // index*30ms (~0.5s+) and seemed to "wait" before showing while scrolling.
   const delay = Math.min(index, 8) * 14;
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    // find nearest scroll container
-    let root = el.parentElement;
-    while (root && root !== document.body) {
-      const style = getComputedStyle(root);
-      if (/(auto|scroll)/.test(style.overflowY)) break;
-      root = root.parentElement;
-    }
-    const io = new IntersectionObserver(
-      (entries: Loose) => {
-        // In/out: items animate as they enter AND leave view (triggerOnce: false).
-        entries.forEach((en: Loose) => {
-          setInView(en.isIntersecting);
-        });
-      },
-      { root: root === document.body ? null : root, threshold: 0.2 },
-    );
-    io.observe(el);
-    // also flip on after a tick so initial items animate in
-    const t = setTimeout(() => {
-      const r = el.getBoundingClientRect();
-      if (r.top < window.innerHeight && r.bottom > 0) setInView(true);
-    }, 20 + delay);
-    return () => {
-      io.disconnect();
-      clearTimeout(t);
-    };
-  }, [delay]);
   return (
-    <div
-      ref={ref}
-      className={`tree-anim-item ${inView ? 'in' : ''}`}
-      style={{ '--anim-delay': `${delay}ms` } as React.CSSProperties}
-    >
+    <div className="tree-anim-item" style={{ '--anim-delay': `${delay}ms` } as React.CSSProperties}>
       {children}
     </div>
   );
