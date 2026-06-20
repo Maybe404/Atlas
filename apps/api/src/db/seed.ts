@@ -1,4 +1,5 @@
 import { eq } from 'drizzle-orm';
+import { isProductionRuntime } from '../lib/env';
 import { createPersonalSpace } from '../lib/personal-space';
 import { db } from './client';
 import {
@@ -16,11 +17,7 @@ import { ATLAS_DATA } from './seed-data';
 
 // Hard stop: this script wipes every table and loads demo fixtures. It must never run against a
 // production database. Set ATLAS_ALLOW_SEED=true only if you really mean to reset prod.
-const PROD_VALUES = new Set(['production', 'prod']);
-const isProd = [process.env.NODE_ENV, process.env.BUN_ENV, process.env.ATLAS_ENV].some(
-  (value) => value && PROD_VALUES.has(value.trim().toLowerCase()),
-);
-if (isProd && process.env.ATLAS_ALLOW_SEED !== 'true') {
+if (isProductionRuntime() && process.env.ATLAS_ALLOW_SEED !== 'true') {
   throw new Error(
     'Refusing to run the demo seed in production — it deletes all data. ' +
       'Use `db:create-admin` to bootstrap, or set ATLAS_ALLOW_SEED=true to override.',

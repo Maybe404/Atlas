@@ -5,8 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "bun --hot run src/server.ts",
-    "build": "bun build src/server.ts --target=bun --outdir=dist",
-    "start": "bun run dist/server.js",
+    "start": "bun run src/server.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run src/db/migrate.ts",
     "db:seed": "bun run src/db/seed.ts",

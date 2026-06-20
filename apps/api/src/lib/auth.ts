@@ -4,6 +4,7 @@ import { getCookie } from 'hono/cookie';
 import { db } from '../db/client';
 import { members, sessions } from '../db/schema';
 import { addDaysIso, nowIso } from './dates';
+import { envFlag, envPositiveNumber, isProductionRuntime } from './env';
 import { forbidden, tooManyRequests, unauthorized } from './http-error';
 import { makeToken } from './id';
 
@@ -25,13 +26,11 @@ const CSRF_HEADER = 'x-atlas-csrf';
 const CSRF_COOKIE = 'atlas_csrf';
 const LOGIN_FAILURE_MESSAGE = 'Email or password is incorrect.';
 const LOGIN_RATE_LIMIT_MESSAGE = 'Too many login attempts. Please try again later.';
-const LOGIN_FAILURE_LIMIT = positiveNumberEnv('ATLAS_LOGIN_RATE_LIMIT_MAX_FAILURES', 5);
-const LOGIN_FAILURE_WINDOW_MS = positiveNumberEnv(
+const LOGIN_FAILURE_LIMIT = envPositiveNumber('ATLAS_LOGIN_RATE_LIMIT_MAX_FAILURES', 5);
+const LOGIN_FAILURE_WINDOW_MS = envPositiveNumber(
   'ATLAS_LOGIN_RATE_LIMIT_WINDOW_MS',
   10 * 60 * 1000,
 );
-const TRUE_VALUES = new Set(['1', 'true', 'yes', 'on']);
-const PRODUCTION_VALUES = new Set(['production', 'prod']);
 
 type LoginFailureState = {
   count: number;
@@ -39,22 +38,6 @@ type LoginFailureState = {
 };
 
 const loginFailures = new Map<string, LoginFailureState>();
-
-function positiveNumberEnv(name: string, fallback: number) {
-  const value = Number(process.env[name]);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
-function envFlag(name: string) {
-  const value = process.env[name]?.trim().toLowerCase();
-  return value ? TRUE_VALUES.has(value) : false;
-}
-
-function isProductionRuntime() {
-  return [process.env.NODE_ENV, process.env.BUN_ENV, process.env.ATLAS_ENV].some((value) =>
-    value ? PRODUCTION_VALUES.has(value.trim().toLowerCase()) : false,
-  );
-}
 
 export function shouldUseSecureCookies() {
   if (isProductionRuntime()) return true;
