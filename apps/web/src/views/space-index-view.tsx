@@ -3,6 +3,7 @@ import { canRead } from '../auth';
 import { I } from '../chrome';
 import { docCategory, docChip } from '../labels';
 import type { Loose } from '../loose-types';
+import { clickableProps } from '../ui-kit';
 import { accentDot, dotClass } from './shared';
 
 const _I = I;
@@ -10,9 +11,10 @@ const _I = I;
 // ─────────────────────────────────────────────────────────────────────────
 // SPACE INDEX · card grid
 // ─────────────────────────────────────────────────────────────────────────
-export function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }: Loose) {
+export function SpaceIndexView({ ctx, spaces = [], members = [], user, onNavigate }: Loose) {
   const space = spaces.find((s: Loose) => s.id === ctx.spaceId) || spaces[0];
   const [filter, setFilter] = useState('all');
+  const canEditSpace = space?.role === 'editor' || user?.role === 'admin';
 
   const docs = useMemo(() => {
     let r = [...(space?.children || [])];
@@ -20,14 +22,7 @@ export function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }: L
     return r;
   }, [space, filter]);
 
-  const desc = (
-    {
-      s1: '面向工程团队的部署手册、RFC、架构笔记与事故复盘。所有公开链接保留作者署名。',
-      s2: '产品决策的素材库：用户访谈、可用性测试、优先级讨论与跨团队同步。',
-      s3: '视觉系统、版式实验、文案规范——一切关于「Atlas 看起来是什么样」的来源。',
-      s4: '个人草稿与笔记，默认仅自己可见。',
-    } as Record<string, string>
-  )[space?.id];
+  const desc = space?.description || `${space?.name || '空间'} 的文档集合。`;
 
   if (!space) {
     return (
@@ -68,6 +63,7 @@ export function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }: L
               { v: 'inherit', l: '继承' },
             ].map((t: Loose) => (
               <button
+                type="button"
                 key={t.v}
                 className={filter === t.v ? 'active' : ''}
                 onClick={() => setFilter(t.v)}
@@ -77,26 +73,41 @@ export function SpaceIndexView({ ctx, spaces = [], members = [], onNavigate }: L
             ))}
           </div>
           <span style={{ flex: 1 }}></span>
-          <button className="btn secondary">
-            <_I.upload width="13" height="13" />
-            <span>导入</span>
-          </button>
-          <button className="btn primary">
-            <_I.plus />
-            <span>新建文档</span>
-          </button>
+          {canEditSpace && (
+            <>
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => onNavigate({ view: 'admin-upload', spaceId: space.id })}
+              >
+                <_I.upload width="13" height="13" />
+                <span>导入</span>
+              </button>
+              <button
+                type="button"
+                className="btn primary"
+                onClick={() => onNavigate({ view: 'admin-docs', spaceId: space.id })}
+              >
+                <_I.plus />
+                <span>新建文档</span>
+              </button>
+            </>
+          )}
         </div>
 
         <div className="doc-grid">
           {docs.map((doc: Loose) => {
-            const locked = !canRead(doc);
+            const locked = !canRead(doc, user);
             const author =
               !locked && doc.author ? members.find((m: Loose) => m.id === doc.author) : null;
             return (
               <div
                 key={doc.id}
                 className="doc-card"
-                onClick={() => onNavigate({ view: 'reader', spaceId: space.id, docId: doc.id })}
+                {...clickableProps(
+                  () => onNavigate({ view: 'reader', spaceId: space.id, docId: doc.id }),
+                  { label: doc.title },
+                )}
               >
                 <div className="card-head">
                   <div className={`dot ${dotClass(doc.dot || 'slate')}`}></div>

@@ -1,7 +1,13 @@
 import { useEffect, useState } from 'react';
 import { AnimatedScrollList, I } from '../chrome';
 import type { Loose } from '../loose-types';
+import { confirmDialog, Select } from '../ui-kit';
 import { SPACE_COLOR_MAP } from './shared';
+
+const ROLE_OPTIONS = [
+  { value: 'admin', label: '管理员' },
+  { value: 'member', label: '成员' },
+];
 
 const _I2 = I;
 
@@ -90,12 +96,18 @@ export function MembersPane({
     );
   };
 
-  const deleteMember = (member: Loose) => {
+  const deleteMember = async (member: Loose) => {
     if (member.id === currentUser?.id) {
       pushToast?.({ msg: '不能删除当前登录成员' });
       return;
     }
-    if (!confirm(`确认删除成员「${member.name}」？该成员的文档会转交给当前管理员。`)) return;
+    const ok = await confirmDialog({
+      title: `删除成员「${member.name}」？`,
+      message: '该成员的文档会转交给当前管理员，此操作不可撤销。',
+      confirmLabel: '删除成员',
+      danger: true,
+    });
+    if (!ok) return;
     mutations.deleteMember(member.id, {
       onSuccess: () => {
         if (passwordMember === member.id) {
@@ -127,7 +139,11 @@ export function MembersPane({
             <h3>团队成员</h3>
             <div className="sub">所有成员对此列表可见</div>
           </div>
-          <button className="btn primary" onClick={() => setShowNewMember((v: Loose) => !v)}>
+          <button
+            type="button"
+            className="btn primary"
+            onClick={() => setShowNewMember((v: Loose) => !v)}
+          >
             <_I2.plus />
             <span>新增成员</span>
           </button>
@@ -135,8 +151,11 @@ export function MembersPane({
         {showNewMember && (
           <form className="member-create-row" onSubmit={submitNewMember}>
             <div className="field compact">
-              <label className="field-label">姓名</label>
+              <label className="field-label" htmlFor="nm-name">
+                姓名
+              </label>
               <input
+                id="nm-name"
                 className="input"
                 value={newMember.name}
                 onChange={(e: Loose) =>
@@ -146,8 +165,11 @@ export function MembersPane({
               />
             </div>
             <div className="field compact">
-              <label className="field-label">邮箱</label>
+              <label className="field-label" htmlFor="nm-email">
+                邮箱
+              </label>
               <input
+                id="nm-email"
                 className="input"
                 type="email"
                 value={newMember.email}
@@ -158,8 +180,11 @@ export function MembersPane({
               />
             </div>
             <div className="field compact">
-              <label className="field-label">初始密码</label>
+              <label className="field-label" htmlFor="nm-password">
+                初始密码
+              </label>
               <input
+                id="nm-password"
                 className="input"
                 type="password"
                 value={newMember.password}
@@ -171,17 +196,14 @@ export function MembersPane({
               />
             </div>
             <div className="field compact">
-              <label className="field-label">角色</label>
-              <select
+              <span className="field-label">角色</span>
+              <Select
                 className="input"
+                ariaLabel="新成员角色"
                 value={newMember.role}
-                onChange={(e: Loose) =>
-                  setNewMember((m: Loose) => ({ ...m, role: e.target.value }))
-                }
-              >
-                <option value="admin">管理员</option>
-                <option value="member">成员</option>
-              </select>
+                options={ROLE_OPTIONS}
+                onChange={(v: string) => setNewMember((m: Loose) => ({ ...m, role: v }))}
+              />
             </div>
             <div className="member-create-actions">
               <button type="button" className="btn ghost" onClick={() => setShowNewMember(false)}>
@@ -211,19 +233,15 @@ export function MembersPane({
                       <div className="name">{m.name}</div>
                       <div className="email mono">{m.email}</div>
                     </div>
-                    <select
-                      className="input"
+                    <Select
+                      ariaLabel={`${m.name} 的工作区角色`}
                       value={m.role}
-                      onChange={(e: Loose) => {
-                        mutations.updateMember(m.id, { role: e.target.value });
-                      }}
-                      style={{ padding: '6px 32px 6px 10px', fontSize: 13 }}
-                    >
-                      <option value="admin">管理员</option>
-                      <option value="member">成员</option>
-                    </select>
+                      options={ROLE_OPTIONS}
+                      onChange={(v: string) => mutations.updateMember(m.id, { role: v })}
+                    />
                     <div className="access-cell" style={{ position: 'relative' }}>
                       <button
+                        type="button"
                         className="access-trigger"
                         data-access-trigger
                         onClick={() => setEditingMember(editingMember === m.id ? null : m.id)}
@@ -248,6 +266,7 @@ export function MembersPane({
                           <span className="access-pill more">+{accessSpaces.length - 3}</span>
                         )}
                         <svg
+                          aria-hidden="true"
                           width="10"
                           height="10"
                           viewBox="0 0 10 10"
@@ -264,10 +283,15 @@ export function MembersPane({
                         </svg>
                       </button>
                       {editingMember === m.id && (
+                        // biome-ignore lint/a11y/noStaticElementInteractions: popover only stops outside-dismiss propagation; its rows are the real controls
                         <div className="access-pop" onMouseDown={(e: Loose) => e.stopPropagation()}>
                           <div className="access-pop-head">
                             <span>{m.name} · 空间访问</span>
-                            <button className="icon-btn" onClick={() => setEditingMember(null)}>
+                            <button
+                              type="button"
+                              className="icon-btn"
+                              onClick={() => setEditingMember(null)}
+                            >
                               <_I2.close />
                             </button>
                           </div>
@@ -291,18 +315,21 @@ export function MembersPane({
                                   <span className="access-pop-name">{s.name}</span>
                                   <div className="segmented access-seg">
                                     <button
+                                      type="button"
                                       className={role === null ? 'active' : ''}
                                       onClick={() => setMemberSpaceRole(m.id, s.id, null)}
                                     >
                                       无
                                     </button>
                                     <button
+                                      type="button"
                                       className={role === 'viewer' ? 'active' : ''}
                                       onClick={() => setMemberSpaceRole(m.id, s.id, 'viewer')}
                                     >
                                       仅读
                                     </button>
                                     <button
+                                      type="button"
                                       className={role === 'editor' ? 'active' : ''}
                                       onClick={() => setMemberSpaceRole(m.id, s.id, 'editor')}
                                     >
@@ -319,6 +346,7 @@ export function MembersPane({
                     <div className="joined">加入 · {m.joined}</div>
                     <div className="member-actions">
                       <button
+                        type="button"
                         className="icon-btn"
                         data-member-more
                         title="成员操作"
@@ -330,11 +358,14 @@ export function MembersPane({
                         <_I2.more />
                       </button>
                       {menuOpenId === m.id && (
+                        // biome-ignore lint/a11y/noStaticElementInteractions: menu wrapper only stops row-click propagation; its items are the real controls
+                        // biome-ignore lint/a11y/useKeyWithClickEvents: menu wrapper only stops row-click propagation; its items are the real controls
                         <div
                           className="row-menu member-row-menu"
                           onClick={(e: Loose) => e.stopPropagation()}
                         >
                           <button
+                            type="button"
                             className="row-menu-item"
                             onClick={() => {
                               setPasswordMember(m.id);
@@ -346,7 +377,11 @@ export function MembersPane({
                             <span>编辑密码</span>
                           </button>
                           <div className="row-menu-sep"></div>
-                          <button className="row-menu-item danger" onClick={() => deleteMember(m)}>
+                          <button
+                            type="button"
+                            className="row-menu-item danger"
+                            onClick={() => deleteMember(m)}
+                          >
                             <_I2.trash />
                             <span>删除成员</span>
                           </button>
@@ -378,6 +413,7 @@ export function MembersPane({
                         autoComplete="new-password"
                       />
                       <button
+                        type="button"
                         className="btn ghost"
                         onClick={() => {
                           setPasswordMember(null);
@@ -386,7 +422,7 @@ export function MembersPane({
                       >
                         取消
                       </button>
-                      <button className="btn primary" onClick={() => savePassword(m)}>
+                      <button type="button" className="btn primary" onClick={() => savePassword(m)}>
                         保存密码
                       </button>
                     </div>

@@ -4,6 +4,7 @@ import { apiGet } from '../api-client';
 import { AnimatedScrollList, I } from '../chrome';
 import { atlasKeys } from '../data-hooks';
 import type { Loose } from '../loose-types';
+import { confirmDialog } from '../ui-kit';
 
 const _I2 = I;
 
@@ -77,13 +78,14 @@ export function TrashPane({ pushToast: _pushToast, mutations }: Loose) {
                       type="button"
                       className="icon-btn danger"
                       title="永久删除"
-                      onClick={() => {
-                        if (
-                          confirm(
-                            `永久删除文件夹「${f.name}」及其中 ${f.files.length} 篇文章？此操作不可恢复。`,
-                          )
-                        )
-                          mutations.permanentDeleteFolder(f.id);
+                      onClick={async () => {
+                        const ok = await confirmDialog({
+                          title: `永久删除文件夹「${f.name}」？`,
+                          message: `其中 ${f.files.length} 篇文章会一并永久删除，此操作不可恢复。`,
+                          confirmLabel: '永久删除',
+                          danger: true,
+                        });
+                        if (ok) mutations.permanentDeleteFolder(f.id);
                       }}
                     >
                       <_I2.trash />
@@ -118,7 +120,11 @@ export function TrashPane({ pushToast: _pushToast, mutations }: Loose) {
             <h3>已删除文章 · {items.length}</h3>
             <div className="sub">按删除时间倒序</div>
           </div>
-          <button className="btn ghost danger" onClick={() => mutations.purgeExpiredTrash?.()}>
+          <button
+            type="button"
+            className="btn ghost danger"
+            onClick={() => mutations.purgeExpiredTrash?.()}
+          >
             清理过期项目
           </button>
         </div>
@@ -138,6 +144,7 @@ export function TrashPane({ pushToast: _pushToast, mutations }: Loose) {
                     : '30 天内'}
                 </div>
                 <button
+                  type="button"
                   className="icon-btn"
                   title="恢复"
                   onClick={() => {

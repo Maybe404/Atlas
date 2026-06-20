@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { I } from '../chrome';
 import { accessLabel } from '../labels';
 import type { Loose } from '../loose-types';
+import { Select } from '../ui-kit';
 import { MarkdownReader } from '../views/markdown-reader';
 
 const _I2 = I;
@@ -110,6 +111,7 @@ export function AdminUploadView({
           <div className="upload-card">
             {step === 0 && (
               <>
+                {/* biome-ignore lint/a11y/noStaticElementInteractions: drag-and-drop target; keyboard users use the file picker button inside it */}
                 <div
                   className={`dropzone ${over ? 'over' : ''}`}
                   onDragOver={(e: Loose) => {
@@ -174,12 +176,18 @@ export function AdminUploadView({
 
                 <div className="flow-footer">
                   <button
+                    type="button"
                     className="btn ghost"
                     onClick={() => onNavigate({ view: 'admin-docs', spaceId: 'all' })}
                   >
                     取消
                   </button>
-                  <button className="btn primary" disabled={!allDone} onClick={() => setStep(1)}>
+                  <button
+                    type="button"
+                    className="btn primary"
+                    disabled={!allDone}
+                    onClick={() => setStep(1)}
+                  >
                     <span>下一步</span>
                     <_I2.arrow />
                   </button>
@@ -190,8 +198,11 @@ export function AdminUploadView({
             {step === 1 && (
               <>
                 <div className="field">
-                  <label className="field-label">标题</label>
+                  <label className="field-label" htmlFor="up-title">
+                    标题
+                  </label>
                   <input
+                    id="up-title"
                     className="input"
                     value={meta.title}
                     onChange={(e: Loose) =>
@@ -201,45 +212,42 @@ export function AdminUploadView({
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
                   <div className="field">
-                    <label className="field-label">归属空间</label>
-                    <select
+                    <span className="field-label">归属空间</span>
+                    <Select
                       className="input"
+                      ariaLabel="归属空间"
                       value={meta.spaceId}
-                      onChange={(e: Loose) =>
-                        setMeta((m: Loose) => ({ ...m, spaceId: e.target.value }))
-                      }
-                    >
-                      {editableSpaces.map((s: Loose) => (
-                        <option key={s.id} value={s.id}>
-                          {s.name}
-                        </option>
-                      ))}
-                    </select>
+                      options={editableSpaces.map((s: Loose) => ({ value: s.id, label: s.name }))}
+                      onChange={(v: string) => setMeta((m: Loose) => ({ ...m, spaceId: v }))}
+                    />
                   </div>
                   <div className="field">
-                    <label className="field-label">访问</label>
-                    <select
+                    <span className="field-label">访问</span>
+                    <Select
                       className="input"
+                      ariaLabel="访问范围"
                       value={meta.access}
-                      onChange={(e: Loose) =>
-                        setMeta((m: Loose) => ({ ...m, access: e.target.value }))
-                      }
-                    >
-                      <option value="inherit">继承（跟随文件夹 / 空间）</option>
-                      <option value="restricted">受限（仅作者 / 管理员 / 被授权者）</option>
-                    </select>
+                      options={[
+                        { value: 'inherit', label: '继承（跟随文件夹 / 空间）' },
+                        { value: 'restricted', label: '受限（仅作者 / 管理员 / 被授权者）' },
+                      ]}
+                      onChange={(v: string) => setMeta((m: Loose) => ({ ...m, access: v }))}
+                    />
                   </div>
                 </div>
                 <div className="field">
-                  <label className="field-label">摘要 · 在索引页显示</label>
+                  <label className="field-label" htmlFor="up-desc">
+                    摘要 · 在索引页显示
+                  </label>
                   <textarea
+                    id="up-desc"
                     className="input textarea"
                     value={meta.desc}
                     onChange={(e: Loose) => setMeta((m: Loose) => ({ ...m, desc: e.target.value }))}
                   />
                 </div>
                 <div className="field">
-                  <label className="field-label">展示方式</label>
+                  <span className="field-label">展示方式</span>
                   <div
                     className="input"
                     style={{
@@ -264,10 +272,11 @@ export function AdminUploadView({
                   </div>
                 </div>
                 <div className="flow-footer">
-                  <button className="btn ghost" onClick={() => setStep(0)}>
+                  <button type="button" className="btn ghost" onClick={() => setStep(0)}>
                     上一步
                   </button>
                   <button
+                    type="button"
                     className="btn primary"
                     disabled={!meta.title.trim()}
                     onClick={() => setStep(2)}
@@ -410,12 +419,15 @@ export function AdminUploadView({
                 </div>
 
                 <div className="flow-footer">
-                  <button className="btn ghost" onClick={() => setStep(1)}>
+                  <button type="button" className="btn ghost" onClick={() => setStep(1)}>
                     上一步
                   </button>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button className="btn secondary">存为草稿</button>
+                    <button type="button" className="btn secondary">
+                      存为草稿
+                    </button>
                     <button
+                      type="button"
                       className="btn primary"
                       disabled={!selectedFile || !meta.title.trim()}
                       onClick={() => {
@@ -461,7 +473,7 @@ export function AdminUploadView({
                     animation: 'pop 0.4s var(--ease-spring)',
                   }}
                 >
-                  <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+                  <svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28" fill="none">
                     <path
                       d="m6 14 6 6L22 8"
                       stroke="currentColor"

@@ -3,9 +3,15 @@ import { useEffect, useRef, useState } from 'react';
 import { I } from '../chrome';
 import { useDocument } from '../data-hooks';
 import type { Loose } from '../loose-types';
+import { clickableProps, Select } from '../ui-kit';
 import { accentDot, dotClass, flattenFolders } from './shared';
 
 const _I = I;
+
+const ACCESS_OPTIONS = [
+  { value: 'inherit', label: '继承（跟随空间 / 文件夹）' },
+  { value: 'restricted', label: '受限（仅作者 / 管理员 / 被授权者）' },
+];
 
 // ─────────────────────────────────────────────────────────────────────────
 // HTML EDITOR DIALOG — edit doc content, save
@@ -16,6 +22,7 @@ export function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }: Loose) {
   if (!doc.isNew && detailQuery.isLoading) {
     return (
       <div className="overlay editor-overlay">
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: dialog surface only stops backdrop-dismiss propagation */}
         <div className="editor-dialog" onMouseDown={(e: Loose) => e.stopPropagation()}>
           <div className="app-state-banner">正在加载文章正文…</div>
         </div>
@@ -25,16 +32,18 @@ export function HTMLEditorDialog({ doc, spaces = [], onClose, onSave }: Loose) {
 
   if (!doc.isNew && (detailQuery.isError || !detailQuery.data)) {
     return (
+      // biome-ignore lint/a11y/noStaticElementInteractions: modal backdrop; dismissable via the close button (click-outside is a mouse convenience)
       <div
         className="overlay editor-overlay"
         onMouseDown={(e: Loose) => {
           if (e.target.classList.contains('editor-overlay')) onClose();
         }}
       >
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: dialog surface only stops backdrop-dismiss propagation */}
         <div className="editor-dialog" onMouseDown={(e: Loose) => e.stopPropagation()}>
           <div className="app-state-banner">无法加载文章正文，可能没有编辑权限或文章已被删除。</div>
           <div style={{ padding: 16 }}>
-            <button className="btn secondary" onClick={onClose}>
+            <button type="button" className="btn secondary" onClick={onClose}>
               关闭
             </button>
           </div>
@@ -177,12 +186,14 @@ function HTMLEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) {
   };
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: modal backdrop; dismissable via the close button (click-outside is a mouse convenience)
     <div
       className="overlay editor-overlay"
       onMouseDown={(e: Loose) => {
         if (e.target.classList.contains('editor-overlay')) onClose();
       }}
     >
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: dialog surface only stops backdrop-dismiss propagation */}
       <div className="editor-dialog" onMouseDown={(e: Loose) => e.stopPropagation()}>
         <div className="editor-head">
           <div className="editor-title-wrap">
@@ -218,6 +229,7 @@ function HTMLEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) {
               >
                 <span className="label">空间</span>
                 <button
+                  type="button"
                   className="editor-space-trigger"
                   onClick={(e: Loose) => {
                     e.stopPropagation();
@@ -234,6 +246,7 @@ function HTMLEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) {
                     <span style={{ color: 'var(--blue)' }}>选择空间…</span>
                   )}
                   <svg
+                    aria-hidden="true"
                     width="9"
                     height="9"
                     viewBox="0 0 10 10"
@@ -262,13 +275,16 @@ function HTMLEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) {
                         <div
                           key={s.id}
                           className={`space-picker-row ${active ? 'active' : ''}`}
-                          onClick={() => {
-                            setSpaceId(s.id);
-                            setFolderId('');
-                            setDirty(true);
-                            setShowSpacePicker(false);
-                            setShowSpaceRequired(false);
-                          }}
+                          {...clickableProps(
+                            () => {
+                              setSpaceId(s.id);
+                              setFolderId('');
+                              setDirty(true);
+                              setShowSpacePicker(false);
+                              setShowSpaceRequired(false);
+                            },
+                            { label: s.name },
+                          )}
                         >
                           <span className={`dot ${accentDot(s.accent)}`}></span>
                           <span>{s.name}</span>
@@ -289,21 +305,22 @@ function HTMLEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) {
                   style={{ marginTop: 8, position: 'relative', maxWidth: 320 }}
                 >
                   <span className="label">文件夹</span>
-                  <select
+                  <Select
                     className="role-select"
+                    ariaLabel="文件夹"
                     value={folderId}
-                    onChange={(e: Loose) => {
-                      setFolderId(e.target.value);
+                    options={[
+                      { value: '', label: '（空间根目录）' },
+                      ...flattenFolders(selectedSpace.folders).map((f: Loose) => ({
+                        value: f.id,
+                        label: f.label,
+                      })),
+                    ]}
+                    onChange={(v: string) => {
+                      setFolderId(v);
                       setDirty(true);
                     }}
-                  >
-                    <option value="">（空间根目录）</option>
-                    {flattenFolders(selectedSpace.folders).map((f: Loose) => (
-                      <option key={f.id} value={f.id}>
-                        {f.label}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </div>
               )}
               {selectedSpace && (
@@ -312,27 +329,27 @@ function HTMLEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) {
                   style={{ marginTop: 8, position: 'relative', maxWidth: 320 }}
                 >
                   <span className="label">访问</span>
-                  <select
+                  <Select
                     className="role-select"
+                    ariaLabel="访问范围"
                     value={access}
-                    onChange={(e: Loose) => {
-                      setAccess(e.target.value);
+                    options={ACCESS_OPTIONS}
+                    onChange={(v: string) => {
+                      setAccess(v as 'inherit' | 'restricted');
                       setDirty(true);
                     }}
-                  >
-                    <option value="inherit">继承（跟随空间 / 文件夹）</option>
-                    <option value="restricted">受限（仅作者 / 管理员 / 被授权者）</option>
-                  </select>
+                  />
                 </div>
               )}
             </div>
           </div>
           <div className="editor-tabs">
             <button
+              type="button"
               className={`editor-tab ${tab === 'source' ? 'active' : ''}`}
               onClick={() => setTab('source')}
             >
-              <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+              <svg aria-hidden="true" width="13" height="13" viewBox="0 0 14 14" fill="none">
                 <path
                   d="m5 3-3.5 4L5 11M9 3l3.5 4L9 11"
                   stroke="currentColor"
@@ -344,10 +361,11 @@ function HTMLEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) {
               <span>HTML</span>
             </button>
             <button
+              type="button"
               className={`editor-tab ${tab === 'preview' ? 'active' : ''}`}
               onClick={() => setTab('preview')}
             >
-              <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+              <svg aria-hidden="true" width="13" height="13" viewBox="0 0 14 14" fill="none">
                 <path
                   d="M1 7s2-4 6-4 6 4 6 4-2 4-6 4-6-4-6-4z"
                   stroke="currentColor"
@@ -359,7 +377,7 @@ function HTMLEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) {
               <span>预览</span>
             </button>
           </div>
-          <button className="icon-btn" onClick={onClose} title="关闭">
+          <button type="button" className="icon-btn" onClick={onClose} title="关闭">
             <_I.close />
           </button>
         </div>
@@ -404,16 +422,17 @@ function HTMLEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) {
             <span>{desc ? '摘要已识别' : '原文保存'}</span>
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn ghost" onClick={onClose}>
+            <button type="button" className="btn ghost" onClick={onClose}>
               取消
             </button>
             <button
+              type="button"
               className="btn secondary"
               onClick={() => setTab(tab === 'source' ? 'preview' : 'source')}
             >
               {tab === 'source' ? '预览' : '编辑'}
             </button>
-            <button className="btn primary" onClick={save}>
+            <button type="button" className="btn primary" onClick={save}>
               <_I.check />
               <span>{doc.isNew ? '创建' : '保存'}</span>
             </button>

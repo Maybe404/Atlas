@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnimatedScrollList, I } from '../chrome';
 import { docCategory, docChip } from '../labels';
 import type { Loose } from '../loose-types';
+import { clickableProps, Select } from '../ui-kit';
 import { documentReaderUrl } from '../url-utils';
 import { HTMLEditorDialog } from './html-editor-dialog';
 import { MarkdownEditorDialog } from './markdown-editor-dialog';
@@ -211,6 +212,7 @@ export function AdminDocsView({
           {canCreate && (
             <div className="right">
               <button
+                type="button"
                 className="btn secondary"
                 onClick={() => onNavigate({ view: 'admin-upload' })}
               >
@@ -218,7 +220,11 @@ export function AdminDocsView({
                 <span>上传 HTML</span>
               </button>
               <div style={{ position: 'relative' }}>
-                <button className="btn primary" onClick={() => setShowNewMenu((o) => !o)}>
+                <button
+                  type="button"
+                  className="btn primary"
+                  onClick={() => setShowNewMenu((o) => !o)}
+                >
                   <_I.plus />
                   <span>新建文章</span>
                 </button>
@@ -227,10 +233,13 @@ export function AdminDocsView({
                     className="space-picker-pop"
                     style={{ top: 'calc(100% + 4px)', right: 0, left: 'auto' }}
                   >
-                    <div className="space-picker-row" onClick={() => startNew('markdown')}>
+                    <div
+                      className="space-picker-row"
+                      {...clickableProps(() => startNew('markdown'))}
+                    >
                       <span>新建 Markdown</span>
                     </div>
-                    <div className="space-picker-row" onClick={() => startNew('html')}>
+                    <div className="space-picker-row" {...clickableProps(() => startNew('html'))}>
                       <span>新建 HTML</span>
                     </div>
                   </div>
@@ -250,7 +259,12 @@ export function AdminDocsView({
               onChange={(e: Loose) => setSearch(e.target.value)}
             />
             {search && (
-              <button className="filter-search-clear" onClick={() => setSearch('')} title="清除">
+              <button
+                type="button"
+                className="filter-search-clear"
+                onClick={() => setSearch('')}
+                title="清除"
+              >
                 <_I.close />
               </button>
             )}
@@ -264,6 +278,7 @@ export function AdminDocsView({
                 { v: 'draft', l: '草稿' },
               ].map((o: Loose) => (
                 <button
+                  type="button"
                   key={o.v}
                   className={status === o.v ? 'active' : ''}
                   onClick={() => setStatus(o.v)}
@@ -275,35 +290,31 @@ export function AdminDocsView({
           </div>
           <div className="filter-group">
             <span className="filter-label">空间</span>
-            <select
+            <Select
               className="filter-select"
+              ariaLabel="按空间筛选"
               value={spaceFilter}
-              onChange={(e: Loose) => setSpaceFilter(e.target.value)}
-            >
-              <option value="all">全部空间</option>
-              {spaceOptions.map((s: Loose) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+              options={[
+                { value: 'all', label: '全部空间' },
+                ...spaceOptions.map((s: Loose) => ({ value: s.id, label: s.name })),
+              ]}
+              onChange={setSpaceFilter}
+            />
           </div>
           {spaceFilter !== 'all' && folderOptions.length > 0 && (
             <div className="filter-group">
               <span className="filter-label">文件夹</span>
-              <select
+              <Select
                 className="filter-select"
+                ariaLabel="按文件夹筛选"
                 value={effectiveFolderFilter}
-                onChange={(e: Loose) => setFolderFilter(e.target.value)}
-              >
-                <option value="all">全部文件夹</option>
-                <option value="__root__">（空间根目录）</option>
-                {folderOptions.map((f: Loose) => (
-                  <option key={f.id} value={f.id}>
-                    {f.label}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: 'all', label: '全部文件夹' },
+                  { value: '__root__', label: '（空间根目录）' },
+                  ...folderOptions.map((f: Loose) => ({ value: f.id, label: f.label })),
+                ]}
+                onChange={setFolderFilter}
+              />
             </div>
           )}
           <div className="filter-group">
@@ -316,6 +327,7 @@ export function AdminDocsView({
                 { v: 'inherit', l: '继承' },
               ].map((o: Loose) => (
                 <button
+                  type="button"
                   key={o.v}
                   className={visFilter === o.v ? 'active' : ''}
                   onClick={() => setVisFilter(o.v)}
@@ -337,13 +349,16 @@ export function AdminDocsView({
               <div
                 key={doc.id}
                 className="doc-row"
-                onClick={(e: Loose) => {
-                  if (renaming === doc.id) return;
-                  if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
-                  if (e.target.closest('.row-menu')) return;
-                  if (doc.canEdit) openEditor(doc);
-                  else onNavigate({ view: 'reader', spaceId: doc.spaceId, docId: doc.id });
-                }}
+                {...clickableProps(
+                  (e: Loose) => {
+                    if (renaming === doc.id) return;
+                    if (e.target.tagName === 'BUTTON' || e.target.closest?.('button')) return;
+                    if (e.target.closest?.('.row-menu')) return;
+                    if (doc.canEdit) openEditor(doc);
+                    else onNavigate({ view: 'reader', spaceId: doc.spaceId, docId: doc.id });
+                  },
+                  { label: doc.title },
+                )}
               >
                 <div className="doc-title">
                   <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
@@ -398,6 +413,7 @@ export function AdminDocsView({
                 <div className="row-actions" style={{ position: 'relative' }}>
                   {doc.canEdit && (
                     <button
+                      type="button"
                       className="icon-btn"
                       title="编辑内容"
                       onClick={(e: Loose) => {
@@ -405,7 +421,13 @@ export function AdminDocsView({
                         openEditor(doc);
                       }}
                     >
-                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <svg
+                        aria-hidden="true"
+                        width="14"
+                        height="14"
+                        viewBox="0 0 14 14"
+                        fill="none"
+                      >
                         <path
                           d="m9 2.5 2.5 2.5L4 12.5H1.5V10z"
                           stroke="currentColor"
@@ -416,6 +438,7 @@ export function AdminDocsView({
                     </button>
                   )}
                   <button
+                    type="button"
                     className="icon-btn"
                     title="预览"
                     onClick={(e: Loose) => {
@@ -423,7 +446,7 @@ export function AdminDocsView({
                       onNavigate({ view: 'reader', spaceId: doc.spaceId, docId: doc.id });
                     }}
                   >
-                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
                       <path
                         d="M1 7s2-4 6-4 6 4 6 4-2 4-6 4-6-4-6-4z"
                         stroke="currentColor"
@@ -434,6 +457,7 @@ export function AdminDocsView({
                     </svg>
                   </button>
                   <button
+                    type="button"
                     className="icon-btn"
                     title="更多"
                     data-row-more
@@ -445,16 +469,25 @@ export function AdminDocsView({
                     <_I.more />
                   </button>
                   {menuOpenId === doc.id && (
+                    // biome-ignore lint/a11y/noStaticElementInteractions: menu wrapper only stops row-click propagation; its items are the real controls
+                    // biome-ignore lint/a11y/useKeyWithClickEvents: menu wrapper only stops row-click propagation; its items are the real controls
                     <div className="row-menu" onClick={(e: Loose) => e.stopPropagation()}>
                       {doc.canEdit && (
                         <>
                           <button
+                            type="button"
                             className="row-menu-item"
                             onClick={() => {
                               openEditor(doc);
                             }}
                           >
-                            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                            <svg
+                              aria-hidden="true"
+                              width="13"
+                              height="13"
+                              viewBox="0 0 14 14"
+                              fill="none"
+                            >
                               <path
                                 d="m9 2.5 2.5 2.5L4 12.5H1.5V10z"
                                 stroke="currentColor"
@@ -465,13 +498,20 @@ export function AdminDocsView({
                             <span>编辑内容</span>
                           </button>
                           <button
+                            type="button"
                             className="row-menu-item"
                             onClick={() => {
                               startRename(doc);
                               setMenuOpenId(null);
                             }}
                           >
-                            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                            <svg
+                              aria-hidden="true"
+                              width="13"
+                              height="13"
+                              viewBox="0 0 14 14"
+                              fill="none"
+                            >
                               <path
                                 d="M2 12h10M3.5 8.5h2l5-5-2-2-5 5z"
                                 stroke="currentColor"
@@ -482,6 +522,7 @@ export function AdminDocsView({
                             <span>重命名</span>
                           </button>
                           <button
+                            type="button"
                             className="row-menu-item"
                             onClick={() => {
                               onShare(doc.id);
@@ -494,6 +535,7 @@ export function AdminDocsView({
                         </>
                       )}
                       <button
+                        type="button"
                         className="row-menu-item"
                         onClick={() => {
                           navigator.clipboard?.writeText(documentReaderUrl(doc.spaceId, doc.id));
@@ -507,7 +549,11 @@ export function AdminDocsView({
                       {doc.canEdit && (
                         <>
                           <div className="row-menu-sep"></div>
-                          <button className="row-menu-item danger" onClick={() => deleteDoc(doc)}>
+                          <button
+                            type="button"
+                            className="row-menu-item danger"
+                            onClick={() => deleteDoc(doc)}
+                          >
                             <_I.trash />
                             <span>删除</span>
                           </button>

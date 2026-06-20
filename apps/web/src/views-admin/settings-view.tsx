@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { I } from '../chrome';
 import type { Loose } from '../loose-types';
+import { clickableProps, confirmDialog } from '../ui-kit';
 import { GeneralPane } from './general-pane';
 import { GroupsPane } from './groups-pane';
 import { MembersPane } from './members-pane';
@@ -23,7 +24,11 @@ export function AdminSettingsView({
   onEditSpace,
   onNewSpace,
 }: Loose) {
-  const [pane, setPane] = useState('spaces');
+  const [pane, setPane] = useState(_ctx?.pane || 'spaces');
+  // Deep links (e.g. CmdK "查看回收站") carry the target pane in the route.
+  useEffect(() => {
+    if (_ctx?.pane) setPane(_ctx.pane);
+  }, [_ctx?.pane]);
 
   const perms = useMemo(() => {
     const p: Record<string, Record<string, Loose>> = {};
@@ -56,35 +61,35 @@ export function AdminSettingsView({
           <div className="settings-nav-group">工作区</div>
           <div
             className={`settings-nav-item ${pane === 'general' ? 'active' : ''}`}
-            onClick={() => setPane('general')}
+            {...clickableProps(() => setPane('general'))}
           >
             <_I2.settings />
             <span>常规</span>
           </div>
           <div
             className={`settings-nav-item ${pane === 'spaces' ? 'active' : ''}`}
-            onClick={() => setPane('spaces')}
+            {...clickableProps(() => setPane('spaces'))}
           >
             <_I2.folder />
             <span>空间</span>
           </div>
           <div
             className={`settings-nav-item ${pane === 'members' ? 'active' : ''}`}
-            onClick={() => setPane('members')}
+            {...clickableProps(() => setPane('members'))}
           >
             <_I2.members />
             <span>成员</span>
           </div>
           <div
             className={`settings-nav-item ${pane === 'groups' ? 'active' : ''}`}
-            onClick={() => setPane('groups')}
+            {...clickableProps(() => setPane('groups'))}
           >
             <_I2.layers />
             <span>权限组</span>
           </div>
           <div
             className={`settings-nav-item ${pane === 'permissions' ? 'active' : ''}`}
-            onClick={() => setPane('permissions')}
+            {...clickableProps(() => setPane('permissions'))}
           >
             <_I2.lock />
             <span>空间权限</span>
@@ -92,7 +97,7 @@ export function AdminSettingsView({
           <div className="settings-nav-group">维护</div>
           <div
             className={`settings-nav-item ${pane === 'trash' ? 'active' : ''}`}
-            onClick={() => setPane('trash')}
+            {...clickableProps(() => setPane('trash'))}
           >
             <_I2.trash />
             <span>回收站</span>
@@ -107,10 +112,14 @@ export function AdminSettingsView({
               perms={perms}
               onEditSpace={onEditSpace}
               onNewSpace={onNewSpace}
-              onDeleteSpace={(id: Loose) => {
-                if (confirm('确认删除该空间？空间需先清空其下文档才能删除。')) {
-                  mutations.deleteSpace(id);
-                }
+              onDeleteSpace={async (id: Loose) => {
+                const ok = await confirmDialog({
+                  title: '删除该空间？',
+                  message: '空间需先清空其下文档才能删除。',
+                  confirmLabel: '删除空间',
+                  danger: true,
+                });
+                if (ok) mutations.deleteSpace(id);
               }}
             />
           )}

@@ -88,6 +88,7 @@ export function PermissionsPane({
       <div className="space-tabs">
         {spaces.map((s: Loose) => (
           <button
+            type="button"
             key={s.id}
             className={`space-tab ${activeSpace === s.id ? 'active' : ''}`}
             onClick={() => setSpaceWithMotion(s.id)}
@@ -127,10 +128,15 @@ export function PermissionsPane({
             </div>
           </div>
           <div style={{ display: 'flex', gap: 6 }}>
-            <button className="btn ghost" disabled={activeCount === 0} onClick={() => setAll(null)}>
+            <button
+              type="button"
+              className="btn ghost"
+              disabled={activeCount === 0}
+              onClick={() => setAll(null)}
+            >
               清空
             </button>
-            <button className="btn secondary" onClick={() => setAll('viewer')}>
+            <button type="button" className="btn secondary" onClick={() => setAll('viewer')}>
               全部设为仅读
             </button>
           </div>
@@ -159,6 +165,7 @@ export function PermissionsPane({
             {!spaceMembersQuery.isLoading && unassignedMembers.length > 0 && (
               <div className="perm-unassigned">
                 <button
+                  type="button"
                   className="perm-unassigned-trigger"
                   onClick={() => setShowUnassigned((v: Loose) => !v)}
                 >
@@ -194,18 +201,21 @@ function PermissionMemberRow({ member, role, spaceId, muted = false, setMemberSp
       </div>
       <div className="segmented access-seg">
         <button
+          type="button"
           className={role === null ? 'active' : ''}
           onClick={() => setMemberSpaceRole(member.id, spaceId, null)}
         >
           无访问
         </button>
         <button
+          type="button"
           className={role === 'viewer' ? 'active' : ''}
           onClick={() => setMemberSpaceRole(member.id, spaceId, 'viewer')}
         >
           仅读
         </button>
         <button
+          type="button"
           className={role === 'editor' ? 'active' : ''}
           onClick={() => setMemberSpaceRole(member.id, spaceId, 'editor')}
         >

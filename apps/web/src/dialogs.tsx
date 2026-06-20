@@ -7,11 +7,26 @@ import { AnimatedItem, AnimatedScrollList, I } from './chrome';
 import { atlasKeys } from './data-hooks';
 import type { Loose } from './loose-types';
 import { dotClass, SPACE_COLORS } from './theme-tokens';
+import { clickableProps, confirmDialog, Select } from './ui-kit';
 import { publicShareUrl } from './url-utils';
 
 const _I3 = I;
 
-function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTheme }: Loose) {
+const SHARE_ROLE_OPTIONS = [
+  { value: 'editor', label: '可编辑' },
+  { value: 'viewer', label: '仅可读' },
+  { value: '', label: '移除' },
+];
+
+function CmdK({
+  open,
+  spaces = [],
+  members = [],
+  onClose,
+  onNavigate,
+  onToggleTheme,
+  onShareCurrent,
+}: Loose) {
   const [q, setQ] = useState('');
   const [idx, setIdx] = useState(0);
 
@@ -66,11 +81,32 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
         title: '查看回收站',
         path: '',
         icon: 'trash',
-        go: { view: 'admin-settings' },
+        go: { view: 'admin-settings', pane: 'trash' },
       },
-      { type: 'cmd', id: 'new', title: '新建文档…', path: '⌘N', icon: 'plus' },
-      { type: 'cmd', id: 'invite', title: '新增成员到工作区…', path: '⌘⇧I', icon: 'members' },
-      { type: 'cmd', id: 'share', title: '分享当前文档…', path: '⌘⇧S', icon: 'share' },
+      {
+        type: 'cmd',
+        id: 'new',
+        title: '新建 / 上传文档…',
+        path: '⌘N',
+        icon: 'plus',
+        go: { view: 'admin-upload' },
+      },
+      {
+        type: 'cmd',
+        id: 'invite',
+        title: '新增成员到工作区…',
+        path: '⌘⇧I',
+        icon: 'members',
+        go: { view: 'admin-settings', pane: 'members' },
+      },
+      {
+        type: 'cmd',
+        id: 'share',
+        title: '分享当前文档…',
+        path: '⌘⇧S',
+        icon: 'share',
+        action: 'share',
+      },
     ];
     const people = members.map((m: Loose) => ({
       type: 'member',
@@ -114,13 +150,15 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
         if (item.type === 'doc')
           onNavigate({ view: 'reader', spaceId: item.spaceId, docId: item.docId });
         else if (item.action === 'theme') onToggleTheme();
+        else if (item.action === 'share') onShareCurrent?.();
+        else if (item.type === 'member') onNavigate({ view: 'admin-settings', pane: 'members' });
         else if (item.type === 'cmd' && item.go) onNavigate(item.go);
         onClose();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [open, flat, idx, onClose, onNavigate, onToggleTheme]);
+  }, [open, flat, idx, onClose, onNavigate, onToggleTheme, onShareCurrent]);
 
   if (!open) return null;
 
@@ -128,23 +166,36 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
   const idxOf = () => counter++;
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: modal backdrop; dismissable via Escape and the input's clear/close affordances
+    // biome-ignore lint/a11y/useKeyWithClickEvents: modal backdrop; dismissable via Escape and the input's clear/close affordances
     <div className="overlay" onClick={onClose}>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: panel only stops backdrop-dismiss propagation */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: panel only stops backdrop-dismiss propagation */}
       <div className="cmdk" onClick={(e: Loose) => e.stopPropagation()}>
         <div className="cmdk-input-row">
           <span style={{ color: 'var(--ink-4)' }}>
             <_I3.search />
           </span>
+          {/* eslint-disable-next-line jsx-a11y/no-autofocus */}
           <input
             className="cmdk-input"
             value={q}
             onChange={(e: Loose) => setQ(e.target.value)}
             placeholder="搜索文档、命令或成员…"
+            role="combobox"
+            aria-expanded={flat.length > 0}
+            aria-controls="cmdk-listbox"
+            aria-activedescendant={flat.length > 0 ? `cmdk-opt-${idx}` : undefined}
+            aria-label="搜索文档、命令或成员"
           />
           <span className="esc">ESC</span>
         </div>
         <div className="cmdk-results">
           <div className="tree-scroll cmdk-scroll-wrap">
             <div
+              id="cmdk-listbox"
+              role="listbox"
+              aria-label="搜索结果"
               className="scroll-list"
               onScroll={(e: Loose) => {
                 const t = e.currentTarget as Loose;
@@ -163,7 +214,12 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
                     const my = idxOf();
                     return (
                       <AnimatedItem index={my} key={it.id}>
+                        {/* biome-ignore lint/a11y/useFocusableInteractive: option belongs to an aria-activedescendant listbox; the combobox input owns keyboard focus */}
+                        {/* biome-ignore lint/a11y/useKeyWithClickEvents: option belongs to an aria-activedescendant listbox; keyboard handled by the combobox input */}
                         <div
+                          id={`cmdk-opt-${my}`}
+                          role="option"
+                          aria-selected={my === idx}
                           className={`cmdk-item ${my === idx ? 'active' : ''}`}
                           onMouseEnter={() => setIdx(my)}
                           onClick={() => {
@@ -188,11 +244,17 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
                     const Ico = _I3[c.icon as keyof typeof _I3] || _I3.doc;
                     return (
                       <AnimatedItem index={my} key={c.id}>
+                        {/* biome-ignore lint/a11y/useFocusableInteractive: option belongs to an aria-activedescendant listbox; the combobox input owns keyboard focus */}
+                        {/* biome-ignore lint/a11y/useKeyWithClickEvents: option belongs to an aria-activedescendant listbox; keyboard handled by the combobox input */}
                         <div
+                          id={`cmdk-opt-${my}`}
+                          role="option"
+                          aria-selected={my === idx}
                           className={`cmdk-item ${my === idx ? 'active' : ''}`}
                           onMouseEnter={() => setIdx(my)}
                           onClick={() => {
                             if (c.action === 'theme') onToggleTheme();
+                            else if (c.action === 'share') onShareCurrent?.();
                             else if (c.go) onNavigate(c.go);
                             onClose();
                           }}
@@ -215,9 +277,18 @@ function CmdK({ open, spaces = [], members = [], onClose, onNavigate, onToggleTh
                     const my = idxOf();
                     return (
                       <AnimatedItem index={my} key={m.id}>
+                        {/* biome-ignore lint/a11y/useFocusableInteractive: option belongs to an aria-activedescendant listbox; the combobox input owns keyboard focus */}
+                        {/* biome-ignore lint/a11y/useKeyWithClickEvents: option belongs to an aria-activedescendant listbox; keyboard handled by the combobox input */}
                         <div
+                          id={`cmdk-opt-${my}`}
+                          role="option"
+                          aria-selected={my === idx}
                           className={`cmdk-item ${my === idx ? 'active' : ''}`}
                           onMouseEnter={() => setIdx(my)}
+                          onClick={() => {
+                            onNavigate({ view: 'admin-settings', pane: 'members' });
+                            onClose();
+                          }}
                         >
                           <span
                             className="avatar small"
@@ -317,45 +388,65 @@ function ShareDialog({
   const url = share?.public?.url || publicShareUrl(share?.public?.token || '');
   const docTitle = documentTitle || '当前文档';
 
+  // Members matching the search box that aren't already invited — the single
+  // source for the autocomplete dropdown (replaces both the native <datalist>
+  // and the separate dimmed "搜索结果" list that used to duplicate it).
+  const suggestions = availableMembers.filter(
+    (mem: Loose) => !roster.some((r: Loose) => r.id === mem.id) && mem.id !== currentUser?.id,
+  );
+
+  const invite = (m: Loose) => {
+    if (!m) return;
+    mutations.updateShare(documentId, { members: [{ memberId: m.id, role: 'viewer' }] });
+    setEmailInput('');
+    pushToast({ msg: '已邀请', meta: m.name });
+  };
+
   const addMember = () => {
     if (!emailInput) return;
     const input = emailInput.trim().toLowerCase();
     const m =
-      availableMembers.find(
+      suggestions.find(
         (x: Loose) => x.email?.toLowerCase() === input || x.name === emailInput.trim(),
-      ) || availableMembers[0];
-    if (m) {
-      mutations.updateShare(documentId, { members: [{ memberId: m.id, role: 'viewer' }] });
-      setEmailInput('');
-      pushToast({ msg: '已邀请', meta: m.name });
-    }
+      ) || suggestions[0];
+    invite(m);
   };
 
   if (!open) return null;
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: modal backdrop; dismissable via the close button (click-outside is a mouse convenience)
+    // biome-ignore lint/a11y/useKeyWithClickEvents: modal backdrop; dismissable via the close button (click-outside is a mouse convenience)
     <div className="overlay" onClick={onClose}>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: dialog surface only stops backdrop-dismiss propagation */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: dialog surface only stops backdrop-dismiss propagation */}
       <div className="dialog" onClick={(e: Loose) => e.stopPropagation()}>
         <div className="dialog-head">
           <div>
             <div className="dialog-title">分享 · {docTitle}</div>
             <div className="dialog-sub">控制谁可以打开这篇文档。变更立即生效。</div>
           </div>
-          <button className="icon-btn" onClick={onClose}>
+          <button type="button" className="icon-btn" onClick={onClose}>
             <_I3.close />
           </button>
         </div>
 
-        <div className="dialog-tabs">
+        <div className="dialog-tabs" role="tablist">
           <div
             className={`tab ${tab === 'invite' ? 'active' : ''}`}
-            onClick={() => setTab('invite')}
+            {...clickableProps(() => setTab('invite'))}
+            role="tab"
+            tabIndex={0}
+            aria-selected={tab === 'invite'}
           >
             邀请成员
           </div>
           <div
             className={`tab ${tab === 'public' ? 'active' : ''}`}
-            onClick={() => setTab('public')}
+            {...clickableProps(() => setTab('public'))}
+            role="tab"
+            tabIndex={0}
+            aria-selected={tab === 'public'}
           >
             公开链接
           </div>
@@ -378,26 +469,41 @@ function ShareDialog({
 
           {tab === 'invite' && (
             <>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 18 }}>
-                <input
-                  className="input"
-                  style={{ flex: 1 }}
-                  placeholder="按姓名或邮箱搜索…"
-                  value={emailInput}
-                  disabled={!canInviteMembers}
-                  onChange={(e: Loose) => setEmailInput(e.target.value)}
-                  onKeyDown={(e: Loose) => {
-                    if (e.key === 'Enter') addMember();
-                  }}
-                />
-                <datalist id="atlas-members">
-                  {availableMembers.map((m: Loose) => (
-                    <option key={m.id} value={m.email}>
-                      {m.name}
-                    </option>
-                  ))}
-                </datalist>
+              <div className="share-invite-row">
+                <div className="share-invite-field">
+                  <input
+                    className="input"
+                    placeholder="按姓名或邮箱搜索…"
+                    value={emailInput}
+                    disabled={!canInviteMembers}
+                    onChange={(e: Loose) => setEmailInput(e.target.value)}
+                    onKeyDown={(e: Loose) => {
+                      if (e.key === 'Enter') addMember();
+                    }}
+                  />
+                  {canInviteMembers && emailInput.trim() && suggestions.length > 0 && (
+                    <div className="share-suggest" role="listbox" aria-label="搜索结果">
+                      {suggestions.map((m: Loose) => (
+                        <button
+                          key={m.id}
+                          type="button"
+                          role="option"
+                          aria-selected={false}
+                          className="share-suggest-row"
+                          onClick={() => invite(m)}
+                        >
+                          <span className="avatar">{m.initials}</span>
+                          <div>
+                            <div className="name">{m.name}</div>
+                            <div className="email mono">{m.email}</div>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <button
+                  type="button"
                   className="btn primary"
                   disabled={!canInviteMembers || !emailInput.trim()}
                   onClick={addMember}
@@ -443,20 +549,19 @@ function ShareDialog({
                           <div className="name">{mem.name}</div>
                           <div className="email mono">{mem.email}</div>
                         </div>
-                        <select
+                        <Select
                           className="role-select"
+                          ariaLabel={`${mem.name} 的权限`}
+                          align="right"
                           value={mem.role}
                           disabled={!canEditShare}
-                          onChange={(e: Loose) =>
+                          options={SHARE_ROLE_OPTIONS}
+                          onChange={(v: string) =>
                             mutations.updateShare(documentId, {
-                              members: [{ memberId: mem.id, role: e.target.value || null }],
+                              members: [{ memberId: mem.id, role: v || null }],
                             })
                           }
-                        >
-                          <option value="editor">可编辑</option>
-                          <option value="viewer">仅可读</option>
-                          <option value="">移除</option>
-                        </select>
+                        />
                       </div>
                     );
                   })}
@@ -472,29 +577,6 @@ function ShareDialog({
                       {canEditShare ? '管理员/作者' : '无管理权限'}
                     </span>
                   </div>
-                  {availableMembers
-                    .filter(
-                      (mem: Loose) =>
-                        !roster.some((r: Loose) => r.id === mem.id) && mem.id !== currentUser?.id,
-                    )
-                    .slice(0, 6)
-                    .map((mem: Loose) => (
-                      <div key={`sg-${mem.id}`} className="share-row" style={{ opacity: 0.78 }}>
-                        <span
-                          className="avatar"
-                          style={{ background: 'var(--parchment)', color: 'var(--ink-3)' }}
-                        >
-                          {mem.initials}
-                        </span>
-                        <div>
-                          <div className="name">{mem.name}</div>
-                          <div className="email mono">{mem.email}</div>
-                        </div>
-                        <span className="dim" style={{ marginLeft: 'auto', fontSize: 12 }}>
-                          搜索结果
-                        </span>
-                      </div>
-                    ))}
                 </AnimatedScrollList>
               </div>
             </>
@@ -513,7 +595,11 @@ function ShareDialog({
                 }}
               >
                 <button
+                  type="button"
                   className={`toggle ${publicOn ? 'on' : ''}`}
+                  role="switch"
+                  aria-checked={publicOn}
+                  aria-label="启用公开链接"
                   disabled={!canEditShare}
                   onClick={() => mutations.updateShare(documentId, { publicEnabled: !publicOn })}
                 ></button>
@@ -545,6 +631,7 @@ function ShareDialog({
                 </span>
                 <span className="url">{publicOn ? url : '— 当前未启用'}</span>
                 <button
+                  type="button"
                   className="btn secondary"
                   style={{ padding: '4px 12px', fontSize: 12 }}
                   disabled={!publicOn || !canEditShare}
@@ -602,6 +689,7 @@ function ShareDialog({
                 />
                 <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
                   <button
+                    type="button"
                     className="btn secondary"
                     disabled={!publicOn || !canEditShare}
                     onClick={() =>
@@ -612,6 +700,7 @@ function ShareDialog({
                     <span>重置链接</span>
                   </button>
                   <button
+                    type="button"
                     className="btn ghost danger"
                     disabled={!publicOn || !canEditShare}
                     onClick={() => mutations.updateShare(documentId, { publicEnabled: false })}
@@ -629,7 +718,7 @@ function ShareDialog({
           <span className="dim" style={{ fontSize: 11.5, fontFamily: 'var(--font-mono)' }}>
             {canEditShare ? `由 ${currentUser?.name || '当前用户'} 管理` : '仅管理员/作者可管理'}
           </span>
-          <button className="btn primary" onClick={onClose}>
+          <button type="button" className="btn primary" onClick={onClose}>
             完成
           </button>
         </div>
@@ -645,7 +734,11 @@ function PublicToggle({ label, desc, value, disabled, onChange }: Loose) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
       <button
+        type="button"
         className={`toggle ${on ? 'on' : ''}`}
+        role="switch"
+        aria-checked={on}
+        aria-label={label}
         disabled={disabled}
         onClick={() => !disabled && onChange?.(!on)}
       ></button>
@@ -664,7 +757,7 @@ function ToastWrap({ toasts }: Loose) {
       {toasts.map((t: Loose) => (
         <div key={t.id} className="toast">
           <span className="check">
-            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+            <svg aria-hidden="true" width="10" height="10" viewBox="0 0 10 10" fill="none">
               <path
                 d="m2 5 2 2 4-5"
                 stroke="currentColor"
@@ -791,7 +884,7 @@ function SpaceManagerDialog({
     setMovingId(null);
   };
 
-  const confirmDeleteFolder = (f: Loose) => {
+  const confirmDeleteFolder = async (f: Loose) => {
     const ids = subtreeIds(f.id);
     const docs = affectedDocCount(ids);
     const subCount = ids.size - 1;
@@ -799,9 +892,15 @@ function SpaceManagerDialog({
       .filter(Boolean)
       .join('、');
     const msg = detail
-      ? `删除文件夹「${f.name}」？其中的 ${detail} 将一并移至回收站，可在回收站恢复。`
-      : `删除空文件夹「${f.name}」？将移至回收站，可恢复。`;
-    if (confirm(msg)) mutations.deleteFolder(f.id);
+      ? `其中的 ${detail} 将一并移至回收站，可在回收站恢复。`
+      : '将移至回收站，可恢复。';
+    const ok = await confirmDialog({
+      title: detail ? `删除文件夹「${f.name}」？` : `删除空文件夹「${f.name}」？`,
+      message: msg,
+      confirmLabel: '移至回收站',
+      danger: true,
+    });
+    if (ok) mutations.deleteFolder(f.id);
   };
 
   const submit = () => {
@@ -812,7 +911,11 @@ function SpaceManagerDialog({
   };
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: modal backdrop; dismissable via the close button (click-outside is a mouse convenience)
+    // biome-ignore lint/a11y/useKeyWithClickEvents: modal backdrop; dismissable via the close button (click-outside is a mouse convenience)
     <div className="overlay" onClick={onClose}>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: dialog surface only stops backdrop-dismiss propagation */}
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: dialog surface only stops backdrop-dismiss propagation */}
       <div
         className="dialog"
         style={{ width: 'min(560px, 92vw)' }}
@@ -828,15 +931,18 @@ function SpaceManagerDialog({
               {isEditing && '修改名称与配色。所有文档会保留在原空间下。'}
             </div>
           </div>
-          <button className="icon-btn" onClick={onClose}>
+          <button type="button" className="icon-btn" onClick={onClose}>
             <_I3.close />
           </button>
         </div>
 
         <div className="dialog-body">
           <div className="field">
-            <label className="field-label">空间名称</label>
+            <label className="field-label" htmlFor="space-mgr-name">
+              空间名称
+            </label>
             <input
+              id="space-mgr-name"
               className="input"
               placeholder="例如：工程、产品、设计…"
               value={form.name}
@@ -847,15 +953,26 @@ function SpaceManagerDialog({
             />
           </div>
           <div className="field">
-            <label className="field-label">配色</label>
-            <div className="color-swatches">
+            <span className="field-label">配色</span>
+            <div className="color-swatches" role="radiogroup" aria-label="配色">
               {SPACE_COLORS.map((c: Loose) => (
+                // biome-ignore lint/a11y/useSemanticElements: color swatch is a visual radio; a native <input type="radio"> can't render the color fill
                 <div
                   key={c.v}
                   className={`color-swatch ${form.accent === c.v ? 'active' : ''}`}
                   style={{ background: c.color }}
                   title={c.label}
+                  role="radio"
+                  aria-checked={form.accent === c.v}
+                  aria-label={c.label}
+                  tabIndex={0}
                   onClick={() => setForm((f: Loose) => ({ ...f, accent: c.v }))}
+                  onKeyDown={(e: Loose) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      setForm((f: Loose) => ({ ...f, accent: c.v }));
+                    }
+                  }}
                 ></div>
               ))}
             </div>
@@ -908,10 +1025,11 @@ function SpaceManagerDialog({
                   justifyContent: 'space-between',
                 }}
               >
-                <label className="field-label" style={{ marginBottom: 0 }}>
+                <span className="field-label" style={{ marginBottom: 0 }}>
                   文件夹
-                </label>
+                </span>
                 <button
+                  type="button"
                   className="btn ghost"
                   style={{ padding: '4px 10px', fontSize: 12 }}
                   onClick={() => {
@@ -954,6 +1072,7 @@ function SpaceManagerDialog({
                       )}
                       <div className="folder-mgr-actions">
                         <button
+                          type="button"
                           className="icon-btn"
                           title="新建子文件夹"
                           onClick={() => {
@@ -965,6 +1084,7 @@ function SpaceManagerDialog({
                           <_I3.plus width="13" height="13" />
                         </button>
                         <button
+                          type="button"
                           className="icon-btn"
                           title="重命名"
                           onClick={() => {
@@ -974,7 +1094,13 @@ function SpaceManagerDialog({
                             setMovingId(null);
                           }}
                         >
-                          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                          <svg
+                            aria-hidden="true"
+                            width="13"
+                            height="13"
+                            viewBox="0 0 14 14"
+                            fill="none"
+                          >
                             <path
                               d="M2 12h10M3.5 8.5h2l5-5-2-2-5 5z"
                               stroke="currentColor"
@@ -984,6 +1110,7 @@ function SpaceManagerDialog({
                           </svg>
                         </button>
                         <button
+                          type="button"
                           className="icon-btn"
                           title="移动到…"
                           onClick={() => {
@@ -992,7 +1119,13 @@ function SpaceManagerDialog({
                             setCreatingUnder(null);
                           }}
                         >
-                          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                          <svg
+                            aria-hidden="true"
+                            width="13"
+                            height="13"
+                            viewBox="0 0 14 14"
+                            fill="none"
+                          >
                             <path
                               d="M1.5 4V11h11V5H7L5.5 3H1.5z"
                               stroke="currentColor"
@@ -1009,6 +1142,7 @@ function SpaceManagerDialog({
                           </svg>
                         </button>
                         <button
+                          type="button"
                           className="icon-btn"
                           title="删除"
                           onClick={() => confirmDeleteFolder(f)}
@@ -1025,28 +1159,24 @@ function SpaceManagerDialog({
                         <span style={{ fontSize: 12, color: 'var(--ink-4)', whiteSpace: 'nowrap' }}>
                           移动到
                         </span>
-                        <select
+                        <Select
                           className="input"
-                          ref={(el: Loose) => el?.focus()}
-                          defaultValue=""
-                          onChange={(e: Loose) => {
-                            if (e.target.value) moveFolder(f.id, e.target.value);
+                          ariaLabel="移动到目标目录"
+                          placeholder="选择目标目录…"
+                          value=""
+                          options={[
+                            { value: '__root__', label: '空间根目录' },
+                            ...folderTree
+                              .filter((t: Loose) => !subtreeIds(f.id).has(t.id))
+                              .map((t: Loose) => ({
+                                value: t.id,
+                                label: `${'　'.repeat(t.depth)}${t.name}`,
+                              })),
+                          ]}
+                          onChange={(v: string) => {
+                            if (v) moveFolder(f.id, v);
                           }}
-                          style={{ padding: '2px 8px', fontSize: 13, flex: 1 }}
-                        >
-                          <option value="" disabled>
-                            选择目标目录…
-                          </option>
-                          <option value="__root__">空间根目录</option>
-                          {folderTree
-                            .filter((t: Loose) => !subtreeIds(f.id).has(t.id))
-                            .map((t: Loose) => (
-                              <option key={t.id} value={t.id}>
-                                {'　'.repeat(t.depth)}
-                                {t.name}
-                              </option>
-                            ))}
-                        </select>
+                        />
                       </div>
                     )}
                     {creatingUnder === f.id && (
@@ -1097,9 +1227,16 @@ function SpaceManagerDialog({
         <div className="dialog-foot">
           {isEditing ? (
             <button
+              type="button"
               className="btn danger ghost"
-              onClick={() => {
-                if (confirm(`删除空间「${editing.name}」？`)) {
+              onClick={async () => {
+                const ok = await confirmDialog({
+                  title: `删除空间「${editing.name}」？`,
+                  message: '空间需先清空其下文档才能删除。',
+                  confirmLabel: '删除空间',
+                  danger: true,
+                });
+                if (ok) {
                   onDelete(editing.id);
                   onClose();
                 }
@@ -1111,10 +1248,15 @@ function SpaceManagerDialog({
             <span></span>
           )}
           <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn ghost" onClick={onClose}>
+            <button type="button" className="btn ghost" onClick={onClose}>
               取消
             </button>
-            <button className="btn primary" disabled={!form.name.trim()} onClick={submit}>
+            <button
+              type="button"
+              className="btn primary"
+              disabled={!form.name.trim()}
+              onClick={submit}
+            >
               {isCreating ? '创建' : '保存'}
             </button>
           </div>

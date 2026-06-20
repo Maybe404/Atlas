@@ -1,12 +1,19 @@
 import { useQuery } from '@tanstack/react-query';
-import { useCallback, useRef } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { apiGet } from '../api-client';
+import { I } from '../chrome';
 import type { Loose } from '../loose-types';
 import { MarkdownReader } from './markdown-reader';
 import { dotClass } from './shared';
 
 export function PublicDocumentView({ token, onChromeScroll }: Loose) {
   const iframeRef = useRef<Loose>(null);
+  const [copied, setCopied] = useState(false);
+  const copyLink = () => {
+    navigator.clipboard?.writeText(window.location.href);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1400);
+  };
   const bindIframeScroll = useCallback(() => {
     try {
       iframeRef.current?.contentWindow?.addEventListener('scroll', onChromeScroll, {
@@ -48,6 +55,11 @@ export function PublicDocumentView({ token, onChromeScroll }: Loose) {
         <span className="mono dim" style={{ fontSize: 11 }}>
           {doc.updated}
         </span>
+        <div style={{ flex: 1 }} />
+        <button type="button" className="pill-btn ghost" onClick={copyLink}>
+          {copied ? <I.check /> : <I.link />}
+          <span>{copied ? '已复制' : '复制链接'}</span>
+        </button>
       </div>
       <div className="reader-iframe-wrap" onScroll={onChromeScroll}>
         {doc.format === 'markdown' ? (

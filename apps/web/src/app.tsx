@@ -8,7 +8,8 @@ import { CmdK, ShareDialog, SpaceManagerDialog, ToastWrap } from './dialogs';
 import type { Loose, RouteState, Toast } from './loose-types';
 import { readerTarget, setLastReader } from './reader-progress';
 import { TweakRadio, TweakSection, TweaksPanel, TweakToggle, useTweaks } from './tweaks-panel';
-import { AdminDocsView, PublicDocumentView, ReaderView } from './views';
+import { ConfirmRoot, clickableProps } from './ui-kit';
+import { AdminDocsView, PublicDocumentView, ReaderView, SpaceIndexView } from './views';
 import { AdminSettingsView, AdminUploadView } from './views-admin';
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/ {
@@ -17,8 +18,10 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/ {
   dockMagnify: true,
 } /*EDITMODE-END*/;
 
-// Views that have a sidebar (only reader per spec — admin pages are full-width)
-const SIDEBAR_VIEWS = new Set(['reader']);
+// Views that keep the directory sidebar (reader + the per-space index — admin
+// pages are full-width). Clicking a space name navigates to its index without
+// losing the tree.
+const SIDEBAR_VIEWS = new Set(['reader', 'space']);
 
 function stateFromLocation(location: Loose): RouteState {
   const params = new URLSearchParams(location.search);
@@ -34,6 +37,7 @@ function stateFromLocation(location: Loose): RouteState {
       view: 'admin-settings',
       spaceId: params.get('space') || 's1',
       docId: params.get('doc') || 'd1',
+      pane: params.get('pane') || undefined,
     };
   if (path.startsWith('/admin/docs'))
     return {
@@ -54,6 +58,8 @@ function stateFromLocation(location: Loose): RouteState {
     return { view: 'public', token: publicMatch[1], spaceId: 'public', docId: publicMatch[1] };
   const docMatch = path.match(/^\/spaces\/([^/]+)\/docs\/([^/]+)/);
   if (docMatch) return { view: 'reader', spaceId: docMatch[1], docId: docMatch[2] };
+  const spaceMatch = path.match(/^\/spaces\/([^/]+)\/?$/);
+  if (spaceMatch) return { view: 'space', spaceId: spaceMatch[1] };
   return {
     view: params.get('view') || 'reader',
     spaceId: params.get('space') || 's1',
@@ -67,7 +73,9 @@ function urlForState(next: RouteState) {
       ? `/admin/docs?space=${next.spaceId}`
       : '/admin/docs';
   if (next.view === 'admin-upload') return '/admin/upload';
-  if (next.view === 'admin-settings') return '/admin/settings';
+  if (next.view === 'admin-settings')
+    return next.pane ? `/admin/settings?pane=${next.pane}` : '/admin/settings';
+  if (next.view === 'space') return `/spaces/${next.spaceId || 's1'}`;
   return `/spaces/${next.spaceId || 's1'}/docs/${next.docId || 'd1'}`;
 }
 
@@ -109,7 +117,7 @@ function App() {
   const isGuest = !user;
 
   const navigate = useCallback(
-    ({ view: v, spaceId: s, docId: d }: RouteState) => {
+    ({ view: v, spaceId: s, docId: d, pane: p }: RouteState) => {
       if (!user && ['admin-docs', 'admin-upload', 'admin-settings'].includes(v ?? '')) {
         setReturnTo({ view, spaceId, docId });
         routerNavigate('/login');
@@ -119,6 +127,7 @@ function App() {
         view: v || view,
         spaceId: s || spaceId,
         docId: d || docId,
+        pane: p,
       };
       routerNavigate(urlForState(next));
     },
@@ -184,20 +193,18 @@ function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Unified chrome auto-hide: topbar + dock + reader meta bar all hide
-  // after 3s of stillness. Scroll hides immediately. Click on blank area
-  // (NOT on buttons / interactive elements) wakes. Mouse near edges wakes.
+  // Unified chrome auto-hide: topbar + dock + reader meta bar hide only after a
+  // stretch of genuine stillness. Scrolling / wheel now *wakes* the chrome and
+  // resets the idle timer (it used to vanish the instant you scrolled, which
+  // made the nav feel like it was running away while reading). Click on blank
+  // area (NOT on buttons / interactive elements) wakes. Mouse near edges wakes.
   const mainRef = useRef<Loose>(null);
   const chromeHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const HIDE_DELAY = 3000;
+  const HIDE_DELAY = 4000;
   const wakeChrome = useCallback(() => {
     setChromeVisible(true);
     if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
     chromeHideTimer.current = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
-  }, []);
-  const hideChrome = useCallback(() => {
-    if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
-    setChromeVisible(false);
   }, []);
   useEffect(() => {
     chromeHideTimer.current = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
@@ -216,16 +223,16 @@ function App() {
 
     document.addEventListener('click', onClick);
     document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('wheel', hideChrome, { passive: true });
+    document.addEventListener('wheel', wakeChrome, { passive: true });
     return () => {
       if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
       document.removeEventListener('click', onClick);
       document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('wheel', hideChrome);
+      document.removeEventListener('wheel', wakeChrome);
     };
-  }, [hideChrome, wakeChrome]);
+  }, [wakeChrome]);
 
-  const ctx = { view, spaceId, docId };
+  const ctx = { view, spaceId, docId, pane: routeState.pane };
   const isLogin = view === 'login';
   const isAdminView = ['admin-docs', 'admin-upload', 'admin-settings'].includes(view);
   const isWorkspaceAdmin = !!user && user.role === 'admin';
@@ -315,12 +322,13 @@ function App() {
       )}
       {hasSidebar && sidebarCollapsed && (
         <button
+          type="button"
           className="sidebar-fab"
           aria-label="展开目录"
           onClick={() => setSidebarCollapsed(false)}
           title="展开目录"
         >
-          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
             <path
               d="M3 3.5h8M3 7h8M3 10.5h8"
               stroke="currentColor"
@@ -334,7 +342,7 @@ function App() {
       <main
         className="main"
         ref={mainRef}
-        onScroll={hideChrome}
+        onScroll={wakeChrome}
         data-screen-label={
           view === 'reader'
             ? '01 Reader · Doc (iframe)'
@@ -344,7 +352,9 @@ function App() {
                 ? '03 Admin · Upload'
                 : view === 'public'
                   ? 'Public · Document'
-                  : '04 Admin · Settings'
+                  : view === 'space'
+                    ? 'Space · Index'
+                    : '04 Admin · Settings'
         }
       >
         {error && <div className="app-state-banner">加载失败 · {error.message}</div>}
@@ -360,12 +370,21 @@ function App() {
             onNavigate={navigate}
             onShare={(id: string) => openShare(id)}
             onLogin={openLogin}
-            onChromeScroll={hideChrome}
+            onChromeScroll={wakeChrome}
             mutations={mutations}
           />
         )}
         {view === 'public' && (
-          <PublicDocumentView token={routeState.token} onChromeScroll={hideChrome} />
+          <PublicDocumentView token={routeState.token} onChromeScroll={wakeChrome} />
+        )}
+        {view === 'space' && (
+          <SpaceIndexView
+            ctx={ctx}
+            spaces={spaces}
+            members={members}
+            user={user}
+            onNavigate={navigate}
+          />
         )}
         {lacksAdminAccess && (
           <AdminAccessDenied user={user} onNavigate={navigate} readerHome={readerHome} />
@@ -416,6 +435,7 @@ function App() {
           <Dock
             view={view}
             onNavigate={navigate}
+            onLogin={openLogin}
             visible={chromeVisible}
             magnify={tweaks.dockMagnify}
             isGuest={isGuest}
@@ -432,6 +452,7 @@ function App() {
           onClose={() => setCmdkOpen(false)}
           onNavigate={navigate}
           onToggleTheme={() => cycleTheme(tweaks.theme === 'dark' ? 'warm' : 'dark')}
+          onShareCurrent={() => openShare(shareDocId)}
         />
       )}
       <ShareDialog
@@ -461,6 +482,7 @@ function App() {
         onDelete={mutations.deleteSpace}
       />
       <ToastWrap toasts={toasts} />
+      <ConfirmRoot />
 
       <TweaksPanel title="Tweaks">
         <TweakSection label="主题">
@@ -497,7 +519,7 @@ function App() {
               { l: '团队 · 上传', v: { view: 'admin-upload' } },
               { l: '管理员 · 设置', v: { view: 'admin-settings' } },
             ].map((x: Loose) => (
-              <div key={x.l} className="tweak-link" onClick={() => navigate(x.v)}>
+              <div key={x.l} className="tweak-link" {...clickableProps(() => navigate(x.v))}>
                 <span>{x.l}</span>
                 <span style={{ color: 'var(--ink-4)' }}>→</span>
               </div>
@@ -512,7 +534,7 @@ function App() {
 // ─────────────────────────────────────────────────────────────────────────
 // DOCK — macOS-style magnification, replaces view-switcher
 // ─────────────────────────────────────────────────────────────────────────
-function Dock({ view, onNavigate, visible, magnify, isGuest, readerHome }: Loose) {
+function Dock({ view, onNavigate, onLogin, visible, magnify, isGuest, readerHome }: Loose) {
   const allItems = [
     {
       id: 'reader',
@@ -525,7 +547,13 @@ function Dock({ view, onNavigate, visible, magnify, isGuest, readerHome }: Loose
     { id: 'admin-upload', label: '上传', icon: 'upload', go: { view: 'admin-upload' } },
     { id: 'admin-settings', label: '设置', icon: 'settings', go: { view: 'admin-settings' } },
   ];
-  const items = isGuest ? allItems.filter((item: Loose) => item.guest) : allItems;
+  // Guests only see the reader; give them a login entry on the dock too so it
+  // isn't a single lonely icon with no way into the workspace.
+  const guestItems = [
+    allItems[0],
+    { id: 'login', label: '登录', icon: 'login', guest: true, action: 'login' },
+  ];
+  const items = isGuest ? guestItems : allItems;
 
   const BASE = 34;
   const MAG = 48;
@@ -588,6 +616,7 @@ function Dock({ view, onNavigate, visible, magnify, isGuest, readerHome }: Loose
 
   return (
     <div className={`dock-anchor ${visible ? '' : 'hidden'}`}>
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: pointer tracking for the magnification effect; the dock items themselves are keyboard-operable */}
       <div
         ref={dockRef}
         className="dock-panel"
@@ -606,7 +635,7 @@ function Dock({ view, onNavigate, visible, magnify, isGuest, readerHome }: Loose
             key={it.id}
             item={it}
             active={view === it.id}
-            onClick={() => onNavigate(it.go)}
+            onClick={() => (it.action === 'login' ? onLogin?.() : onNavigate(it.go))}
             setRef={(el: Loose) => {
               itemRefs.current[i] = el;
             }}
@@ -630,7 +659,8 @@ function DockItem({ item, active, onClick, setRef }: Loose) {
         transition: 'transform 70ms ease-out',
         willChange: 'transform',
       }}
-      onClick={onClick}
+      aria-current={active ? 'page' : undefined}
+      {...clickableProps(onClick, { label: item.label })}
     >
       <div className="dock-glyph">
         <DockGlyph kind={item.icon} size={iconSize} />
@@ -646,7 +676,7 @@ function DockGlyph({ kind, size = 18 }: Loose) {
     sw = 1.5;
   if (kind === 'book')
     return (
-      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+      <svg aria-hidden="true" width={s} height={s} viewBox="0 0 18 18" fill="none">
         <path
           d="M3 3.5h5.5a2 2 0 0 1 2 2V15a1.5 1.5 0 0 0-1.5-1.5H3z"
           stroke="currentColor"
@@ -663,7 +693,7 @@ function DockGlyph({ kind, size = 18 }: Loose) {
     );
   if (kind === 'admin')
     return (
-      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+      <svg aria-hidden="true" width={s} height={s} viewBox="0 0 18 18" fill="none">
         <rect
           x="2.5"
           y="3.5"
@@ -683,7 +713,7 @@ function DockGlyph({ kind, size = 18 }: Loose) {
     );
   if (kind === 'upload')
     return (
-      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+      <svg aria-hidden="true" width={s} height={s} viewBox="0 0 18 18" fill="none">
         <path
           d="M9 11.5V3M9 3 6 6M9 3l3 3"
           stroke="currentColor"
@@ -699,9 +729,27 @@ function DockGlyph({ kind, size = 18 }: Loose) {
         />
       </svg>
     );
+  if (kind === 'login')
+    return (
+      <svg aria-hidden="true" width={s} height={s} viewBox="0 0 18 18" fill="none">
+        <path
+          d="M3 9h8M8 6l3 3-3 3"
+          stroke="currentColor"
+          strokeWidth={sw}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <path
+          d="M11.5 3.5h2A1.5 1.5 0 0 1 15 5v8a1.5 1.5 0 0 1-1.5 1.5h-2"
+          stroke="currentColor"
+          strokeWidth={sw}
+          strokeLinecap="round"
+        />
+      </svg>
+    );
   if (kind === 'settings')
     return (
-      <svg width={s} height={s} viewBox="0 0 18 18" fill="none">
+      <svg aria-hidden="true" width={s} height={s} viewBox="0 0 18 18" fill="none">
         <circle cx="9" cy="9" r="2.4" stroke="currentColor" strokeWidth={sw} />
         <path
           d="M9 1.6v2.2M9 14.2v2.2M1.6 9h2.2M14.2 9h2.2M3.8 3.8l1.6 1.6M12.6 12.6l1.6 1.6M14.2 3.8l-1.6 1.6M5.4 12.6l-1.6 1.6"
@@ -721,7 +769,7 @@ function AdminAccessDenied({ user, onNavigate, readerHome }: Loose) {
     <div className="main-card">
       <div className="admin-denied">
         <div className="reader-locked-glyph">
-          <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+          <svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28" fill="none">
             <rect
               x="6"
               y="13"
@@ -747,6 +795,7 @@ function AdminAccessDenied({ user, onNavigate, readerHome }: Loose) {
         </p>
         <div className="reader-locked-actions">
           <button
+            type="button"
             className="reader-locked-secondary"
             onClick={() => onNavigate(readerHome || { view: 'reader' })}
           >

@@ -1,5 +1,6 @@
 import React from 'react';
 import type { Loose } from './loose-types';
+import { Select } from './ui-kit';
 
 // tweaks-panel
 // Reusable Tweaks shell + form-control helpers.
@@ -88,7 +89,7 @@ const __TWEAKS_STYLE = `
     background:rgba(255,255,255,.6);color:inherit;font:inherit;outline:none}
   .twk-field:focus{border-color:rgba(0,0,0,.25);background:rgba(255,255,255,.85)}
   select.twk-field{padding-right:22px;
-    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='rgba(0,0,0,.5)' d='M0 0h10L5 6z'/></svg>");
+    background-image:url("data:image/svg+xml;utf8,<svg aria-hidden="true" xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path fill='rgba(0,0,0,.5)' d='M0 0h10L5 6z'/></svg>");
     background-repeat:no-repeat;background-position:right 8px center}
 
   .twk-slider{appearance:none;-webkit-appearance:none;width:100%;height:4px;margin:6px 0;
@@ -312,9 +313,11 @@ function TweaksPanel({
         data-noncommentable=""
         style={{ right: offsetRef.current.x, bottom: offsetRef.current.y }}
       >
+        {/* biome-ignore lint/a11y/noStaticElementInteractions: drag handle for repositioning the dev tweak panel */}
         <div className="twk-hd" onMouseDown={onDragStart}>
           <b>{title}</b>
           <button
+            type="button"
             className="twk-x"
             aria-label="Close tweaks"
             onMouseDown={(e: Loose) => e.stopPropagation()}
@@ -521,6 +524,7 @@ function TweakRadio({
           }}
         />
         {opts.map((o: Loose) => (
+          // biome-ignore lint/a11y/useSemanticElements: segmented control styled as a radio group; a native radio can't carry the sliding indicator
           <button key={o.value} type="button" role="radio" aria-checked={o.value === value}>
             {o.label}
           </button>
@@ -543,21 +547,16 @@ function TweakSelect({
 }) {
   return (
     <TweakRow label={label}>
-      <select
+      <Select
         className="twk-field"
+        ariaLabel={label}
         value={String(value)}
-        onChange={(e: Loose) => onChange(e.target.value)}
-      >
-        {options.map((o: Loose) => {
-          const v = typeof o === 'object' ? o.value : o;
-          const l = typeof o === 'object' ? o.label : o;
-          return (
-            <option key={v} value={v}>
-              {l}
-            </option>
-          );
-        })}
-      </select>
+        options={options.map((o: Loose) => ({
+          value: String(typeof o === 'object' ? o.value : o),
+          label: String(typeof o === 'object' ? o.label : o),
+        }))}
+        onChange={(v: string) => onChange(v)}
+      />
     </TweakRow>
   );
 }
@@ -711,12 +710,13 @@ function TweakColor({
   return (
     <TweakRow label={label}>
       <div className="twk-chips" role="radiogroup">
-        {options.map((o: Loose, i: Loose) => {
+        {options.map((o: Loose) => {
           const colors = Array.isArray(o) ? o : [o];
           const [hero, ...rest] = colors;
           const sup = rest.slice(0, 4);
           const on = key(o) === cur;
           return (
+            // biome-ignore lint/a11y/useSemanticElements: color-swatch radio; a native <input type="radio"> can't render the color fill
             <button
               key={key(o)}
               type="button"

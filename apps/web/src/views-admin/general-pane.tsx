@@ -1,4 +1,8 @@
+import { useState } from 'react';
+import { Select } from '../ui-kit';
+
 export function GeneralPane() {
+  const [lang, setLang] = useState('zh');
   return (
     <>
       <div className="pane-head">
@@ -19,11 +23,15 @@ export function GeneralPane() {
       <div className="setting-card flat">
         <div className="card-body">
           <div className="field">
-            <label className="field-label">工作区名称</label>
-            <input className="input" defaultValue="林氏工作室" />
+            <label className="field-label" htmlFor="ws-name">
+              工作区名称
+            </label>
+            <input id="ws-name" className="input" defaultValue="林氏工作室" />
           </div>
           <div className="field">
-            <label className="field-label">URL 标识符</label>
+            <label className="field-label" htmlFor="ws-slug">
+              URL 标识符
+            </label>
             <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
               <div
                 style={{
@@ -39,6 +47,7 @@ export function GeneralPane() {
                 atlas.team /
               </div>
               <input
+                id="ws-slug"
                 className="input"
                 defaultValue="lin-studio"
                 style={{
@@ -51,11 +60,17 @@ export function GeneralPane() {
             </div>
           </div>
           <div className="field" style={{ marginBottom: 0 }}>
-            <label className="field-label">默认语言</label>
-            <select className="input">
-              <option>简体中文</option>
-              <option>English</option>
-            </select>
+            <span className="field-label">默认语言</span>
+            <Select
+              className="input"
+              ariaLabel="默认语言"
+              value={lang}
+              options={[
+                { value: 'zh', label: '简体中文' },
+                { value: 'en', label: 'English' },
+              ]}
+              onChange={setLang}
+            />
           </div>
         </div>
       </div>

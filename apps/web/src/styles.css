@@ -4308,3 +4308,189 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 .icon-btn.danger:hover { color: #ff3b30; }
 .muted-hint { font-size: 12px; color: var(--ink-4); }
 .muted-hint.pad { padding: 24px; text-align: center; }
+
+/* ── Themed select (replaces native <select>) ───────────────────────────── */
+.atlas-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  text-align: left;
+  color: var(--ink);
+  font: inherit;
+  letter-spacing: -0.012em;
+}
+/* When given the .input class it inherits the field look; otherwise a compact pill. */
+.atlas-select:not(.input):not(.filter-select) {
+  padding: 6px 10px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--canvas);
+  font-size: 13px;
+}
+/* Filter-bar variant: borderless pill, no native caret image (we draw our own). */
+.atlas-select.filter-select {
+  background-image: none;
+  border: 0;
+  background-color: rgba(0,0,0,0.04);
+  padding: 5px 12px;
+  font-size: 12.5px;
+  font-weight: 500;
+  border-radius: var(--r-pill);
+}
+.atlas-select.filter-select:hover { background-color: rgba(0,0,0,0.07); }
+[data-theme="dark"] .atlas-select.filter-select { background-color: rgba(255,255,255,0.08); }
+[data-theme="dark"] .atlas-select.filter-select:hover { background-color: rgba(255,255,255,0.12); }
+.atlas-select.input { width: 100%; padding-right: 12px; cursor: pointer; }
+.atlas-select:hover { border-color: var(--hairline-strong); }
+.atlas-select.open { border-color: var(--blue); }
+.atlas-select:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+.atlas-select[disabled] { opacity: 0.45; pointer-events: none; }
+.atlas-select-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.atlas-select-value.placeholder { color: var(--ink-4); }
+.atlas-select-caret { color: var(--ink-4); flex-shrink: 0; transition: transform var(--dur-fast); }
+.atlas-select.open .atlas-select-caret { transform: rotate(180deg); }
+
+.atlas-select-menu {
+  z-index: 90;
+  max-height: 264px;
+  overflow-y: auto;
+  padding: 5px;
+  background: var(--canvas);
+  border-radius: var(--r-md);
+  border: 1px solid var(--hairline-2);
+  box-shadow: var(--shadow-overlay);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  animation: lift 0.16s var(--ease-spring);
+  transform-origin: top center;
+}
+.atlas-select-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  color: var(--ink);
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  letter-spacing: -0.012em;
+}
+.atlas-select-option.active { background: rgba(0,0,0,0.05); }
+[data-theme="dark"] .atlas-select-option.active { background: rgba(255,255,255,0.08); }
+.atlas-select-option.selected { color: var(--blue); font-weight: 500; }
+.atlas-select-option-label { flex: 1; }
+.atlas-select-option-hint { font-size: 11px; color: var(--ink-4); }
+.atlas-select-check { color: var(--blue); flex-shrink: 0; }
+
+/* ── Confirm dialog ─────────────────────────────────────────────────────── */
+.confirm-dialog { width: min(420px, 92vw); }
+.confirm-body { padding: 24px 24px 8px; }
+.confirm-message {
+  font-size: 13.5px;
+  color: var(--ink-3);
+  margin-top: 8px;
+  line-height: 1.55;
+  letter-spacing: -0.012em;
+}
+.confirm-foot { justify-content: flex-end; }
+.btn.danger-solid { background: #ff3b30; color: #fff; }
+.btn.danger-solid:hover { background: #e0352b; }
+
+/* ── Split space row (chevron toggles, name navigates) ──────────────────── */
+.breadcrumb button.crumb {
+  background: none;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  padding: 0;
+}
+.tree-space-row { padding: 0; gap: 0; }
+.tree-space-row .chev-btn {
+  width: auto;
+  height: auto;
+  padding: 7px 4px 7px 9px;
+  align-self: stretch;
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--r-sm) 0 0 var(--r-sm);
+  color: var(--ink-4);
+  cursor: pointer;
+}
+.tree-space-row .chev-btn.expanded { transform: rotate(90deg); }
+.tree-space-row .chev-btn:hover { color: var(--ink-2); }
+.tree-space-name {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px 7px 5px;
+  color: inherit;
+  font: inherit;
+  letter-spacing: -0.012em;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+.tree-space-name .name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tree-space-name .count { font-family: var(--font-mono); font-size: 11px; color: var(--ink-4); }
+.tree-space-row .chev-btn:focus-visible,
+.tree-space-name:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+
+/* Keyboard focus ring for clickable rows that became buttons / got tabindex */
+.tree-node:focus-visible,
+.dock-item:focus-visible,
+.cmdk-item:focus-visible,
+.toc-sec:focus-visible,
+.toc-sub:focus-visible,
+.color-swatch:focus-visible,
+.tweak-link:focus-visible,
+.doc-card:focus-visible,
+.tab:focus-visible,
+.settings-nav-item:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; }
+
+/* ── Share invite autocomplete (replaces native <datalist>) ─────────────── */
+.share-invite-row { display: flex; gap: 8px; margin-bottom: 18px; align-items: flex-start; }
+.share-invite-field { flex: 1; position: relative; }
+.share-invite-field .input { width: 100%; }
+.share-suggest {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 60;
+  background: var(--canvas);
+  border-radius: var(--r-md);
+  border: 1px solid var(--hairline-2);
+  box-shadow: var(--shadow-overlay);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 240px;
+  overflow-y: auto;
+  animation: lift 0.16s var(--ease-spring);
+  transform-origin: top center;
+}
+.share-suggest-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--dur-fast);
+}
+.share-suggest-row:hover,
+.share-suggest-row:focus-visible { background: rgba(0,0,0,0.05); outline: none; }
+[data-theme="dark"] .share-suggest-row:hover,
+[data-theme="dark"] .share-suggest-row:focus-visible { background: rgba(255,255,255,0.08); }
+.share-suggest-row .avatar { background: var(--parchment); color: var(--ink-2); }
+.share-suggest-row .name { font-size: 13.5px; color: var(--ink); }
+.share-suggest-row .email { font-size: 12px; color: var(--ink-4); }

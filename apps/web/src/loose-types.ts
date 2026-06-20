@@ -8,6 +8,7 @@ export type RouteState = {
   spaceId?: string;
   docId?: string;
   token?: string;
+  pane?: string;
 };
 
 export type Toast = {

@@ -85,6 +85,7 @@ export function ReaderView({
           <p className="reader-locked-desc">这个空间目前是空的。上传或新建文档后会显示在这里。</p>
           <div className="reader-locked-actions">
             <button
+              type="button"
               className="reader-locked-secondary"
               onClick={() => onNavigate({ view: 'reader', ...firstPublicDoc(spaces) })}
             >
@@ -109,13 +110,13 @@ export function ReaderView({
           )}
           <div style={{ flex: 1 }} />
           {allowed && (
-            <button className="pill-btn ghost" onClick={copyReaderLink}>
+            <button type="button" className="pill-btn ghost" onClick={copyReaderLink}>
               {copied ? <_I.check /> : <_I.link />}
               <span>{copied ? '已复制' : '链接'}</span>
             </button>
           )}
           {allowed && earlyDocId && (
-            <button className="pill-btn" onClick={() => onShare(earlyDocId)}>
+            <button type="button" className="pill-btn" onClick={() => onShare(earlyDocId)}>
               <_I.share />
               <span>分享</span>
             </button>
@@ -123,7 +124,7 @@ export function ReaderView({
         </div>
         <div className="reader-locked">
           <div className="reader-locked-glyph">
-            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+            <svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28" fill="none">
               <rect
                 x="6"
                 y="13"
@@ -153,6 +154,7 @@ export function ReaderView({
           <div className="reader-locked-actions">
             {user ? (
               <button
+                type="button"
                 className="reader-locked-secondary"
                 onClick={() => onNavigate({ view: 'reader', ...firstPublicDoc(spaces) })}
               >
@@ -160,8 +162,8 @@ export function ReaderView({
               </button>
             ) : (
               <>
-                <button className="reader-locked-primary" onClick={onLogin}>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <button type="button" className="reader-locked-primary" onClick={onLogin}>
+                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
                     <path
                       d="M2 7h7M7 4l3 3-3 3"
                       stroke="currentColor"
@@ -179,6 +181,7 @@ export function ReaderView({
                   登录账号
                 </button>
                 <button
+                  type="button"
                   className="reader-locked-secondary"
                   onClick={() => onNavigate({ view: 'reader', ...firstPublicDoc(spaces) })}
                 >
@@ -207,32 +210,33 @@ export function ReaderView({
             </span>
           </>
         ) : null}
+        <div style={{ flex: 1 }} />
         {doc ? (
           <>
             {allowed && (
-              <button className="pill-btn ghost" onClick={copyReaderLink}>
+              <button type="button" className="pill-btn ghost" onClick={copyReaderLink}>
                 {copied ? <_I.check /> : <_I.link />}
                 <span>{copied ? '已复制' : '链接'}</span>
               </button>
             )}
             {allowed && (
-              <button className="pill-btn" onClick={() => onShare(doc.id)}>
+              <button type="button" className="pill-btn" onClick={() => onShare(doc.id)}>
                 <_I.share />
                 <span>分享</span>
               </button>
             )}
             {allowed && isMarkdown && (
               <>
-                <button className="pill-btn ghost" onClick={() => doCopy('source')}>
+                <button type="button" className="pill-btn ghost" onClick={() => doCopy('source')}>
                   {copiedMode === 'source' ? <_I.check /> : <_I.copy />}
                   <span>{copiedMode === 'source' ? '已复制' : '复制源码'}</span>
                 </button>
-                <button className="pill-btn ghost" onClick={() => doCopy('rich')}>
+                <button type="button" className="pill-btn ghost" onClick={() => doCopy('rich')}>
                   {copiedMode === 'rich' ? <_I.check /> : <_I.copy />}
                   <span>{copiedMode === 'rich' ? '已复制' : '带格式'}</span>
                 </button>
                 {detailDoc?.canEdit && (
-                  <button className="pill-btn" onClick={() => setEditing(true)}>
+                  <button type="button" className="pill-btn" onClick={() => setEditing(true)}>
                     <_I.edit />
                     <span>编辑</span>
                   </button>
@@ -274,7 +278,7 @@ export function ReaderView({
         ) : (
           <div className="reader-locked">
             <div className="reader-locked-glyph">
-              <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28" fill="none">
                 <rect
                   x="6"
                   y="13"
@@ -307,8 +311,8 @@ export function ReaderView({
             </p>
             <div className="reader-locked-actions">
               {!user && (
-                <button className="reader-locked-primary" onClick={onLogin}>
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <button type="button" className="reader-locked-primary" onClick={onLogin}>
+                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
                     <path
                       d="M2 7h7M7 4l3 3-3 3"
                       stroke="currentColor"
@@ -327,6 +331,7 @@ export function ReaderView({
                 </button>
               )}
               <button
+                type="button"
                 className="reader-locked-secondary"
                 onClick={() => {
                   onNavigate({ view: 'reader', ...firstPublicDoc(spaces) });

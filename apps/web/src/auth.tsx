@@ -166,7 +166,7 @@ export function useAuth({
 
 function UserGlyph() {
   return (
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none">
+    <svg aria-hidden="true" width="15" height="15" viewBox="0 0 16 16" fill="none">
       <circle cx="8" cy="6" r="2.6" stroke="currentColor" strokeWidth="1.4" />
       <path
         d="M2.8 13.5c0.6-2.6 2.7-4.1 5.2-4.1s4.6 1.5 5.2 4.1"
@@ -180,7 +180,7 @@ function UserGlyph() {
 
 function LogoutGlyph() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
       <path
         d="M6 2.5H4A1.5 1.5 0 0 0 2.5 4v6A1.5 1.5 0 0 0 4 11.5h2M8.5 4 11.5 7l-3 3M5 7h6.4"
         stroke="currentColor"
@@ -194,7 +194,7 @@ function LogoutGlyph() {
 
 function InfoGlyph() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
       <circle cx="7" cy="7" r="5.4" stroke="currentColor" strokeWidth="1.3" />
       <path d="M7 6v3.6M7 4.5v0.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
     </svg>
@@ -203,7 +203,7 @@ function InfoGlyph() {
 
 function SwitchGlyph() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
       <path
         d="M3 5h7l-1.6-1.6M11 9H4l1.6 1.6"
         stroke="currentColor"
@@ -217,7 +217,7 @@ function SwitchGlyph() {
 
 function PlusGlyph() {
   return (
-    <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
       <path d="M7 3v8M3 7h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
     </svg>
   );
@@ -303,6 +303,7 @@ export function UserMenu({
     >
       {user ? (
         <button
+          type="button"
           className="user-menu-trigger"
           style={{ background: user.tint || tintForUser(user) }}
           onClick={(event: Loose) => {
@@ -317,6 +318,7 @@ export function UserMenu({
         </button>
       ) : (
         <button
+          type="button"
           className="user-menu-trigger guest"
           onClick={(event: Loose) => {
             event.stopPropagation();
@@ -331,6 +333,8 @@ export function UserMenu({
       )}
 
       {open && (
+        // biome-ignore lint/a11y/noStaticElementInteractions: menu wrapper only stops trigger-click propagation; its items are the real controls
+        // biome-ignore lint/a11y/useKeyWithClickEvents: menu wrapper only stops trigger-click propagation; its items are the real controls
         <div className="user-menu-pop" onClick={(event: Loose) => event.stopPropagation()}>
           {!user && (
             <div className="um-pane um-pane-guest">
@@ -344,6 +348,7 @@ export function UserMenu({
                 </div>
               </div>
               <button
+                type="button"
                 className="um-cta"
                 onClick={() => {
                   close();
@@ -373,7 +378,7 @@ export function UserMenu({
                 </span>
               </div>
               <div className="um-sep" />
-              <button className="um-item" onClick={() => setPane('info')}>
+              <button type="button" className="um-item" onClick={() => setPane('info')}>
                 <span className="um-item-glyph">
                   <InfoGlyph />
                 </span>
@@ -381,7 +386,7 @@ export function UserMenu({
                 <span className="um-chev">›</span>
               </button>
               {IS_DEV_DEMO_LOGIN && (
-                <button className="um-item" onClick={() => setPane('switch')}>
+                <button type="button" className="um-item" onClick={() => setPane('switch')}>
                   <span className="um-item-glyph">
                     <SwitchGlyph />
                   </span>
@@ -391,6 +396,7 @@ export function UserMenu({
               )}
               <div className="um-sep" />
               <button
+                type="button"
                 className="um-item um-item-danger"
                 onClick={() => {
                   close();
@@ -408,7 +414,12 @@ export function UserMenu({
           {user && pane === 'info' && (
             <div className="um-pane">
               <div className="um-pane-head">
-                <button className="um-back" onClick={() => setPane('main')} aria-label="返回">
+                <button
+                  type="button"
+                  className="um-back"
+                  onClick={() => setPane('main')}
+                  aria-label="返回"
+                >
                   ‹
                 </button>
                 <span className="um-pane-title">账号信息</span>
@@ -432,6 +443,7 @@ export function UserMenu({
               </dl>
               <div className="um-sep" />
               <button
+                type="button"
                 className="um-item um-item-danger"
                 onClick={() => {
                   close();
@@ -449,7 +461,12 @@ export function UserMenu({
           {user && pane === 'switch' && (
             <div className="um-pane">
               <div className="um-pane-head">
-                <button className="um-back" onClick={() => setPane('main')} aria-label="返回">
+                <button
+                  type="button"
+                  className="um-back"
+                  onClick={() => setPane('main')}
+                  aria-label="返回"
+                >
                   ‹
                 </button>
                 <span className="um-pane-title">切换账号</span>
@@ -459,6 +476,7 @@ export function UserMenu({
                   const active = account.id === user.id;
                   return (
                     <button
+                      type="button"
                       key={account.id}
                       className={`um-switch-row ${active ? 'active' : ''}`}
                       onClick={() => switchAccount(account)}
@@ -481,6 +499,7 @@ export function UserMenu({
               </div>
               <div className="um-sep" />
               <button
+                type="button"
                 className="um-item"
                 onClick={() => {
                   close();
@@ -561,7 +580,7 @@ export function LoginView({
       <div className="login-stage">
         <div className="login-brand">
           <div className="login-brand-mark">
-            <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+            <svg aria-hidden="true" width="44" height="44" viewBox="0 0 44 44" fill="none">
               <rect
                 x="6"
                 y="6"
@@ -625,13 +644,9 @@ export function LoginView({
               <label className="login-field">
                 <span className="login-label">
                   密码
-                  <a
-                    className="login-forgot"
-                    onClick={(event: Loose) => event.preventDefault()}
-                    href="#"
-                  >
+                  <button type="button" className="login-forgot">
                     忘记密码？
-                  </a>
+                  </button>
                 </span>
                 <input
                   type="password"

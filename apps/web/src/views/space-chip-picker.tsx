@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { I } from '../chrome';
 import type { Loose } from '../loose-types';
+import { clickableProps } from '../ui-kit';
 import { accentDot } from './shared';
 
 const _I = I;
@@ -20,15 +21,18 @@ export function SpaceChipPicker({ doc, spaces, onPick }: Loose) {
     <span
       ref={wrapRef}
       className="space-chip space-chip-edit"
-      onClick={(e: Loose) => {
-        e.stopPropagation();
-        setOpen((o: Loose) => !o);
-      }}
       style={{ position: 'relative' }}
+      {...clickableProps(
+        (e: Loose) => {
+          e.stopPropagation();
+          setOpen((o: Loose) => !o);
+        },
+        { label: '更换空间' },
+      )}
     >
       <span className={`dot ${accentDot(doc.spaceAccent)}`}></span>
       {doc.spaceName}
-      <svg className="chev" width="9" height="9" viewBox="0 0 10 10" fill="none">
+      <svg aria-hidden="true" className="chev" width="9" height="9" viewBox="0 0 10 10" fill="none">
         <path
           d="M2 3.5 5 7 8 3.5"
           stroke="currentColor"
@@ -38,6 +42,8 @@ export function SpaceChipPicker({ doc, spaces, onPick }: Loose) {
         />
       </svg>
       {open && (
+        // biome-ignore lint/a11y/noStaticElementInteractions: popover wrapper only stops click propagation, not an interactive control
+        // biome-ignore lint/a11y/useKeyWithClickEvents: popover wrapper only stops click propagation, not an interactive control
         <div className="space-picker-pop" onClick={(e: Loose) => e.stopPropagation()}>
           {spaces.map((s: Loose) => {
             const active = s.id === doc.spaceId;
@@ -45,10 +51,13 @@ export function SpaceChipPicker({ doc, spaces, onPick }: Loose) {
               <div
                 key={s.id}
                 className={`space-picker-row ${active ? 'active' : ''}`}
-                onClick={() => {
-                  onPick(s);
-                  setOpen(false);
-                }}
+                {...clickableProps(
+                  () => {
+                    onPick(s);
+                    setOpen(false);
+                  },
+                  { label: s.name },
+                )}
               >
                 <span className={`dot ${accentDot(s.accent)}`}></span>
                 <span>{s.name}</span>

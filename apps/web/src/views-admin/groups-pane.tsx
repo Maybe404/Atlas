@@ -2,7 +2,13 @@ import { useMemo, useState } from 'react';
 import { AnimatedScrollList, I } from '../chrome';
 import { CAPABILITY_ORDER, capabilityLabel } from '../labels';
 import type { Loose } from '../loose-types';
+import { confirmDialog, Select } from '../ui-kit';
 import { flattenFolders, folderPathLabel } from '../views/shared';
+
+const GRANT_ROLE_OPTIONS = [
+  { value: 'viewer', label: '只读' },
+  { value: 'editor', label: '可编辑' },
+];
 
 const _I2 = I;
 
@@ -129,10 +135,14 @@ function GroupCard({ group, spaces, members, mutations, pushToast }: Loose) {
           type="button"
           className="icon-btn danger"
           title="删除权限组"
-          onClick={() => {
-            if (confirm(`确认删除权限组「${group.name}」？组的能力与授权将一并移除。`)) {
-              mutations.deleteGroup(group.id);
-            }
+          onClick={async () => {
+            const ok = await confirmDialog({
+              title: `删除权限组「${group.name}」？`,
+              message: '组的能力与授权将一并移除。',
+              confirmLabel: '删除权限组',
+              danger: true,
+            });
+            if (ok) mutations.deleteGroup(group.id);
           }}
         >
           <_I2.trash />
@@ -173,18 +183,18 @@ function GroupCard({ group, spaces, members, mutations, pushToast }: Loose) {
                 );
               })}
             </div>
-            <select
+            <Select
               className="input group-add-select"
+              ariaLabel="添加成员到权限组"
+              placeholder="＋ 添加成员…"
               value={addMemberId}
-              onChange={(e: Loose) => addMember(e.target.value)}
-            >
-              <option value="">＋ 添加成员…</option>
-              {nonMembers.map((m: Loose) => (
-                <option key={m.id} value={m.id}>
-                  {m.name}（{m.email}）
-                </option>
-              ))}
-            </select>
+              options={nonMembers.map((m: Loose) => ({
+                value: m.id,
+                label: m.name,
+                hint: m.email,
+              }))}
+              onChange={addMember}
+            />
           </section>
 
           <section className="group-section">
@@ -225,42 +235,35 @@ function GroupCard({ group, spaces, members, mutations, pushToast }: Loose) {
               ))}
             </div>
             <div className="group-grant-add">
-              <select
+              <Select
                 className="input"
+                ariaLabel="授权空间"
+                placeholder="选择空间…"
                 value={grantSpaceId}
-                onChange={(e: Loose) => {
-                  setGrantSpaceId(e.target.value);
+                options={spaces.map((s: Loose) => ({ value: s.id, label: s.name }))}
+                onChange={(v: string) => {
+                  setGrantSpaceId(v);
                   setGrantFolderId('');
                 }}
-              >
-                <option value="">选择空间…</option>
-                {spaces.map((s: Loose) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-              <select
+              />
+              <Select
                 className="input"
+                ariaLabel="授权文件夹"
                 value={grantFolderId}
-                onChange={(e: Loose) => setGrantFolderId(e.target.value)}
                 disabled={!grantSpaceId || grantFolders.length === 0}
-              >
-                <option value="">整个空间</option>
-                {grantFolders.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.label}
-                  </option>
-                ))}
-              </select>
-              <select
+                options={[
+                  { value: '', label: '整个空间' },
+                  ...grantFolders.map((f: Loose) => ({ value: f.id, label: f.label })),
+                ]}
+                onChange={setGrantFolderId}
+              />
+              <Select
                 className="input"
+                ariaLabel="授权角色"
                 value={grantRole}
-                onChange={(e: Loose) => setGrantRole(e.target.value)}
-              >
-                <option value="viewer">只读</option>
-                <option value="editor">可编辑</option>
-              </select>
+                options={GRANT_ROLE_OPTIONS}
+                onChange={(v: string) => setGrantRole(v as 'viewer' | 'editor')}
+              />
               <button type="button" className="btn secondary" onClick={addGrant}>
                 添加授权
               </button>
