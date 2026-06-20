@@ -272,6 +272,13 @@ function App() {
     if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
     chromeHideTimer.current = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
   }, []);
+  // Reading is the default — scrolling means "I'm reading", so it HIDES the
+  // chrome rather than waking it. The dock / corner toolbar come back only when
+  // the pointer reaches the edge that owns them (see onMouseMove below).
+  const hideChrome = useCallback(() => {
+    if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
+    setChromeVisible(false);
+  }, []);
   useEffect(() => {
     chromeHideTimer.current = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
 
@@ -283,20 +290,25 @@ function App() {
       if ((e.target as Element | null)?.closest(INTERACTIVE)) return;
       wakeChrome();
     };
+    // Edge-reveal: bottom strip owns the dock; top-right corner owns the reader
+    // toolbar. Moving into either zone wakes the chrome; the wide middle (where
+    // you read) never does.
     const onMouseMove = (e: MouseEvent) => {
-      if (e.clientY < 70 || window.innerHeight - e.clientY < 90) wakeChrome();
+      const nearBottom = window.innerHeight - e.clientY < 90;
+      const nearTopRight = e.clientY < 120 && window.innerWidth - e.clientX < 240;
+      if (nearBottom || nearTopRight) wakeChrome();
     };
 
     document.addEventListener('click', onClick);
     document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('wheel', wakeChrome, { passive: true });
+    document.addEventListener('wheel', hideChrome, { passive: true });
     return () => {
       if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
       document.removeEventListener('click', onClick);
       document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('wheel', wakeChrome);
+      document.removeEventListener('wheel', hideChrome);
     };
-  }, [wakeChrome]);
+  }, [wakeChrome, hideChrome]);
 
   const ctx = { view, spaceId, docId, pane: routeState.pane };
   const isLogin = view === 'login';
@@ -408,7 +420,7 @@ function App() {
       <main
         className="main"
         ref={mainRef}
-        onScroll={wakeChrome}
+        onScroll={hideChrome}
         data-screen-label={
           view === 'reader'
             ? '01 Reader · Doc (iframe)'
@@ -436,12 +448,12 @@ function App() {
             onNavigate={navigate}
             onShare={(id: string) => openShare(id)}
             onLogin={openLogin}
-            onChromeScroll={wakeChrome}
+            onChromeScroll={hideChrome}
             mutations={mutations}
           />
         )}
         {view === 'public' && (
-          <PublicDocumentView token={routeState.token} onChromeScroll={wakeChrome} />
+          <PublicDocumentView token={routeState.token} onChromeScroll={hideChrome} />
         )}
         {view === 'space' && (
           <SpaceIndexView

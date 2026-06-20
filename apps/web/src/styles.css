@@ -596,15 +596,25 @@ html { transition: background 0.3s var(--ease-soft); }
 }
 .reader-meta-bar.corner .pill-btn span { display: none; }
 .reader-meta-bar.corner .pill-btn svg { width: 15px; height: 15px; }
-/* Edit is the single accented action — coral fill (follows the theme accent),
-   everything else stays muted ghost. */
-.reader-meta-bar.corner .pill-btn.accent {
+/* Idle: bare glyphs, no circle behind them. The theme accent only wraps a
+   button on hover — that's the single moment a colour ring appears. */
+.reader-meta-bar.corner .pill-btn.ghost {
+  background: transparent;
+  color: var(--ink-3);
+}
+.reader-meta-bar.corner .pill-btn.ghost:hover {
   background: var(--accent);
   color: #fff;
 }
+/* Edit reads as the primary action via a coral glyph at rest (no circle, like
+   the rest), and like the others gains the coral ring only on hover. */
+.reader-meta-bar.corner .pill-btn.accent {
+  background: transparent;
+  color: var(--accent);
+}
 .reader-meta-bar.corner .pill-btn.accent:hover {
   background: var(--accent);
-  filter: brightness(0.94);
+  color: #fff;
 }
 
 /* Hidden (chrome collapsed): slide up and out, fully gone — matches the dock's

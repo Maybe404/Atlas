@@ -228,13 +228,13 @@ export function ReaderView({
             )}
             {allowed && isMarkdown && (
               <>
-                <button type="button" className="pill-btn ghost" onClick={() => doCopy('source')}>
-                  {copiedMode === 'source' ? <_I.check /> : <_I.code />}
-                  <span>{copiedMode === 'source' ? '已复制' : '复制源码'}</span>
-                </button>
                 <button type="button" className="pill-btn ghost" onClick={() => doCopy('rich')}>
                   {copiedMode === 'rich' ? <_I.check /> : <_I.copy />}
                   <span>{copiedMode === 'rich' ? '已复制' : '带格式'}</span>
+                </button>
+                <button type="button" className="pill-btn ghost" onClick={() => doCopy('source')}>
+                  {copiedMode === 'source' ? <_I.check /> : <_I.code />}
+                  <span>{copiedMode === 'source' ? '已复制' : '复制源码'}</span>
                 </button>
                 {detailDoc?.canEdit && (
                   <button
