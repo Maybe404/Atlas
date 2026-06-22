@@ -129,55 +129,56 @@ export function TrashPane({ pushToast: _pushToast, mutations }: Loose) {
           </button>
         </div>
         <div className="card-body card-body-scroll">
-          <AnimatedScrollList className="rows-scroll">
-            {items.length === 0 && (
-              <EmptyState
-                glyph={
-                  <svg viewBox="0 0 56 56" fill="none" aria-hidden="true">
-                    <path
-                      d="M16 18h24l-2 28a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4z"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M12 18h32M24 26v16M32 26v16"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                }
-                title="回收站是空的"
-                desc="删除的文档会保留 30 天，在此期间可以随时恢复。"
-              />
-            )}
-            {items.map((it: Loose) => (
-              <div key={it.id} className="trash-row">
-                <div>
-                  <div className="doc-name">{it.title}</div>
-                  <div className="location">原位置 · {it.spaceName}</div>
+          {items.length === 0 ? (
+            <EmptyState
+              glyph={
+                <svg viewBox="0 0 56 56" fill="none" aria-hidden="true">
+                  <path
+                    d="M16 18h24l-2 28a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4z"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M12 18h32M24 26v16M32 26v16"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              }
+              title="回收站是空的"
+              desc="删除的文档会保留 30 天，在此期间可以随时恢复。"
+            />
+          ) : (
+            <AnimatedScrollList className="rows-scroll">
+              {items.map((it: Loose) => (
+                <div key={it.id} className="trash-row">
+                  <div>
+                    <div className="doc-name">{it.title}</div>
+                    <div className="location">原位置 · {it.spaceName}</div>
+                  </div>
+                  <div className="by">作者 · {it.authorName}</div>
+                  <div className="when">{it.updated}</div>
+                  <div className="expires">
+                    {it.purgeAfter
+                      ? `${new Date(it.purgeAfter).toLocaleDateString('zh-CN')} 清理`
+                      : '30 天内'}
+                  </div>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title="恢复"
+                    onClick={() => {
+                      mutations.restoreDocument(it.id);
+                    }}
+                  >
+                    <_I2.refresh />
+                  </button>
                 </div>
-                <div className="by">作者 · {it.authorName}</div>
-                <div className="when">{it.updated}</div>
-                <div className="expires">
-                  {it.purgeAfter
-                    ? `${new Date(it.purgeAfter).toLocaleDateString('zh-CN')} 清理`
-                    : '30 天内'}
-                </div>
-                <button
-                  type="button"
-                  className="icon-btn"
-                  title="恢复"
-                  onClick={() => {
-                    mutations.restoreDocument(it.id);
-                  }}
-                >
-                  <_I2.refresh />
-                </button>
-              </div>
-            ))}
-          </AnimatedScrollList>
+              ))}
+            </AnimatedScrollList>
+          )}
         </div>
       </div>
     </>

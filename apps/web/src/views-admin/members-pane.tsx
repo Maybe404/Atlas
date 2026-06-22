@@ -216,245 +216,253 @@ export function MembersPane({
           </form>
         )}
         <div className="card-body card-body-scroll">
-          <AnimatedScrollList className="rows-scroll">
-            {members.length === 0 && (
-              <EmptyState
-                glyph={
-                  <svg viewBox="0 0 56 56" fill="none" aria-hidden="true">
-                    <circle cx="22" cy="20" r="6" stroke="currentColor" strokeWidth="2" />
-                    <path
-                      d="M10 44c1.5-6 6-10 12-10s10.5 4 12 10"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    />
-                    <circle cx="40" cy="18" r="5" stroke="currentColor" strokeWidth="2" />
-                    <path
-                      d="M36 32c1-4 4-6 8-6"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                }
-                title="还没有成员"
-                desc="点击右上角「新增成员」邀请第一位协作者加入工作区。"
-              />
-            )}
-            {members.map((m: Loose, i: Loose) => {
-              const memberPerms = perms[m.id] || {};
-              const accessSpaces = spaces.filter((s: Loose) => memberPerms[s.id]);
-              return (
-                <div key={m.id} className="member-row-wrap">
-                  <div className="member-row member-row-grid">
-                    <span
-                      className="avatar"
-                      style={{ background: avatarColors[i % avatarColors.length] }}
-                    >
-                      {m.initials}
-                    </span>
-                    <div className="member-meta">
-                      <div className="name">{m.name}</div>
-                      <div className="email mono">{m.email}</div>
-                    </div>
-                    <Select
-                      ariaLabel={`${m.name} 的工作区角色`}
-                      value={m.role}
-                      options={ROLE_OPTIONS}
-                      onChange={(v: string) => mutations.updateMember(m.id, { role: v })}
-                    />
-                    <div className="access-cell" style={{ position: 'relative' }}>
-                      <button
-                        type="button"
-                        className="access-trigger"
-                        data-access-trigger
-                        onClick={() => setEditingMember(editingMember === m.id ? null : m.id)}
-                        title="编辑空间访问"
+          {members.length === 0 ? (
+            <EmptyState
+              glyph={
+                <svg viewBox="0 0 56 56" fill="none" aria-hidden="true">
+                  <circle cx="22" cy="20" r="6" stroke="currentColor" strokeWidth="2" />
+                  <path
+                    d="M10 44c1.5-6 6-10 12-10s10.5 4 12 10"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                  <circle cx="40" cy="18" r="5" stroke="currentColor" strokeWidth="2" />
+                  <path
+                    d="M36 32c1-4 4-6 8-6"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              }
+              title="还没有成员"
+              desc="点击右上角「新增成员」邀请第一位协作者加入工作区。"
+            />
+          ) : (
+            <AnimatedScrollList className="rows-scroll">
+              {members.map((m: Loose, i: Loose) => {
+                const memberPerms = perms[m.id] || {};
+                const accessSpaces = spaces.filter((s: Loose) => memberPerms[s.id]);
+                return (
+                  <div key={m.id} className="member-row-wrap">
+                    <div className="member-row member-row-grid">
+                      <span
+                        className="avatar"
+                        style={{ background: avatarColors[i % avatarColors.length] }}
                       >
-                        {accessSpaces.length === 0 && (
-                          <span className="access-empty">未分配空间</span>
-                        )}
-                        {accessSpaces.slice(0, 3).map((s: Loose) => (
-                          <span key={s.id} className="access-pill">
-                            <span
-                              className="dot"
-                              style={{ background: SPACE_COLOR_MAP[s.accent] }}
-                            ></span>
-                            <span>{s.name}</span>
-                            <span className="role">
-                              {memberPerms[s.id] === 'editor' ? '编' : '读'}
-                            </span>
-                          </span>
-                        ))}
-                        {accessSpaces.length > 3 && (
-                          <span className="access-pill more">+{accessSpaces.length - 3}</span>
-                        )}
-                        <svg
-                          aria-hidden="true"
-                          width="10"
-                          height="10"
-                          viewBox="0 0 10 10"
-                          fill="none"
-                          style={{ marginLeft: 2, color: 'var(--ink-4)' }}
+                        {m.initials}
+                      </span>
+                      <div className="member-meta">
+                        <div className="name">{m.name}</div>
+                        <div className="email mono">{m.email}</div>
+                      </div>
+                      <Select
+                        ariaLabel={`${m.name} 的工作区角色`}
+                        value={m.role}
+                        options={ROLE_OPTIONS}
+                        onChange={(v: string) => mutations.updateMember(m.id, { role: v })}
+                      />
+                      <div className="access-cell" style={{ position: 'relative' }}>
+                        <button
+                          type="button"
+                          className="access-trigger"
+                          data-access-trigger
+                          onClick={() => setEditingMember(editingMember === m.id ? null : m.id)}
+                          title="编辑空间访问"
                         >
-                          <path
-                            d="M2 3.5 5 7 8 3.5"
-                            stroke="currentColor"
-                            strokeWidth="1.4"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </button>
-                      {editingMember === m.id && (
-                        // biome-ignore lint/a11y/noStaticElementInteractions: popover only stops outside-dismiss propagation; its rows are the real controls
-                        <div className="access-pop" onMouseDown={(e: Loose) => e.stopPropagation()}>
-                          <div className="access-pop-head">
-                            <span>{m.name} · 空间访问</span>
+                          {accessSpaces.length === 0 && (
+                            <span className="access-empty">未分配空间</span>
+                          )}
+                          {accessSpaces.slice(0, 3).map((s: Loose) => (
+                            <span key={s.id} className="access-pill">
+                              <span
+                                className="dot"
+                                style={{ background: SPACE_COLOR_MAP[s.accent] }}
+                              ></span>
+                              <span>{s.name}</span>
+                              <span className="role">
+                                {memberPerms[s.id] === 'editor' ? '编' : '读'}
+                              </span>
+                            </span>
+                          ))}
+                          {accessSpaces.length > 3 && (
+                            <span className="access-pill more">+{accessSpaces.length - 3}</span>
+                          )}
+                          <svg
+                            aria-hidden="true"
+                            width="10"
+                            height="10"
+                            viewBox="0 0 10 10"
+                            fill="none"
+                            style={{ marginLeft: 2, color: 'var(--ink-4)' }}
+                          >
+                            <path
+                              d="M2 3.5 5 7 8 3.5"
+                              stroke="currentColor"
+                              strokeWidth="1.4"
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                            />
+                          </svg>
+                        </button>
+                        {editingMember === m.id && (
+                          // biome-ignore lint/a11y/noStaticElementInteractions: popover only stops outside-dismiss propagation; its rows are the real controls
+                          <div
+                            className="access-pop"
+                            onMouseDown={(e: Loose) => e.stopPropagation()}
+                          >
+                            <div className="access-pop-head">
+                              <span>{m.name} · 空间访问</span>
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                onClick={() => setEditingMember(null)}
+                              >
+                                <_I2.close />
+                              </button>
+                            </div>
+                            <div className="access-pop-body">
+                              {spaces.map((s: Loose) => {
+                                const role = memberPerms[s.id] || null;
+                                return (
+                                  <div key={s.id} className="access-pop-row">
+                                    <span
+                                      className="sm-mark"
+                                      style={{
+                                        background: SPACE_COLOR_MAP[s.accent],
+                                        width: 22,
+                                        height: 22,
+                                        borderRadius: 6,
+                                        fontSize: 11,
+                                      }}
+                                    >
+                                      {s.mark || s.name.slice(0, 1)}
+                                    </span>
+                                    <span className="access-pop-name">{s.name}</span>
+                                    <div className="segmented access-seg">
+                                      <button
+                                        type="button"
+                                        className={role === null ? 'active' : ''}
+                                        onClick={() => setMemberSpaceRole(m.id, s.id, null)}
+                                      >
+                                        无
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className={role === 'viewer' ? 'active' : ''}
+                                        onClick={() => setMemberSpaceRole(m.id, s.id, 'viewer')}
+                                      >
+                                        仅读
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className={role === 'editor' ? 'active' : ''}
+                                        onClick={() => setMemberSpaceRole(m.id, s.id, 'editor')}
+                                      >
+                                        编辑
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="joined">加入 · {m.joined}</div>
+                      <div className="member-actions">
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          data-member-more
+                          title="成员操作"
+                          onClick={(e: Loose) => {
+                            e.stopPropagation();
+                            setMenuOpenId(menuOpenId === m.id ? null : m.id);
+                          }}
+                        >
+                          <_I2.more />
+                        </button>
+                        {menuOpenId === m.id && (
+                          // biome-ignore lint/a11y/noStaticElementInteractions: menu wrapper only stops row-click propagation; its items are the real controls
+                          // biome-ignore lint/a11y/useKeyWithClickEvents: menu wrapper only stops row-click propagation; its items are the real controls
+                          <div
+                            className="row-menu member-row-menu"
+                            onClick={(e: Loose) => e.stopPropagation()}
+                          >
                             <button
                               type="button"
-                              className="icon-btn"
-                              onClick={() => setEditingMember(null)}
+                              className="row-menu-item"
+                              onClick={() => {
+                                setPasswordMember(m.id);
+                                setPasswordDraft('');
+                                setMenuOpenId(null);
+                              }}
                             >
-                              <_I2.close />
+                              <_I2.lock />
+                              <span>编辑密码</span>
+                            </button>
+                            <div className="row-menu-sep"></div>
+                            <button
+                              type="button"
+                              className="row-menu-item danger"
+                              onClick={() => deleteMember(m)}
+                            >
+                              <_I2.trash />
+                              <span>删除成员</span>
                             </button>
                           </div>
-                          <div className="access-pop-body">
-                            {spaces.map((s: Loose) => {
-                              const role = memberPerms[s.id] || null;
-                              return (
-                                <div key={s.id} className="access-pop-row">
-                                  <span
-                                    className="sm-mark"
-                                    style={{
-                                      background: SPACE_COLOR_MAP[s.accent],
-                                      width: 22,
-                                      height: 22,
-                                      borderRadius: 6,
-                                      fontSize: 11,
-                                    }}
-                                  >
-                                    {s.mark || s.name.slice(0, 1)}
-                                  </span>
-                                  <span className="access-pop-name">{s.name}</span>
-                                  <div className="segmented access-seg">
-                                    <button
-                                      type="button"
-                                      className={role === null ? 'active' : ''}
-                                      onClick={() => setMemberSpaceRole(m.id, s.id, null)}
-                                    >
-                                      无
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className={role === 'viewer' ? 'active' : ''}
-                                      onClick={() => setMemberSpaceRole(m.id, s.id, 'viewer')}
-                                    >
-                                      仅读
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className={role === 'editor' ? 'active' : ''}
-                                      onClick={() => setMemberSpaceRole(m.id, s.id, 'editor')}
-                                    >
-                                      编辑
-                                    </button>
-                                  </div>
-                                </div>
-                              );
-                            })}
+                        )}
+                      </div>
+                    </div>
+                    {passwordMember === m.id && (
+                      <div className="member-password-row">
+                        <div>
+                          <div className="member-password-title">编辑 {m.name} 的登录密码</div>
+                          <div className="member-password-sub">
+                            保存后该成员下次登录需使用新密码。
                           </div>
                         </div>
-                      )}
-                    </div>
-                    <div className="joined">加入 · {m.joined}</div>
-                    <div className="member-actions">
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        data-member-more
-                        title="成员操作"
-                        onClick={(e: Loose) => {
-                          e.stopPropagation();
-                          setMenuOpenId(menuOpenId === m.id ? null : m.id);
-                        }}
-                      >
-                        <_I2.more />
-                      </button>
-                      {menuOpenId === m.id && (
-                        // biome-ignore lint/a11y/noStaticElementInteractions: menu wrapper only stops row-click propagation; its items are the real controls
-                        // biome-ignore lint/a11y/useKeyWithClickEvents: menu wrapper only stops row-click propagation; its items are the real controls
-                        <div
-                          className="row-menu member-row-menu"
-                          onClick={(e: Loose) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            className="row-menu-item"
-                            onClick={() => {
-                              setPasswordMember(m.id);
+                        <input
+                          className="input"
+                          type="password"
+                          value={passwordDraft}
+                          onChange={(e: Loose) => setPasswordDraft(e.target.value)}
+                          onKeyDown={(e: Loose) => {
+                            if (e.key === 'Enter') savePassword(m);
+                            if (e.key === 'Escape') {
+                              setPasswordMember(null);
                               setPasswordDraft('');
-                              setMenuOpenId(null);
-                            }}
-                          >
-                            <_I2.lock />
-                            <span>编辑密码</span>
-                          </button>
-                          <div className="row-menu-sep"></div>
-                          <button
-                            type="button"
-                            className="row-menu-item danger"
-                            onClick={() => deleteMember(m)}
-                          >
-                            <_I2.trash />
-                            <span>删除成员</span>
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  {passwordMember === m.id && (
-                    <div className="member-password-row">
-                      <div>
-                        <div className="member-password-title">编辑 {m.name} 的登录密码</div>
-                        <div className="member-password-sub">
-                          保存后该成员下次登录需使用新密码。
-                        </div>
-                      </div>
-                      <input
-                        className="input"
-                        type="password"
-                        value={passwordDraft}
-                        onChange={(e: Loose) => setPasswordDraft(e.target.value)}
-                        onKeyDown={(e: Loose) => {
-                          if (e.key === 'Enter') savePassword(m);
-                          if (e.key === 'Escape') {
+                            }
+                          }}
+                          placeholder="输入新密码"
+                          autoComplete="new-password"
+                        />
+                        <button
+                          type="button"
+                          className="btn ghost"
+                          onClick={() => {
                             setPasswordMember(null);
                             setPasswordDraft('');
-                          }
-                        }}
-                        placeholder="输入新密码"
-                        autoComplete="new-password"
-                      />
-                      <button
-                        type="button"
-                        className="btn ghost"
-                        onClick={() => {
-                          setPasswordMember(null);
-                          setPasswordDraft('');
-                        }}
-                      >
-                        取消
-                      </button>
-                      <button type="button" className="btn primary" onClick={() => savePassword(m)}>
-                        保存密码
-                      </button>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </AnimatedScrollList>
+                          }}
+                        >
+                          取消
+                        </button>
+                        <button
+                          type="button"
+                          className="btn primary"
+                          onClick={() => savePassword(m)}
+                        >
+                          保存密码
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </AnimatedScrollList>
+          )}
         </div>
       </div>
     </>
