@@ -798,17 +798,53 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
   );
 }
 
-// AnimatedItem — CSS-only staggered entrance. The old version attached one
-// IntersectionObserver + setTimeout per tree node, which on a 50+ node tree
-// meant 50+ observers and a noticeable first-frame reflow. The entrance is now
-// driven entirely by CSS (animation-delay from --anim-delay, capped at 8 so a
-// long list doesn't make trailing items wait). Scrolling no longer re-triggers
-// the animation, which is the intended trade-off — the cascade only plays on
-// mount / page-change, exactly when the user benefits from it.
+// AnimatedItem — viewport-driven scale/fade reveal. Items toggle as they enter
+// and leave the nearest scroll container so long lists keep the subtle "scroll
+// into view" motion, while the capped stagger prevents distant rows from
+// waiting behind an index-sized delay.
 function AnimatedItem({ children, index = 0 }: Loose) {
+  const ref = useRef<Loose>(null);
+  const [inView, setInView] = useState(false);
   const delay = Math.min(index, 8) * 14;
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    let root = el.parentElement;
+    while (root && root !== document.body) {
+      const style = getComputedStyle(root);
+      if (/(auto|scroll)/.test(style.overflowY)) break;
+      root = root.parentElement;
+    }
+
+    const io = new IntersectionObserver(
+      (entries: Loose) => {
+        entries.forEach((en: Loose) => {
+          setInView(en.isIntersecting);
+        });
+      },
+      { root: root === document.body ? null : root, threshold: 0.2 },
+    );
+    io.observe(el);
+
+    const t = setTimeout(() => {
+      const r = el.getBoundingClientRect();
+      if (r.top < window.innerHeight && r.bottom > 0) setInView(true);
+    }, 20 + delay);
+
+    return () => {
+      io.disconnect();
+      clearTimeout(t);
+    };
+  }, [delay]);
+
   return (
-    <div className="tree-anim-item" style={{ '--anim-delay': `${delay}ms` } as React.CSSProperties}>
+    <div
+      ref={ref}
+      className={`tree-anim-item ${inView ? 'in' : ''}`}
+      style={{ '--anim-delay': `${delay}ms` } as React.CSSProperties}
+    >
       {children}
     </div>
   );

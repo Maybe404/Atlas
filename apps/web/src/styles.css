@@ -1791,19 +1791,18 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   background: linear-gradient(to top, var(--canvas), transparent);
 }
 
-/* animated list items (sub-tree leaves) — scale+fade in on mount with a capped
-   per-item stagger (driven by --anim-delay, set per node in AnimatedItem).
-   This used to be IntersectionObserver-driven; it is now CSS-only so a 50+
-   node tree doesn't pay one observer + setTimeout per node on the first frame.
-   The trade-off: scrolling no longer re-triggers the animation — the cascade
-   plays once on mount / page-change, which is the only time it's useful. */
+/* animated list items (sub-tree leaves) — scale+fade in/out as they enter and
+   leave the viewport. The per-item stagger is capped in AnimatedItem so scrolling
+   never has to wait out a long cascade. */
 .tree-anim-item {
-  animation: tree-anim-in 0.28s var(--ease-spring) backwards;
-  animation-delay: var(--anim-delay, 0ms);
+  opacity: 0;
+  transform: scale(0.7);
+  transition: opacity 0.22s var(--ease-soft), transform 0.28s var(--ease-spring);
+  transition-delay: var(--anim-delay, 0ms);
 }
-@keyframes tree-anim-in {
-  from { opacity: 0; transform: scale(0.7); }
-  to   { opacity: 1; transform: scale(1); }
+.tree-anim-item.in {
+  opacity: 1;
+  transform: scale(1);
 }
 
 /* space row actions — only visible on hover (within space header) */
