@@ -5,7 +5,7 @@ import { useDocument } from '../data-hooks';
 import type { Loose } from '../loose-types';
 import { copyMarkdownRich, copyMarkdownSource } from '../markdown/copy';
 import { renderMarkdownWithDiagrams } from '../markdown/renderer';
-import { clickableProps, Select } from '../ui-kit';
+import { clickableProps, Select, Skeleton } from '../ui-kit';
 import { accentDot, dotClass, flattenFolders } from './shared';
 
 const ACCESS_OPTIONS = [
@@ -26,7 +26,16 @@ export function MarkdownEditorDialog({ doc, spaces = [], onClose, onSave }: Loos
       <div className="overlay editor-overlay">
         {/* biome-ignore lint/a11y/noStaticElementInteractions: dialog surface only stops backdrop-dismiss propagation */}
         <div className="editor-dialog" onMouseDown={(e: Loose) => e.stopPropagation()}>
-          <div className="app-state-banner">正在加载文章正文…</div>
+          <div style={{ padding: '32px 40px' }} role="status" aria-label="正在加载文章正文">
+            <Skeleton w="40%" h={20} r={4} />
+            <div style={{ marginTop: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+              <Skeleton w="100%" h={12} />
+              <Skeleton w="95%" h={12} />
+              <Skeleton w="88%" h={12} />
+              <Skeleton w="92%" h={12} />
+              <Skeleton w="70%" h={12} />
+            </div>
+          </div>
         </div>
       </div>
     );

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatedScrollList, I } from '../chrome';
 import type { Loose } from '../loose-types';
-import { confirmDialog, Select } from '../ui-kit';
+import { confirmDialog, EmptyState, Select } from '../ui-kit';
 import { SPACE_COLOR_MAP } from './shared';
 
 const ROLE_OPTIONS = [
@@ -217,6 +217,30 @@ export function MembersPane({
         )}
         <div className="card-body card-body-scroll">
           <AnimatedScrollList className="rows-scroll">
+            {members.length === 0 && (
+              <EmptyState
+                glyph={
+                  <svg viewBox="0 0 56 56" fill="none" aria-hidden="true">
+                    <circle cx="22" cy="20" r="6" stroke="currentColor" strokeWidth="2" />
+                    <path
+                      d="M10 44c1.5-6 6-10 12-10s10.5 4 12 10"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                    <circle cx="40" cy="18" r="5" stroke="currentColor" strokeWidth="2" />
+                    <path
+                      d="M36 32c1-4 4-6 8-6"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                }
+                title="还没有成员"
+                desc="点击右上角「新增成员」邀请第一位协作者加入工作区。"
+              />
+            )}
             {members.map((m: Loose, i: Loose) => {
               const memberPerms = perms[m.id] || {};
               const accessSpaces = spaces.filter((s: Loose) => memberPerms[s.id]);

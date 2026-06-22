@@ -644,7 +644,12 @@ export function LoginView({
               <label className="login-field">
                 <span className="login-label">
                   密码
-                  <button type="button" className="login-forgot">
+                  <button
+                    type="button"
+                    className="login-forgot"
+                    disabled
+                    title="密码重置暂未开放，请联系管理员重置"
+                  >
                     忘记密码？
                   </button>
                 </span>

@@ -3,6 +3,7 @@ import { useCallback, useRef, useState } from 'react';
 import { apiGet } from '../api-client';
 import { I } from '../chrome';
 import type { Loose } from '../loose-types';
+import { EmptyState, Skeleton } from '../ui-kit';
 import { MarkdownReader } from './markdown-reader';
 import { dotClass } from './shared';
 
@@ -31,7 +32,17 @@ export function PublicDocumentView({ token, onChromeScroll }: Loose) {
   if (publicQuery.isLoading) {
     return (
       <div className="main-card reader-card">
-        <div className="app-state-banner">正在打开公开文档…</div>
+        <div className="reader-skeleton" role="status" aria-label="正在加载公开文档">
+          <Skeleton w="60%" h={28} r={6} />
+          <Skeleton w="40%" h={14} r={4} />
+          <div className="reader-skeleton-body">
+            <Skeleton w="100%" h={12} />
+            <Skeleton w="92%" h={12} />
+            <Skeleton w="78%" h={12} />
+            <Skeleton w="85%" h={12} />
+            <Skeleton w="60%" h={12} />
+          </div>
+        </div>
       </div>
     );
   }
@@ -39,7 +50,21 @@ export function PublicDocumentView({ token, onChromeScroll }: Loose) {
   if (!doc) {
     return (
       <div className="main-card reader-card">
-        <div className="app-state-banner">公开链接不可用或已过期</div>
+        <EmptyState
+          glyph={
+            <svg viewBox="0 0 56 56" fill="none" aria-hidden="true">
+              <circle cx="28" cy="28" r="24" stroke="currentColor" strokeWidth="2" />
+              <path
+                d="M20 20l16 16M36 20L20 36"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+              />
+            </svg>
+          }
+          title="公开链接不可用或已过期"
+          desc="这篇文档的公开分享可能已被撤销、已过期，或链接有误。请联系文档作者获取新的链接。"
+        />
       </div>
     );
   }

@@ -3904,6 +3904,11 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   font-weight: 400;
 }
 .login-forgot:hover { color: var(--blue); }
+.login-forgot:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+.login-forgot:disabled:hover { color: var(--ink-4); }
 .login-input {
   height: 40px;
   padding: 0 14px;
