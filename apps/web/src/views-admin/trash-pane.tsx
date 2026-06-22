@@ -4,7 +4,7 @@ import { apiGet } from '../api-client';
 import { AnimatedScrollList, I } from '../chrome';
 import { atlasKeys } from '../data-hooks';
 import type { Loose } from '../loose-types';
-import { confirmDialog, EmptyState } from '../ui-kit';
+import { confirmDialog } from '../ui-kit';
 
 const _I2 = I;
 
@@ -130,28 +130,6 @@ export function TrashPane({ pushToast: _pushToast, mutations }: Loose) {
         </div>
         <div className="card-body card-body-scroll">
           <AnimatedScrollList className="rows-scroll">
-            {items.length === 0 && (
-              <EmptyState
-                glyph={
-                  <svg viewBox="0 0 56 56" fill="none" aria-hidden="true">
-                    <path
-                      d="M16 18h24l-2 28a4 4 0 0 1-4 4H22a4 4 0 0 1-4-4z"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M12 18h32M24 26v16M32 26v16"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                }
-                title="回收站是空的"
-                desc="删除的文档会保留 30 天，在此期间可以随时恢复。"
-              />
-            )}
             {items.map((it: Loose) => (
               <div key={it.id} className="trash-row">
                 <div>

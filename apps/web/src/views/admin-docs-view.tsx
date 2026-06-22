@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AnimatedScrollList, I } from '../chrome';
 import { docCategory, docChip } from '../labels';
 import type { Loose } from '../loose-types';
-import { clickableProps, EmptyState, Select } from '../ui-kit';
+import { clickableProps, Select } from '../ui-kit';
 import { documentReaderUrl } from '../url-utils';
 import { HTMLEditorDialog } from './html-editor-dialog';
 import { MarkdownEditorDialog } from './markdown-editor-dialog';
@@ -98,14 +98,6 @@ export function AdminDocsView({
     }
     return r;
   }, [docs, status, spaceFilter, effectiveFolderFilter, visFilter, search]);
-
-  const hasFilter = Boolean(
-    search.trim() ||
-      status !== 'all' ||
-      spaceFilter !== 'all' ||
-      visFilter !== 'all' ||
-      effectiveFolderFilter !== 'all',
-  );
 
   const startRename = (doc: Loose) => {
     setRenaming(doc.id);
@@ -351,37 +343,6 @@ export function AdminDocsView({
         </div>
 
         <AnimatedScrollList className="doc-list-scroll">
-          {filtered.length === 0 && (
-            <EmptyState
-              glyph={
-                <svg viewBox="0 0 56 56" fill="none" aria-hidden="true">
-                  <rect
-                    x="10"
-                    y="8"
-                    width="36"
-                    height="40"
-                    rx="4"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  />
-                  <path
-                    d="M18 20h20M18 28h20M18 36h12"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                  />
-                </svg>
-              }
-              title={hasFilter ? '没有匹配的文档' : '还没有文档'}
-              desc={
-                hasFilter
-                  ? '试试调整筛选条件或清空搜索关键词。'
-                  : canCreate
-                    ? '点击右上角「新建文章」或「上传 HTML」开始。'
-                    : '联系空间编辑者创建或上传文档。'
-              }
-            />
-          )}
           {filtered.map((doc: Loose) => {
             const author = members.find((m: Loose) => m.id === doc.author);
             return (
