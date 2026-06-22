@@ -125,24 +125,7 @@ export function ReaderView({
         </div>
         <div className="reader-locked">
           <div className="reader-locked-glyph">
-            <svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28" fill="none">
-              <rect
-                x="6"
-                y="13"
-                width="16"
-                height="11"
-                rx="2"
-                stroke="currentColor"
-                strokeWidth="1.6"
-              />
-              <path
-                d="M9.5 13V10a4.5 4.5 0 0 1 9 0v3"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-              />
-              <path d="M14 17v3.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-            </svg>
+            <_I.lockLarge />
           </div>
           <h2 className="reader-locked-title">
             {user ? '没有权限查看这篇文档' : '这篇文档需要登录'}
@@ -164,21 +147,7 @@ export function ReaderView({
             ) : (
               <>
                 <button type="button" className="reader-locked-primary" onClick={onLogin}>
-                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path
-                      d="M2 7h7M7 4l3 3-3 3"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M9.5 2h2A1 1 0 0 1 12.5 3v8a1 1 0 0 1-1 1h-2"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    />
-                  </svg>
+                  <_I.signIn />
                   登录账号
                 </button>
                 <button
@@ -293,24 +262,7 @@ export function ReaderView({
         ) : (
           <div className="reader-locked">
             <div className="reader-locked-glyph">
-              <svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28" fill="none">
-                <rect
-                  x="6"
-                  y="13"
-                  width="16"
-                  height="11"
-                  rx="2"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                />
-                <path
-                  d="M9.5 13V10a4.5 4.5 0 0 1 9 0v3"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                />
-                <circle cx="14" cy="18.5" r="1.2" fill="currentColor" />
-              </svg>
+              <_I.lockLarge />
             </div>
             <h2 className="reader-locked-title">
               {user ? '没有权限查看这篇文档' : '这篇文档需要登录'}
@@ -327,21 +279,7 @@ export function ReaderView({
             <div className="reader-locked-actions">
               {!user && (
                 <button type="button" className="reader-locked-primary" onClick={onLogin}>
-                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path
-                      d="M2 7h7M7 4l3 3-3 3"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M9.5 2h2A1 1 0 0 1 12.5 3v8a1 1 0 0 1-1 1h-2"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    />
-                  </svg>
+                  <_I.signIn />
                   登录账号
                 </button>
               )}

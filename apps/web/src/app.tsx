@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate as useRouterNavigate } from 'react-router';
 import { firstPublicDoc, LoginView, useAuth } from './auth';
-import { Sidebar, Topbar } from './chrome';
+import { I, Sidebar, Topbar } from './chrome';
 import { useAtlasData, useAtlasMutations } from './data-hooks';
 import { CmdK, ShareDialog, SpaceManagerDialog, ToastWrap } from './dialogs';
 import type { Loose, RouteState, Toast } from './loose-types';
@@ -373,6 +373,45 @@ function App() {
     if (view === 'reader' && activeDoc) setLastReader(spaceId, activeDoc.id);
   }, [view, activeDoc, spaceId]);
   const readerHome = readerTarget({ view: 'reader', spaceId: 's1', docId: 'd1' });
+
+  // Global shortcuts — the ones advertised in CmdK. ⌘K (open the palette) lives
+  // in its own listener above; these are the direct shortcuts for commands that
+  // have a stable target. ⌘D (browser bookmark) and ⌘N (new window) are
+  // intentionally NOT bound here — they clash with native browser behaviour, so
+  // CmdK no longer advertises them either (see dialogs.tsx).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const key = e.key.toLowerCase();
+      if (e.shiftKey && key === 'u') {
+        e.preventDefault();
+        navigate({ view: 'admin-upload' });
+        return;
+      }
+      if (e.shiftKey && key === 'd') {
+        e.preventDefault();
+        navigate({ view: 'admin-docs', spaceId: 'all' });
+        return;
+      }
+      if (e.shiftKey && key === 'i') {
+        e.preventDefault();
+        navigate({ view: 'admin-settings', pane: 'members' });
+        return;
+      }
+      if (e.shiftKey && key === 's') {
+        e.preventDefault();
+        openShare(shareDocId);
+        return;
+      }
+      if (e.key === ',') {
+        e.preventDefault();
+        navigate({ view: 'admin-settings' });
+        return;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [navigate, openShare, shareDocId]);
 
   if (isLogin) {
     return (
@@ -870,24 +909,7 @@ function AdminAccessDenied({ user, onNavigate, readerHome }: Loose) {
     <div className="main-card">
       <div className="admin-denied">
         <div className="reader-locked-glyph">
-          <svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <rect
-              x="6"
-              y="13"
-              width="16"
-              height="11"
-              rx="2"
-              stroke="currentColor"
-              strokeWidth="1.6"
-            />
-            <path
-              d="M9.5 13V10a4.5 4.5 0 0 1 9 0v3"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-            />
-            <path d="M14 17v3.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          </svg>
+          <I.lockLarge />
         </div>
         <h2 className="reader-locked-title">需要管理员权限</h2>
         <p className="reader-locked-desc">

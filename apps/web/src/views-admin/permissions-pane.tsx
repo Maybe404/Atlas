@@ -4,6 +4,7 @@ import { apiGet } from '../api-client';
 import { AnimatedScrollList } from '../chrome';
 import { atlasKeys } from '../data-hooks';
 import type { Loose } from '../loose-types';
+import { Skeleton } from '../ui-kit';
 import { SPACE_COLOR_MAP } from './shared';
 
 export function PermissionsPane({
@@ -144,7 +145,18 @@ export function PermissionsPane({
         <div className="card-body card-body-scroll">
           <AnimatedScrollList key={space.id} className="rows-scroll permission-member-list">
             {spaceMembersQuery.isLoading && (
-              <div className="perm-empty">正在同步 {space.name} 的成员权限…</div>
+              <div role="status" aria-label={`正在同步 ${space.name} 的成员权限`}>
+                {[0, 1, 2].map((i) => (
+                  <div key={i} className="perm-matrix-row" aria-hidden="true">
+                    <Skeleton w={32} h={32} r={999} />
+                    <div className="perm-matrix-meta">
+                      <Skeleton w="50%" h={14} r={4} />
+                      <Skeleton w="70%" h={11} r={4} />
+                    </div>
+                    <Skeleton w={180} h={32} r={999} />
+                  </div>
+                ))}
+              </div>
             )}
             {!spaceMembersQuery.isLoading && assignedMembers.length === 0 && (
               <div className="perm-empty">当前空间还没有成员访问权限。</div>

@@ -423,9 +423,6 @@ export function AdminUploadView({
                     上一步
                   </button>
                   <div style={{ display: 'flex', gap: 8 }}>
-                    <button type="button" className="btn secondary">
-                      存为草稿
-                    </button>
                     <button
                       type="button"
                       className="btn primary"
