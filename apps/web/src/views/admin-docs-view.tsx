@@ -350,144 +350,114 @@ export function AdminDocsView({
           </span>
         </div>
 
-        {filtered.length === 0 ? (
-          <EmptyState
-            glyph={
-              <svg viewBox="0 0 56 56" fill="none" aria-hidden="true">
-                <rect
-                  x="10"
-                  y="8"
-                  width="36"
-                  height="40"
-                  rx="4"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                />
-                <path
-                  d="M18 20h20M18 28h20M18 36h12"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            }
-            title={hasFilter ? '没有匹配的文档' : '还没有文档'}
-            desc={
-              hasFilter
-                ? '试试调整筛选条件或清空搜索关键词。'
-                : canCreate
-                  ? '点击右上角「新建文章」或「上传 HTML」开始。'
-                  : '联系空间编辑者创建或上传文档。'
-            }
-          />
-        ) : (
-          <AnimatedScrollList className="doc-list-scroll">
-            {filtered.map((doc: Loose) => {
-              const author = members.find((m: Loose) => m.id === doc.author);
-              return (
-                <div
-                  key={doc.id}
-                  className="doc-row"
-                  {...clickableProps(
-                    (e: Loose) => {
-                      if (renaming === doc.id) return;
-                      if (e.target.tagName === 'BUTTON' || e.target.closest?.('button')) return;
-                      if (e.target.closest?.('.row-menu')) return;
-                      if (doc.canEdit) openEditor(doc);
-                      else onNavigate({ view: 'reader', spaceId: doc.spaceId, docId: doc.id });
-                    },
-                    { label: doc.title },
-                  )}
-                >
-                  <div className="doc-title">
-                    <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
-                    <div className="text">
-                      {renaming === doc.id ? (
-                        <input
-                          className="input"
-                          value={renameVal}
-                          onChange={(e: Loose) => setRenameVal(e.target.value)}
-                          onClick={(e: Loose) => e.stopPropagation()}
-                          onBlur={commitRename}
-                          onKeyDown={(e: Loose) => {
-                            if (e.key === 'Enter') commitRename();
-                            if (e.key === 'Escape') setRenaming(null);
-                          }}
-                          style={{
-                            padding: '4px 8px',
-                            fontSize: 14,
-                            fontWeight: 500,
-                            width: '100%',
-                          }}
-                        />
-                      ) : (
-                        <h4
-                          onDoubleClick={(e: Loose) => {
-                            e.stopPropagation();
-                            if (doc.canEdit) startRename(doc);
-                          }}
-                        >
-                          {doc.title}
-                        </h4>
-                      )}
-                      <div className="path">
-                        {doc.spaceName}
-                        {doc.folderPath ? ` / ${doc.folderPath}` : ''}/{doc.id}
-                        {doc.format === 'markdown' ? '.md' : '.html'}
-                      </div>
-                    </div>
-                  </div>
-                  {doc.canEdit ? (
-                    <SpaceChipPicker
-                      doc={doc}
-                      spaces={spaces}
-                      onPick={(s: Loose) => {
-                        mutations.updateDocument(doc.id, { spaceId: s.id });
-                      }}
-                    />
-                  ) : (
-                    <span className="vis-chip">{doc.spaceName}</span>
-                  )}
-                  <div className="author">
-                    <span className="avatar small">{author?.initials}</span>
-                    <span>{author?.name}</span>
-                  </div>
-                  <div className="updated">{doc.updated}</div>
-                  <span className={`vis-chip ${docChip(doc).cls}`}>{docChip(doc).label}</span>
-                  <div className="row-actions" style={{ position: 'relative' }}>
-                    {doc.canEdit && (
-                      <button
-                        type="button"
-                        className="icon-btn"
-                        title="编辑内容"
-                        onClick={(e: Loose) => {
+        <AnimatedScrollList className="doc-list-scroll">
+          {filtered.length === 0 && (
+            <EmptyState
+              glyph={
+                <svg viewBox="0 0 56 56" fill="none" aria-hidden="true">
+                  <rect
+                    x="10"
+                    y="8"
+                    width="36"
+                    height="40"
+                    rx="4"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  />
+                  <path
+                    d="M18 20h20M18 28h20M18 36h12"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                  />
+                </svg>
+              }
+              title={hasFilter ? '没有匹配的文档' : '还没有文档'}
+              desc={
+                hasFilter
+                  ? '试试调整筛选条件或清空搜索关键词。'
+                  : canCreate
+                    ? '点击右上角「新建文章」或「上传 HTML」开始。'
+                    : '联系空间编辑者创建或上传文档。'
+              }
+            />
+          )}
+          {filtered.map((doc: Loose) => {
+            const author = members.find((m: Loose) => m.id === doc.author);
+            return (
+              <div
+                key={doc.id}
+                className="doc-row"
+                {...clickableProps(
+                  (e: Loose) => {
+                    if (renaming === doc.id) return;
+                    if (e.target.tagName === 'BUTTON' || e.target.closest?.('button')) return;
+                    if (e.target.closest?.('.row-menu')) return;
+                    if (doc.canEdit) openEditor(doc);
+                    else onNavigate({ view: 'reader', spaceId: doc.spaceId, docId: doc.id });
+                  },
+                  { label: doc.title },
+                )}
+              >
+                <div className="doc-title">
+                  <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
+                  <div className="text">
+                    {renaming === doc.id ? (
+                      <input
+                        className="input"
+                        value={renameVal}
+                        onChange={(e: Loose) => setRenameVal(e.target.value)}
+                        onClick={(e: Loose) => e.stopPropagation()}
+                        onBlur={commitRename}
+                        onKeyDown={(e: Loose) => {
+                          if (e.key === 'Enter') commitRename();
+                          if (e.key === 'Escape') setRenaming(null);
+                        }}
+                        style={{ padding: '4px 8px', fontSize: 14, fontWeight: 500, width: '100%' }}
+                      />
+                    ) : (
+                      <h4
+                        onDoubleClick={(e: Loose) => {
                           e.stopPropagation();
-                          openEditor(doc);
+                          if (doc.canEdit) startRename(doc);
                         }}
                       >
-                        <svg
-                          aria-hidden="true"
-                          width="14"
-                          height="14"
-                          viewBox="0 0 14 14"
-                          fill="none"
-                        >
-                          <path
-                            d="m9 2.5 2.5 2.5L4 12.5H1.5V10z"
-                            stroke="currentColor"
-                            strokeWidth="1.3"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </button>
+                        {doc.title}
+                      </h4>
                     )}
+                    <div className="path">
+                      {doc.spaceName}
+                      {doc.folderPath ? ` / ${doc.folderPath}` : ''}/{doc.id}
+                      {doc.format === 'markdown' ? '.md' : '.html'}
+                    </div>
+                  </div>
+                </div>
+                {doc.canEdit ? (
+                  <SpaceChipPicker
+                    doc={doc}
+                    spaces={spaces}
+                    onPick={(s: Loose) => {
+                      mutations.updateDocument(doc.id, { spaceId: s.id });
+                    }}
+                  />
+                ) : (
+                  <span className="vis-chip">{doc.spaceName}</span>
+                )}
+                <div className="author">
+                  <span className="avatar small">{author?.initials}</span>
+                  <span>{author?.name}</span>
+                </div>
+                <div className="updated">{doc.updated}</div>
+                <span className={`vis-chip ${docChip(doc).cls}`}>{docChip(doc).label}</span>
+                <div className="row-actions" style={{ position: 'relative' }}>
+                  {doc.canEdit && (
                     <button
                       type="button"
                       className="icon-btn"
-                      title="预览"
+                      title="编辑内容"
                       onClick={(e: Loose) => {
                         e.stopPropagation();
-                        onNavigate({ view: 'reader', spaceId: doc.spaceId, docId: doc.id });
+                        openEditor(doc);
                       }}
                     >
                       <svg
@@ -498,125 +468,143 @@ export function AdminDocsView({
                         fill="none"
                       >
                         <path
-                          d="M1 7s2-4 6-4 6 4 6 4-2 4-6 4-6-4-6-4z"
+                          d="m9 2.5 2.5 2.5L4 12.5H1.5V10z"
                           stroke="currentColor"
                           strokeWidth="1.3"
                           strokeLinejoin="round"
                         />
-                        <circle cx="7" cy="7" r="1.6" stroke="currentColor" strokeWidth="1.3" />
                       </svg>
                     </button>
-                    <button
-                      type="button"
-                      className="icon-btn"
-                      title="更多"
-                      data-row-more
-                      onClick={(e: Loose) => {
-                        e.stopPropagation();
-                        setMenuOpenId(menuOpenId === doc.id ? null : doc.id);
-                      }}
-                    >
-                      <_I.more />
-                    </button>
-                    {menuOpenId === doc.id && (
-                      // biome-ignore lint/a11y/noStaticElementInteractions: menu wrapper only stops row-click propagation; its items are the real controls
-                      // biome-ignore lint/a11y/useKeyWithClickEvents: menu wrapper only stops row-click propagation; its items are the real controls
-                      <div className="row-menu" onClick={(e: Loose) => e.stopPropagation()}>
-                        {doc.canEdit && (
-                          <>
-                            <button
-                              type="button"
-                              className="row-menu-item"
-                              onClick={() => {
-                                openEditor(doc);
-                              }}
+                  )}
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title="预览"
+                    onClick={(e: Loose) => {
+                      e.stopPropagation();
+                      onNavigate({ view: 'reader', spaceId: doc.spaceId, docId: doc.id });
+                    }}
+                  >
+                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
+                      <path
+                        d="M1 7s2-4 6-4 6 4 6 4-2 4-6 4-6-4-6-4z"
+                        stroke="currentColor"
+                        strokeWidth="1.3"
+                        strokeLinejoin="round"
+                      />
+                      <circle cx="7" cy="7" r="1.6" stroke="currentColor" strokeWidth="1.3" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    className="icon-btn"
+                    title="更多"
+                    data-row-more
+                    onClick={(e: Loose) => {
+                      e.stopPropagation();
+                      setMenuOpenId(menuOpenId === doc.id ? null : doc.id);
+                    }}
+                  >
+                    <_I.more />
+                  </button>
+                  {menuOpenId === doc.id && (
+                    // biome-ignore lint/a11y/noStaticElementInteractions: menu wrapper only stops row-click propagation; its items are the real controls
+                    // biome-ignore lint/a11y/useKeyWithClickEvents: menu wrapper only stops row-click propagation; its items are the real controls
+                    <div className="row-menu" onClick={(e: Loose) => e.stopPropagation()}>
+                      {doc.canEdit && (
+                        <>
+                          <button
+                            type="button"
+                            className="row-menu-item"
+                            onClick={() => {
+                              openEditor(doc);
+                            }}
+                          >
+                            <svg
+                              aria-hidden="true"
+                              width="13"
+                              height="13"
+                              viewBox="0 0 14 14"
+                              fill="none"
                             >
-                              <svg
-                                aria-hidden="true"
-                                width="13"
-                                height="13"
-                                viewBox="0 0 14 14"
-                                fill="none"
-                              >
-                                <path
-                                  d="m9 2.5 2.5 2.5L4 12.5H1.5V10z"
-                                  stroke="currentColor"
-                                  strokeWidth="1.3"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                              <span>编辑内容</span>
-                            </button>
-                            <button
-                              type="button"
-                              className="row-menu-item"
-                              onClick={() => {
-                                startRename(doc);
-                                setMenuOpenId(null);
-                              }}
+                              <path
+                                d="m9 2.5 2.5 2.5L4 12.5H1.5V10z"
+                                stroke="currentColor"
+                                strokeWidth="1.3"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                            <span>编辑内容</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="row-menu-item"
+                            onClick={() => {
+                              startRename(doc);
+                              setMenuOpenId(null);
+                            }}
+                          >
+                            <svg
+                              aria-hidden="true"
+                              width="13"
+                              height="13"
+                              viewBox="0 0 14 14"
+                              fill="none"
                             >
-                              <svg
-                                aria-hidden="true"
-                                width="13"
-                                height="13"
-                                viewBox="0 0 14 14"
-                                fill="none"
-                              >
-                                <path
-                                  d="M2 12h10M3.5 8.5h2l5-5-2-2-5 5z"
-                                  stroke="currentColor"
-                                  strokeWidth="1.3"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                              <span>重命名</span>
-                            </button>
-                            <button
-                              type="button"
-                              className="row-menu-item"
-                              onClick={() => {
-                                onShare(doc.id);
-                                setMenuOpenId(null);
-                              }}
-                            >
-                              <_I.share />
-                              <span>分享</span>
-                            </button>
-                          </>
-                        )}
-                        <button
-                          type="button"
-                          className="row-menu-item"
-                          onClick={() => {
-                            navigator.clipboard?.writeText(documentReaderUrl(doc.spaceId, doc.id));
-                            pushToast({ msg: '链接已复制', meta: doc.title });
-                            setMenuOpenId(null);
-                          }}
-                        >
-                          <_I.link />
-                          <span>复制链接</span>
-                        </button>
-                        {doc.canEdit && (
-                          <>
-                            <div className="row-menu-sep"></div>
-                            <button
-                              type="button"
-                              className="row-menu-item danger"
-                              onClick={() => deleteDoc(doc)}
-                            >
-                              <_I.trash />
-                              <span>删除</span>
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                              <path
+                                d="M2 12h10M3.5 8.5h2l5-5-2-2-5 5z"
+                                stroke="currentColor"
+                                strokeWidth="1.3"
+                                strokeLinejoin="round"
+                              />
+                            </svg>
+                            <span>重命名</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="row-menu-item"
+                            onClick={() => {
+                              onShare(doc.id);
+                              setMenuOpenId(null);
+                            }}
+                          >
+                            <_I.share />
+                            <span>分享</span>
+                          </button>
+                        </>
+                      )}
+                      <button
+                        type="button"
+                        className="row-menu-item"
+                        onClick={() => {
+                          navigator.clipboard?.writeText(documentReaderUrl(doc.spaceId, doc.id));
+                          pushToast({ msg: '链接已复制', meta: doc.title });
+                          setMenuOpenId(null);
+                        }}
+                      >
+                        <_I.link />
+                        <span>复制链接</span>
+                      </button>
+                      {doc.canEdit && (
+                        <>
+                          <div className="row-menu-sep"></div>
+                          <button
+                            type="button"
+                            className="row-menu-item danger"
+                            onClick={() => deleteDoc(doc)}
+                          >
+                            <_I.trash />
+                            <span>删除</span>
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
                 </div>
-              );
-            })}
-          </AnimatedScrollList>
-        )}
+              </div>
+            );
+          })}
+        </AnimatedScrollList>
       </div>
       {editing &&
         (editing.format === 'markdown' ? (
