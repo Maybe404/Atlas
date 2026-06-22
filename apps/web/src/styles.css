@@ -158,12 +158,9 @@ html { transition: background 0.3s var(--ease-soft); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
-  /* The global rule above would make the infinite shimmer flash rapidly; pin
-     it to a static fill instead. Same for the stagger entrance — a 0.001ms
-     duration with backwards fill still works, but being explicit avoids any
-     render glitch from the keyframe mid-state. */
+  /* The global rule above would make the infinite shimmer flash rapidly; pin it
+     to a static fill instead. */
   .skeleton { animation: none; }
-  .tree-anim-item { animation: none; }
 }
 
 /* utility */
