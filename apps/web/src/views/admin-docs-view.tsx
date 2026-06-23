@@ -1,16 +1,170 @@
 import { extractHtmlMetadata, extractMarkdownMetadata } from '@atlas/shared';
-import { useEffect, useMemo, useState } from 'react';
-import { AnimatedScrollList, I } from '../chrome';
+import { useMemo, useState } from 'react';
+import { I } from '../chrome';
+import { useDocument } from '../data-hooks';
 import { docCategory, docChip } from '../labels';
 import type { Loose } from '../loose-types';
-import { clickableProps, EmptyState, Select } from '../ui-kit';
+import { SPACE_COLOR_MAP } from '../theme-tokens';
+import { clickableProps, EmptyState, Select, Skeleton, useDismiss } from '../ui-kit';
 import { documentReaderUrl } from '../url-utils';
 import { HTMLEditorDialog } from './html-editor-dialog';
 import { MarkdownEditorDialog } from './markdown-editor-dialog';
+import { MarkdownReader } from './markdown-reader';
 import { dotClass, flattenFolders, folderPathLabel } from './shared';
 import { SpaceChipPicker } from './space-chip-picker';
 
 const _I = I;
+const VIEW_KEY = 'atlas:admin-docs-view';
+const MENU_IGNORE = ['.doc-more-menu', '[data-more-trigger]'];
+
+const editGlyph = (
+  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <path
+      d="m9 2.5 2.5 2.5L4 12.5H1.5V10z"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+const eyeGlyph = (
+  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
+    <path
+      d="M1 7s2-4 6-4 6 4 6 4-2 4-6 4-6-4-6-4z"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinejoin="round"
+    />
+    <circle cx="7" cy="7" r="1.6" stroke="currentColor" strokeWidth="1.3" />
+  </svg>
+);
+const renameGlyph = (
+  <svg aria-hidden="true" width="13" height="13" viewBox="0 0 14 14" fill="none">
+    <path
+      d="M2 12h10M3.5 8.5h2l5-5-2-2-5 5z"
+      stroke="currentColor"
+      strokeWidth="1.3"
+      strokeLinejoin="round"
+    />
+  </svg>
+);
+
+// Self-contained "more" dropdown — own open/dismiss state so it works identically
+// inside a gallery card or the workbench preview header without shared parent state.
+function DocMoreMenu({ doc, actions, align = 'right' }: Loose) {
+  const [open, setOpen] = useState(false);
+  useDismiss(open, () => setOpen(false), MENU_IGNORE);
+  const close = () => setOpen(false);
+  return (
+    <div className="doc-more-wrap" style={{ position: 'relative' }}>
+      <button
+        type="button"
+        className="icon-btn"
+        title="更多"
+        data-more-trigger
+        aria-haspopup="true"
+        aria-expanded={open}
+        onClick={(e: Loose) => {
+          e.stopPropagation();
+          setOpen((o: boolean) => !o);
+        }}
+      >
+        <_I.more />
+      </button>
+      {open && (
+        // biome-ignore lint/a11y/noStaticElementInteractions: wrapper only stops card-click bubbling; items are the real controls
+        // biome-ignore lint/a11y/useKeyWithClickEvents: wrapper only stops card-click bubbling; items are the real controls
+        <div
+          className="row-menu doc-more-menu"
+          style={
+            align === 'left' ? { right: 'auto', left: 0, transformOrigin: 'top left' } : undefined
+          }
+          onClick={(e: Loose) => e.stopPropagation()}
+        >
+          {doc.canEdit && (
+            <>
+              <button
+                type="button"
+                className="row-menu-item"
+                onClick={() => {
+                  actions.edit(doc);
+                  close();
+                }}
+              >
+                {editGlyph}
+                <span>编辑内容</span>
+              </button>
+              <button
+                type="button"
+                className="row-menu-item"
+                onClick={() => {
+                  actions.rename(doc);
+                  close();
+                }}
+              >
+                {renameGlyph}
+                <span>重命名</span>
+              </button>
+              <button
+                type="button"
+                className="row-menu-item"
+                onClick={() => {
+                  actions.share(doc);
+                  close();
+                }}
+              >
+                <_I.share />
+                <span>分享</span>
+              </button>
+            </>
+          )}
+          <button
+            type="button"
+            className="row-menu-item"
+            onClick={() => {
+              actions.copyLink(doc);
+              close();
+            }}
+          >
+            <_I.link />
+            <span>复制链接</span>
+          </button>
+          <button
+            type="button"
+            className="row-menu-item"
+            onClick={() => {
+              actions.preview(doc);
+              close();
+            }}
+          >
+            {eyeGlyph}
+            <span>预览</span>
+          </button>
+          {doc.canEdit && (
+            <>
+              <div className="row-menu-sep"></div>
+              <button
+                type="button"
+                className="row-menu-item danger"
+                onClick={() => {
+                  actions.remove(doc);
+                  close();
+                }}
+              >
+                <_I.trash />
+                <span>删除</span>
+              </button>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function formatBadge(doc: Loose) {
+  return doc.format === 'markdown' ? 'MD' : 'HTML';
+}
 
 export function AdminDocsView({
   ctx: _ctx,
@@ -33,6 +187,7 @@ export function AdminDocsView({
             spaceId: s.id,
             spaceName: s.name,
             spaceAccent: s.accent,
+            spaceMark: s.mark,
             folderPath: folderPathLabel(s.folders, c.folderId),
           })),
       ),
@@ -42,9 +197,24 @@ export function AdminDocsView({
   const canCreate = editableSpaces.length > 0;
   const [renaming, setRenaming] = useState<Loose>(null);
   const [renameVal, setRenameVal] = useState('');
-  const [menuOpenId, setMenuOpenId] = useState<Loose>(null);
   const [editing, setEditing] = useState<Loose>(null); // doc being edited
   const [showNewMenu, setShowNewMenu] = useState(false);
+  const [viewMode, setViewMode] = useState<string>(() => {
+    try {
+      return localStorage.getItem(VIEW_KEY) || 'gallery';
+    } catch {
+      return 'gallery';
+    }
+  });
+  const [selectedId, setSelectedId] = useState<Loose>(null);
+  useDismiss(showNewMenu, () => setShowNewMenu(false), ['.space-picker-pop', '[data-new-trigger]']);
+
+  const setView = (v: string) => {
+    setViewMode(v);
+    try {
+      localStorage.setItem(VIEW_KEY, v);
+    } catch {}
+  };
 
   // filter state
   const [status, setStatus] = useState('all'); // all | published | draft
@@ -99,6 +269,33 @@ export function AdminDocsView({
     return r;
   }, [docs, status, spaceFilter, effectiveFolderFilter, visFilter, search]);
 
+  // Group filtered docs by space (insertion order) for the workbench rail.
+  const groups = useMemo(() => {
+    const map = new Map<string, Loose>();
+    filtered.forEach((d: Loose) => {
+      let g = map.get(d.spaceId);
+      if (!g) {
+        g = {
+          id: d.spaceId,
+          name: d.spaceName,
+          accent: d.spaceAccent,
+          mark: d.spaceMark,
+          docs: [],
+        };
+        map.set(d.spaceId, g);
+      }
+      g.docs.push(d);
+    });
+    return Array.from(map.values());
+  }, [filtered]);
+
+  // Keep the workbench selection valid as filters change, without an effect.
+  const effectiveSelected = useMemo(() => {
+    if (selectedId && filtered.some((d: Loose) => d.id === selectedId)) return selectedId;
+    return filtered[0]?.id || null;
+  }, [selectedId, filtered]);
+  const selectedDoc = filtered.find((d: Loose) => d.id === effectiveSelected) || null;
+
   const hasFilter = Boolean(
     search.trim() ||
       status !== 'all' ||
@@ -121,12 +318,33 @@ export function AdminDocsView({
 
   const deleteDoc = (doc: Loose) => {
     mutations.deleteDocument(doc.id);
-    setMenuOpenId(null);
   };
 
   const openEditor = (doc: Loose) => {
     setEditing(doc);
-    setMenuOpenId(null);
+  };
+
+  const previewDoc = (doc: Loose) => {
+    onNavigate({ view: 'reader', spaceId: doc.spaceId, docId: doc.id });
+  };
+
+  const copyLink = (doc: Loose) => {
+    navigator.clipboard?.writeText(documentReaderUrl(doc.spaceId, doc.id));
+    pushToast({ msg: '链接已复制', meta: doc.title });
+  };
+
+  const actions = {
+    edit: openEditor,
+    rename: startRename,
+    share: (doc: Loose) => onShare(doc.id),
+    copyLink,
+    preview: previewDoc,
+    remove: deleteDoc,
+  };
+
+  const openDoc = (doc: Loose) => {
+    if (doc.canEdit) openEditor(doc);
+    else previewDoc(doc);
   };
 
   const startNew = (format: 'html' | 'markdown') => {
@@ -183,28 +401,6 @@ export function AdminDocsView({
     setEditing(null);
   };
 
-  // close row-menu popover when clicking elsewhere
-  useEffect(() => {
-    if (!menuOpenId) return;
-    const onDocClick = (e: Loose) => {
-      if (e.target.closest('.row-menu') || e.target.closest('[data-row-more]')) return;
-      setMenuOpenId(null);
-    };
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, [menuOpenId]);
-
-  // close new-doc menu when clicking elsewhere
-  useEffect(() => {
-    if (!showNewMenu) return;
-    const onDocClick = (e: Loose) => {
-      if (e.target.closest?.('.space-picker-pop')) return;
-      setShowNewMenu(false);
-    };
-    document.addEventListener('mousedown', onDocClick);
-    return () => document.removeEventListener('mousedown', onDocClick);
-  }, [showNewMenu]);
-
   return (
     <div className="main-card">
       <div className="main-scroll">
@@ -214,7 +410,7 @@ export function AdminDocsView({
             <h1>所有文章</h1>
             <p className="lead">
               管理空间内的 HTML
-              文章：直接编辑内容、重命名、调整可见性、删除。点击文章打开编辑器，右侧三点菜单提供更多操作。
+              文章：直接编辑内容、重命名、调整可见性、删除。画廊浏览全部，工作台聚焦单篇预览。
             </p>
           </div>
           {canCreate && (
@@ -231,6 +427,7 @@ export function AdminDocsView({
                 <button
                   type="button"
                   className="btn primary"
+                  data-new-trigger
                   onClick={() => setShowNewMenu((o) => !o)}
                 >
                   <_I.plus />
@@ -348,10 +545,46 @@ export function AdminDocsView({
           <span className="filter-count mono">
             {filtered.length} / {docs.length}
           </span>
+          <div className="segmented view-toggle">
+            <button
+              type="button"
+              className={viewMode === 'gallery' ? 'active' : ''}
+              onClick={() => setView('gallery')}
+              title="画廊视图"
+            >
+              <svg aria-hidden="true" width="13" height="13" viewBox="0 0 14 14" fill="none">
+                <rect x="1" y="1" width="5" height="5" rx="1.2" fill="currentColor" />
+                <rect x="8" y="1" width="5" height="5" rx="1.2" fill="currentColor" />
+                <rect x="1" y="8" width="5" height="5" rx="1.2" fill="currentColor" />
+                <rect x="8" y="8" width="5" height="5" rx="1.2" fill="currentColor" />
+              </svg>
+              <span>画廊</span>
+            </button>
+            <button
+              type="button"
+              className={viewMode === 'workbench' ? 'active' : ''}
+              onClick={() => setView('workbench')}
+              title="工作台视图"
+            >
+              <svg aria-hidden="true" width="13" height="13" viewBox="0 0 14 14" fill="none">
+                <rect x="1" y="1" width="4" height="12" rx="1.2" fill="currentColor" />
+                <rect
+                  x="6.5"
+                  y="1"
+                  width="6.5"
+                  height="12"
+                  rx="1.2"
+                  fill="currentColor"
+                  opacity="0.5"
+                />
+              </svg>
+              <span>工作台</span>
+            </button>
+          </div>
         </div>
 
-        <AnimatedScrollList className="doc-list-scroll">
-          {filtered.length === 0 && (
+        {filtered.length === 0 ? (
+          <div className="doc-empty-wrap">
             <EmptyState
               glyph={
                 <svg viewBox="0 0 56 56" fill="none" aria-hidden="true">
@@ -381,230 +614,139 @@ export function AdminDocsView({
                     : '联系空间编辑者创建或上传文档。'
               }
             />
-          )}
-          {filtered.map((doc: Loose) => {
-            const author = members.find((m: Loose) => m.id === doc.author);
-            return (
-              <div
-                key={doc.id}
-                className="doc-row"
-                {...clickableProps(
-                  (e: Loose) => {
-                    if (renaming === doc.id) return;
-                    if (e.target.tagName === 'BUTTON' || e.target.closest?.('button')) return;
-                    if (e.target.closest?.('.row-menu')) return;
-                    if (doc.canEdit) openEditor(doc);
-                    else onNavigate({ view: 'reader', spaceId: doc.spaceId, docId: doc.id });
-                  },
-                  { label: doc.title },
-                )}
-              >
-                <div className="doc-title">
-                  <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
-                  <div className="text">
-                    {renaming === doc.id ? (
-                      <input
-                        className="input"
-                        value={renameVal}
-                        onChange={(e: Loose) => setRenameVal(e.target.value)}
-                        onClick={(e: Loose) => e.stopPropagation()}
-                        onBlur={commitRename}
-                        onKeyDown={(e: Loose) => {
-                          if (e.key === 'Enter') commitRename();
-                          if (e.key === 'Escape') setRenaming(null);
-                        }}
-                        style={{ padding: '4px 8px', fontSize: 14, fontWeight: 500, width: '100%' }}
-                      />
-                    ) : (
-                      <h4
-                        onDoubleClick={(e: Loose) => {
-                          e.stopPropagation();
-                          if (doc.canEdit) startRename(doc);
-                        }}
-                      >
-                        {doc.title}
-                      </h4>
-                    )}
-                    <div className="path">
-                      {doc.spaceName}
-                      {doc.folderPath ? ` / ${doc.folderPath}` : ''}/{doc.id}
-                      {doc.format === 'markdown' ? '.md' : '.html'}
+          </div>
+        ) : viewMode === 'gallery' ? (
+          <div className="doc-gallery">
+            {filtered.map((doc: Loose) => {
+              const author = members.find((m: Loose) => m.id === doc.author);
+              const chip = docChip(doc);
+              const accent = SPACE_COLOR_MAP[doc.spaceAccent] || SPACE_COLOR_MAP.accent;
+              return (
+                <div
+                  key={doc.id}
+                  className="gx-card"
+                  style={{ '--card-strip': accent } as Loose}
+                  {...clickableProps(
+                    (e: Loose) => {
+                      if (renaming === doc.id) return;
+                      if (e.target.closest?.('button') || e.target.closest?.('.row-menu')) return;
+                      openDoc(doc);
+                    },
+                    { label: doc.title },
+                  )}
+                >
+                  <div className="gx-preview">
+                    <div className="gx-preview-head">
+                      <span className="gx-eyebrow">
+                        {doc.spaceName}
+                        {doc.folderPath ? ` · ${doc.folderPath}` : ''}
+                      </span>
+                      <span className="format-badge">{formatBadge(doc)}</span>
+                    </div>
+                    <div className="gx-preview-title">{doc.title || '未命名文章'}</div>
+                    <p className="gx-preview-body">{doc.desc || '暂无摘要，点击编辑补充。'}</p>
+                  </div>
+                  <div className="gx-foot">
+                    <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
+                    <div className="gx-foot-main">
+                      {renaming === doc.id ? (
+                        <input
+                          className="input gx-rename"
+                          value={renameVal}
+                          // biome-ignore lint/a11y/noAutofocus: rename input is an explicit user action; focus belongs here
+                          autoFocus
+                          onChange={(e: Loose) => setRenameVal(e.target.value)}
+                          onClick={(e: Loose) => e.stopPropagation()}
+                          onBlur={commitRename}
+                          onKeyDown={(e: Loose) => {
+                            // Stop the card's clickableProps keydown from preventing Space/Enter.
+                            e.stopPropagation();
+                            if (e.key === 'Enter') commitRename();
+                            if (e.key === 'Escape') setRenaming(null);
+                          }}
+                        />
+                      ) : (
+                        <span className="gx-foot-title">{doc.title}</span>
+                      )}
+                      <span className="gx-foot-meta">
+                        <span className="avatar small">{author?.initials}</span>
+                        {author?.name}
+                        <span className="dim">· {doc.updated}</span>
+                      </span>
+                    </div>
+                    <span className={`vis-chip ${chip.cls}`}>{chip.label}</span>
+                    <div className="gx-actions">
+                      {doc.canEdit && (
+                        <button
+                          type="button"
+                          className="icon-btn"
+                          title="编辑内容"
+                          onClick={(e: Loose) => {
+                            e.stopPropagation();
+                            openEditor(doc);
+                          }}
+                        >
+                          {editGlyph}
+                        </button>
+                      )}
+                      <DocMoreMenu doc={doc} actions={actions} />
                     </div>
                   </div>
                 </div>
-                {doc.canEdit ? (
-                  <SpaceChipPicker
-                    doc={doc}
-                    spaces={spaces}
-                    onPick={(s: Loose) => {
-                      mutations.updateDocument(doc.id, { spaceId: s.id });
-                    }}
-                  />
-                ) : (
-                  <span className="vis-chip">{doc.spaceName}</span>
-                )}
-                <div className="author">
-                  <span className="avatar small">{author?.initials}</span>
-                  <span>{author?.name}</span>
-                </div>
-                <div className="updated">{doc.updated}</div>
-                <span className={`vis-chip ${docChip(doc).cls}`}>{docChip(doc).label}</span>
-                <div className="row-actions" style={{ position: 'relative' }}>
-                  {doc.canEdit && (
+              );
+            })}
+          </div>
+        ) : (
+          <div className="workbench">
+            <div className="wb-rail">
+              {groups.map((g: Loose) => (
+                <div key={g.id} className="wb-group">
+                  <div className="wb-group-head">
+                    <span
+                      className="sm-mark"
+                      style={{ background: SPACE_COLOR_MAP[g.accent] || SPACE_COLOR_MAP.accent }}
+                    >
+                      {g.mark || g.name.slice(0, 1)}
+                    </span>
+                    <span className="wb-group-name">{g.name}</span>
+                    <span className="count mono">{g.docs.length}</span>
+                  </div>
+                  {g.docs.map((doc: Loose) => (
                     <button
                       type="button"
-                      className="icon-btn"
-                      title="编辑内容"
-                      onClick={(e: Loose) => {
-                        e.stopPropagation();
-                        openEditor(doc);
-                      }}
+                      key={doc.id}
+                      className={`wb-item ${effectiveSelected === doc.id ? 'active' : ''}`}
+                      onClick={() => setSelectedId(doc.id)}
                     >
-                      <svg
-                        aria-hidden="true"
-                        width="14"
-                        height="14"
-                        viewBox="0 0 14 14"
-                        fill="none"
-                      >
-                        <path
-                          d="m9 2.5 2.5 2.5L4 12.5H1.5V10z"
-                          stroke="currentColor"
-                          strokeWidth="1.3"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
+                      <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
+                      <span className="wb-item-title">{doc.title}</span>
+                      <span className="format-badge sm">{formatBadge(doc)}</span>
                     </button>
-                  )}
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    title="预览"
-                    onClick={(e: Loose) => {
-                      e.stopPropagation();
-                      onNavigate({ view: 'reader', spaceId: doc.spaceId, docId: doc.id });
-                    }}
-                  >
-                    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
-                      <path
-                        d="M1 7s2-4 6-4 6 4 6 4-2 4-6 4-6-4-6-4z"
-                        stroke="currentColor"
-                        strokeWidth="1.3"
-                        strokeLinejoin="round"
-                      />
-                      <circle cx="7" cy="7" r="1.6" stroke="currentColor" strokeWidth="1.3" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    className="icon-btn"
-                    title="更多"
-                    data-row-more
-                    onClick={(e: Loose) => {
-                      e.stopPropagation();
-                      setMenuOpenId(menuOpenId === doc.id ? null : doc.id);
-                    }}
-                  >
-                    <_I.more />
-                  </button>
-                  {menuOpenId === doc.id && (
-                    // biome-ignore lint/a11y/noStaticElementInteractions: menu wrapper only stops row-click propagation; its items are the real controls
-                    // biome-ignore lint/a11y/useKeyWithClickEvents: menu wrapper only stops row-click propagation; its items are the real controls
-                    <div className="row-menu" onClick={(e: Loose) => e.stopPropagation()}>
-                      {doc.canEdit && (
-                        <>
-                          <button
-                            type="button"
-                            className="row-menu-item"
-                            onClick={() => {
-                              openEditor(doc);
-                            }}
-                          >
-                            <svg
-                              aria-hidden="true"
-                              width="13"
-                              height="13"
-                              viewBox="0 0 14 14"
-                              fill="none"
-                            >
-                              <path
-                                d="m9 2.5 2.5 2.5L4 12.5H1.5V10z"
-                                stroke="currentColor"
-                                strokeWidth="1.3"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                            <span>编辑内容</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="row-menu-item"
-                            onClick={() => {
-                              startRename(doc);
-                              setMenuOpenId(null);
-                            }}
-                          >
-                            <svg
-                              aria-hidden="true"
-                              width="13"
-                              height="13"
-                              viewBox="0 0 14 14"
-                              fill="none"
-                            >
-                              <path
-                                d="M2 12h10M3.5 8.5h2l5-5-2-2-5 5z"
-                                stroke="currentColor"
-                                strokeWidth="1.3"
-                                strokeLinejoin="round"
-                              />
-                            </svg>
-                            <span>重命名</span>
-                          </button>
-                          <button
-                            type="button"
-                            className="row-menu-item"
-                            onClick={() => {
-                              onShare(doc.id);
-                              setMenuOpenId(null);
-                            }}
-                          >
-                            <_I.share />
-                            <span>分享</span>
-                          </button>
-                        </>
-                      )}
-                      <button
-                        type="button"
-                        className="row-menu-item"
-                        onClick={() => {
-                          navigator.clipboard?.writeText(documentReaderUrl(doc.spaceId, doc.id));
-                          pushToast({ msg: '链接已复制', meta: doc.title });
-                          setMenuOpenId(null);
-                        }}
-                      >
-                        <_I.link />
-                        <span>复制链接</span>
-                      </button>
-                      {doc.canEdit && (
-                        <>
-                          <div className="row-menu-sep"></div>
-                          <button
-                            type="button"
-                            className="row-menu-item danger"
-                            onClick={() => deleteDoc(doc)}
-                          >
-                            <_I.trash />
-                            <span>删除</span>
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
+                  ))}
                 </div>
-              </div>
-            );
-          })}
-        </AnimatedScrollList>
+              ))}
+            </div>
+            <div className="wb-preview">
+              {selectedDoc ? (
+                <WorkbenchPreview
+                  key={selectedDoc.id}
+                  doc={selectedDoc}
+                  spaces={spaces}
+                  author={members.find((m: Loose) => m.id === selectedDoc.author)}
+                  actions={actions}
+                  renaming={renaming === selectedDoc.id}
+                  renameVal={renameVal}
+                  setRenameVal={setRenameVal}
+                  commitRename={commitRename}
+                  cancelRename={() => setRenaming(null)}
+                  mutations={mutations}
+                />
+              ) : (
+                <div className="wb-preview-empty">选择左侧的文档以预览。</div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
       {editing &&
         (editing.format === 'markdown' ? (
@@ -623,5 +765,127 @@ export function AdminDocsView({
           />
         ))}
     </div>
+  );
+}
+
+function WorkbenchPreview({
+  doc,
+  spaces,
+  author,
+  actions,
+  renaming,
+  renameVal,
+  setRenameVal,
+  commitRename,
+  cancelRename,
+  mutations,
+}: Loose) {
+  const detailQuery = useDocument(doc.id, Boolean(doc.id));
+  const detailDoc = detailQuery.data || doc;
+  const isMarkdown = detailDoc.format === 'markdown';
+  const chip = docChip(doc);
+  const accent = SPACE_COLOR_MAP[doc.spaceAccent] || SPACE_COLOR_MAP.accent;
+  const crumb = `atlas.team / ${doc.spaceName}${doc.folderPath ? ` / ${doc.folderPath}` : ''} / ${doc.id}${isMarkdown ? '.md' : '.html'}`;
+
+  return (
+    <>
+      <div className="wb-pv-head">
+        <span className="sm-mark" style={{ background: accent }}>
+          {doc.spaceMark || doc.spaceName?.slice(0, 1)}
+        </span>
+        <div className="wb-pv-title">
+          {renaming ? (
+            <input
+              className="input"
+              value={renameVal}
+              // biome-ignore lint/a11y/noAutofocus: rename input is an explicit user action; focus belongs here
+              autoFocus
+              onChange={(e: Loose) => setRenameVal(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e: Loose) => {
+                if (e.key === 'Enter') commitRename();
+                if (e.key === 'Escape') cancelRename();
+              }}
+              style={{ fontSize: 16, fontWeight: 600, width: '100%', padding: '4px 8px' }}
+            />
+          ) : (
+            <div className="wb-pv-title-row">
+              <h3>{doc.title}</h3>
+              <span className={`vis-chip ${chip.cls}`}>{chip.label}</span>
+            </div>
+          )}
+          <div className="wb-pv-crumb mono">{crumb}</div>
+        </div>
+        <div className="wb-pv-actions">
+          {doc.canEdit && (
+            <button type="button" className="btn secondary" onClick={() => actions.edit(doc)}>
+              {editGlyph}
+              <span>编辑</span>
+            </button>
+          )}
+          <button
+            type="button"
+            className="icon-btn"
+            title="预览"
+            onClick={() => actions.preview(doc)}
+          >
+            {eyeGlyph}
+          </button>
+          <DocMoreMenu doc={doc} actions={actions} />
+        </div>
+      </div>
+
+      <div className="wb-pv-chrome">
+        <span className="wb-dot r"></span>
+        <span className="wb-dot y"></span>
+        <span className="wb-dot g"></span>
+        <span className="wb-pv-url mono">{crumb}</span>
+      </div>
+
+      <div className="wb-pv-body">
+        {detailQuery.isLoading ? (
+          <div className="wb-pv-skeleton" role="status" aria-label="正在加载正文">
+            <Skeleton w="55%" h={26} r={6} />
+            <Skeleton w="35%" h={13} r={4} />
+            <div style={{ height: 14 }} />
+            <Skeleton w="100%" h={12} />
+            <Skeleton w="92%" h={12} />
+            <Skeleton w="80%" h={12} />
+            <Skeleton w="88%" h={12} />
+            <Skeleton w="60%" h={12} />
+          </div>
+        ) : detailQuery.isError ? (
+          <div className="wb-preview-empty">无法加载该文档的内容。</div>
+        ) : isMarkdown ? (
+          <MarkdownReader content={detailDoc.html || ''} scrollKey={`wb:${doc.id}`} />
+        ) : (
+          <iframe
+            className="wb-pv-frame"
+            srcDoc={
+              detailDoc.html ||
+              '<!doctype html><html><body style="font-family:sans-serif;color:#888;padding:24px">暂无内容</body></html>'
+            }
+            title={detailDoc.title}
+            sandbox="allow-scripts allow-popups"
+          />
+        )}
+      </div>
+
+      <div className="wb-pv-foot">
+        <span className="avatar small">{author?.initials}</span>
+        <span>{author?.name}</span>
+        <span className="dim">· 更新于 {doc.updated}</span>
+        <div style={{ flex: 1 }} />
+        {doc.canEdit ? (
+          <SpaceChipPicker
+            doc={doc}
+            spaces={spaces}
+            onPick={(s: Loose) => mutations.updateDocument(doc.id, { spaceId: s.id })}
+          />
+        ) : (
+          <span className="vis-chip">{doc.spaceName}</span>
+        )}
+      </div>
+    </>
   );
 }
