@@ -1,6 +1,6 @@
 import { extractHtmlMetadata, extractMarkdownMetadata } from '@atlas/shared';
 import { useMemo, useState } from 'react';
-import { I } from '../chrome';
+import { AnimatedItem, I } from '../chrome';
 import { useDocument } from '../data-hooks';
 import { docCategory, docChip } from '../labels';
 import type { Loose } from '../loose-types';
@@ -51,7 +51,7 @@ const renameGlyph = (
 
 // Self-contained "more" dropdown — own open/dismiss state so it works identically
 // inside a gallery card or the workbench preview header without shared parent state.
-function DocMoreMenu({ doc, actions, align = 'right' }: Loose) {
+function DocMoreMenu({ doc, actions, align = 'right', overlay = false }: Loose) {
   const [open, setOpen] = useState(false);
   useDismiss(open, () => setOpen(false), MENU_IGNORE);
   const close = () => setOpen(false);
@@ -59,7 +59,7 @@ function DocMoreMenu({ doc, actions, align = 'right' }: Loose) {
     <div className="doc-more-wrap" style={{ position: 'relative' }}>
       <button
         type="button"
-        className="icon-btn"
+        className={overlay ? 'gx-overlay-btn' : 'icon-btn'}
         title="更多"
         data-more-trigger
         aria-haspopup="true"
@@ -617,82 +617,100 @@ export function AdminDocsView({
           </div>
         ) : viewMode === 'gallery' ? (
           <div className="doc-gallery">
-            {filtered.map((doc: Loose) => {
+            {filtered.map((doc: Loose, i: number) => {
               const author = members.find((m: Loose) => m.id === doc.author);
               const chip = docChip(doc);
               const accent = SPACE_COLOR_MAP[doc.spaceAccent] || SPACE_COLOR_MAP.accent;
               return (
-                <div
-                  key={doc.id}
-                  className="gx-card"
-                  style={{ '--card-strip': accent } as Loose}
-                  {...clickableProps(
-                    (e: Loose) => {
-                      if (renaming === doc.id) return;
-                      if (e.target.closest?.('button') || e.target.closest?.('.row-menu')) return;
-                      openDoc(doc);
-                    },
-                    { label: doc.title },
-                  )}
-                >
-                  <div className="gx-preview">
-                    <div className="gx-preview-head">
-                      <span className="gx-eyebrow">
-                        {doc.spaceName}
-                        {doc.folderPath ? ` · ${doc.folderPath}` : ''}
-                      </span>
-                      <span className="format-badge">{formatBadge(doc)}</span>
+                <AnimatedItem key={doc.id} index={i}>
+                  <div
+                    className="gx-card"
+                    style={{ '--card-strip': accent } as Loose}
+                    {...clickableProps(
+                      (e: Loose) => {
+                        if (renaming === doc.id) return;
+                        if (e.target.closest?.('button') || e.target.closest?.('.row-menu')) return;
+                        openDoc(doc);
+                      },
+                      { label: doc.title },
+                    )}
+                  >
+                    {/* Paper thumbnail — a styled mini-page evoking the document, with
+                        an accent bar, format badge, and hover action overlay. */}
+                    <div className="gx-thumb">
+                      <span className="gx-thumb-bar" style={{ background: accent }}></span>
+                      <div className="gx-thumb-clip">
+                        <div className="gx-page">
+                          <div className="gx-page-kicker" style={{ color: accent }}>
+                            {doc.spaceName}
+                            {doc.folderPath ? ` · ${doc.folderPath}` : ''}
+                          </div>
+                          <div className="gx-page-title">{doc.title || '未命名文章'}</div>
+                          <span className="gx-page-rule" style={{ background: accent }}></span>
+                          <p className="gx-page-desc">{doc.desc || '暂无摘要，点击编辑补充。'}</p>
+                          <div className="gx-page-lines" aria-hidden="true">
+                            <i></i>
+                            <i></i>
+                            <i></i>
+                          </div>
+                        </div>
+                      </div>
+                      <span className="format-badge gx-ext">{formatBadge(doc)}</span>
+                      <div className="gx-overlay">
+                        {doc.canEdit && (
+                          <button
+                            type="button"
+                            className="gx-overlay-btn"
+                            title="编辑内容"
+                            aria-label="编辑内容"
+                            onClick={(e: Loose) => {
+                              e.stopPropagation();
+                              openEditor(doc);
+                            }}
+                          >
+                            {editGlyph}
+                          </button>
+                        )}
+                        <DocMoreMenu doc={doc} actions={actions} align="left" overlay />
+                      </div>
                     </div>
-                    <div className="gx-preview-title">{doc.title || '未命名文章'}</div>
-                    <p className="gx-preview-body">{doc.desc || '暂无摘要，点击编辑补充。'}</p>
-                  </div>
-                  <div className="gx-foot">
-                    <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
-                    <div className="gx-foot-main">
-                      {renaming === doc.id ? (
-                        <input
-                          className="input gx-rename"
-                          value={renameVal}
-                          // biome-ignore lint/a11y/noAutofocus: rename input is an explicit user action; focus belongs here
-                          autoFocus
-                          onChange={(e: Loose) => setRenameVal(e.target.value)}
-                          onClick={(e: Loose) => e.stopPropagation()}
-                          onBlur={commitRename}
-                          onKeyDown={(e: Loose) => {
-                            // Stop the card's clickableProps keydown from preventing Space/Enter.
-                            e.stopPropagation();
-                            if (e.key === 'Enter') commitRename();
-                            if (e.key === 'Escape') setRenaming(null);
-                          }}
-                        />
-                      ) : (
-                        <span className="gx-foot-title">{doc.title}</span>
-                      )}
-                      <span className="gx-foot-meta">
+                    {/* Meta sits below the paper, on the parchment. */}
+                    <div className="gx-foot">
+                      <div className="gx-foot-row">
+                        <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
+                        {renaming === doc.id ? (
+                          <input
+                            className="input gx-rename"
+                            value={renameVal}
+                            // biome-ignore lint/a11y/noAutofocus: rename input is an explicit user action; focus belongs here
+                            autoFocus
+                            onChange={(e: Loose) => setRenameVal(e.target.value)}
+                            onClick={(e: Loose) => e.stopPropagation()}
+                            onBlur={commitRename}
+                            onKeyDown={(e: Loose) => {
+                              // Stop the card's clickableProps keydown from preventing Space/Enter.
+                              e.stopPropagation();
+                              if (e.key === 'Enter') commitRename();
+                              if (e.key === 'Escape') setRenaming(null);
+                            }}
+                          />
+                        ) : (
+                          <span className="gx-foot-title">{doc.title}</span>
+                        )}
+                        <span className={`vis-chip ${chip.cls}`}>{chip.label}</span>
+                      </div>
+                      <div className="gx-foot-meta">
                         <span className="avatar small">{author?.initials}</span>
-                        {author?.name}
+                        <span className="gx-foot-author">{author?.name}</span>
                         <span className="dim">· {doc.updated}</span>
-                      </span>
-                    </div>
-                    <span className={`vis-chip ${chip.cls}`}>{chip.label}</span>
-                    <div className="gx-actions">
-                      {doc.canEdit && (
-                        <button
-                          type="button"
-                          className="icon-btn"
-                          title="编辑内容"
-                          onClick={(e: Loose) => {
-                            e.stopPropagation();
-                            openEditor(doc);
-                          }}
-                        >
-                          {editGlyph}
-                        </button>
-                      )}
-                      <DocMoreMenu doc={doc} actions={actions} />
+                        <span className="gx-foot-space">
+                          <span className="gx-foot-sq" style={{ background: accent }}></span>
+                          {doc.spaceName}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
+                </AnimatedItem>
               );
             })}
           </div>
