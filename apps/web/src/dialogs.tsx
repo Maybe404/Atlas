@@ -71,7 +71,7 @@ function CmdK({
         type: 'cmd',
         id: 'theme',
         title: '切换深色模式',
-        path: '⌘D',
+        path: '',
         icon: 'moon',
         action: 'theme',
       },
@@ -87,7 +87,7 @@ function CmdK({
         type: 'cmd',
         id: 'new',
         title: '新建 / 上传文档…',
-        path: '⌘N',
+        path: '',
         icon: 'plus',
         go: { view: 'admin-upload' },
       },
@@ -753,7 +753,7 @@ function PublicToggle({ label, desc, value, disabled, onChange }: Loose) {
 function ToastWrap({ toasts }: Loose) {
   if (!toasts.length) return null;
   return (
-    <div className="toast-wrap">
+    <div className="toast-wrap" role="status" aria-live="polite" aria-atomic="true">
       {toasts.map((t: Loose) => (
         <div key={t.id} className="toast">
           <span className="check">

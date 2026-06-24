@@ -1,7 +1,7 @@
 import { ALL_CAPABILITIES, type Capability, type SpaceMemberRole } from '@atlas/shared';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '../db/client';
-import { documents, folders, grants, groups, members, shareLinks, spaces } from '../db/schema';
+import { documents, folders, groups, members, shareLinks, spaces } from '../db/schema';
 import { nowIso } from './dates';
 import { getMemberSpaceRole, listEffectiveGrants, listGroupIdsForMember } from './grants';
 import { forbidden, notFound } from './http-error';
@@ -21,6 +21,10 @@ export type PermissionLookup = {
   restrictedFolderIds: Set<string>;
   // Docs reachable through an enabled, unrevoked, unexpired public share link.
   publishedDocIds: Set<string>;
+  // Active share tokens (id → token) for the same set, so the directory can surface a usable
+  // /share/:token URL for guests. Tokens are public by design — leaking them to the directory
+  // is intentional, not a security regression.
+  publishedTokensByDoc: Map<string, string>;
   // Personal-space owners (owner reads/edits everything in their space).
   spaceOwnerById: Map<string, string | null>;
   // Effective global capabilities (union across the member's groups; admins hold all).
@@ -35,6 +39,7 @@ export function emptyPermissionLookup(): PermissionLookup {
     folderParentById: new Map(),
     restrictedFolderIds: new Set(),
     publishedDocIds: new Set(),
+    publishedTokensByDoc: new Map(),
     spaceOwnerById: new Map(),
     capabilities: new Set(),
   };
@@ -57,7 +62,11 @@ export async function loadPermissionLookup(user: User | undefined): Promise<Perm
       .from(folders),
     db.select({ id: spaces.id, ownerId: spaces.ownerId }).from(spaces),
     db
-      .select({ documentId: shareLinks.documentId, expiresAt: shareLinks.expiresAt })
+      .select({
+        documentId: shareLinks.documentId,
+        expiresAt: shareLinks.expiresAt,
+        token: shareLinks.token,
+      })
       .from(shareLinks)
       .where(and(eq(shareLinks.enabled, true), isNull(shareLinks.revokedAt))),
   ]);
@@ -71,6 +80,7 @@ export async function loadPermissionLookup(user: User | undefined): Promise<Perm
   for (const link of linkRows) {
     if (link.expiresAt && new Date(link.expiresAt).getTime() < now) continue;
     lookup.publishedDocIds.add(link.documentId);
+    lookup.publishedTokensByDoc.set(link.documentId, link.token);
   }
 
   // Admins bypass grants and hold every capability; guests hold none.
@@ -139,7 +149,8 @@ export function getSpaceRoleFromLookup(
 export async function getSpaceRole(user: User | undefined, spaceId: string) {
   if (!user) return null;
   if (isAdmin(user)) return 'editor' as const;
-  return getMemberSpaceRole(user.id, spaceId);
+  const groupIds = await listGroupIdsForMember(user.id);
+  return getMemberSpaceRole(user.id, spaceId, groupIds);
 }
 
 export async function requireSpaceAccess(user: User, spaceId: string) {
@@ -157,6 +168,9 @@ export async function requireSpaceEditor(user: User, spaceId: string) {
 export async function requireFolderEditor(user: User, folderId: string) {
   const [folder] = await db.select().from(folders).where(eq(folders.id, folderId));
   if (!folder) throw notFound();
+  // A trashed folder is no longer a writable target — its docs/children are restored through
+  // the folder restore route, not by editing it.
+  if (folder.deletedAt) throw notFound();
   await requireSpaceEditor(user, folder.spaceId);
   return folder;
 }
@@ -181,21 +195,33 @@ function resolveInheritRole(doc: DocumentRow, lookup: PermissionLookup): SpaceMe
   return lookup.spaceRolesBySpaceId.get(doc.spaceId) ?? null;
 }
 
-// Single source of truth for read access. `requireDocumentRead` / `canReadDocument` delegate here
-// after loading the lookup, so the chain stays identical for list rendering and single-doc reads.
+// Strict read: used by single-doc routes (requireDocumentRead / canEdit). Guest can never read
+// via this path — the share link route is the only way for anonymous visitors to load a doc.
 export function canReadDocumentWithLookup(
   user: User | undefined,
   doc: DocumentRow,
   lookup: PermissionLookup,
 ) {
   if (doc.deletedAt) return false;
-  if (lookup.publishedDocIds.has(doc.id)) return true; // public share link — guest channel
   if (!user) return false;
   if (isAdmin(user) || doc.authorId === user.id) return true;
   if (lookup.spaceOwnerById.get(doc.spaceId) === user.id) return true;
   if (lookup.documentRolesByDocumentId.has(doc.id)) return true; // explicit per-doc grant
   if (doc.access === 'restricted') return false; // no inheritance
   return resolveInheritRole(doc, lookup) !== null;
+}
+
+// Directory visibility: used by the /spaces listing to decide whether a doc card is shown
+// readable. A published doc is always visible (so guests can land on /share/:token via the
+// directory); the actual read still requires the share token or a grant.
+export function canSeeInDirectoryWithLookup(
+  user: User | undefined,
+  doc: DocumentRow,
+  lookup: PermissionLookup,
+) {
+  if (doc.deletedAt) return false;
+  if (lookup.publishedDocIds.has(doc.id)) return true;
+  return canReadDocumentWithLookup(user, doc, lookup);
 }
 
 export async function canReadDocument(user: User | undefined, doc: DocumentRow) {
@@ -229,6 +255,9 @@ export async function canEditDocument(user: User | undefined, doc: DocumentRow) 
   return canEditDocumentWithLookup(user, doc, await loadPermissionLookup(user));
 }
 
+// Capability check only — kept for callers that need the cheap predicate. The full manager
+// check (requireDocumentShareManager) gates on the `publish` capability first, so a doc
+// author without publish still needs explicit membership in a publish-bearing group.
 export function canManageDocumentShare(user: User | undefined, doc: DocumentRow) {
   if (doc.deletedAt) return false;
   if (!user) return false;
@@ -236,20 +265,19 @@ export function canManageDocumentShare(user: User | undefined, doc: DocumentRow)
 }
 
 export async function requireDocumentShareManager(user: User | undefined, docId: string) {
+  if (!user) throw notFound();
   const [doc] = await db
     .select()
     .from(documents)
     .where(and(eq(documents.id, docId), isNull(documents.deletedAt)));
   if (!doc) throw notFound();
-  if (canManageDocumentShare(user, doc)) return doc; // admin or author
-  // Members with the `publish` capability may manage shares on documents they can edit.
-  if (user) {
-    const caps = await getMemberCapabilities(user);
-    if (caps.has('publish')) {
-      const lookup = await loadPermissionLookup(user);
-      if (canEditDocumentWithLookup(user, doc, lookup)) return doc;
-    }
-  }
+  // Everyone managing a share must hold the `publish` capability (admin always does; others
+  // must be in a group with it). This is the single rule that protects the public channel.
+  const caps = await getMemberCapabilities(user);
+  if (!caps.has('publish')) throw notFound();
+  if (isAdmin(user) || doc.authorId === user.id) return doc;
+  const lookup = await loadPermissionLookup(user);
+  if (canEditDocumentWithLookup(user, doc, lookup)) return doc;
   throw notFound();
 }
 
@@ -266,20 +294,22 @@ export async function listReadableSpaces(user: User | undefined) {
     return db.select().from(spaces);
   }
 
-  const rows = await db
-    .select({ space: spaces })
+  // A member sees a space when EITHER (a) they hold a direct member-subject grant on it OR
+  // (b) one of their groups does. `listEffectiveGrants` already unions those shapes; we just
+  // need to dedupe by space id and join with the spaces table. Without the group-subject
+  // branch, a member whose only access to a space is via a group grant would be able to
+  // write into it but couldn't navigate to it in the directory.
+  const groupIds = await listGroupIdsForMember(user.id);
+  const effective = await listEffectiveGrants(user.id, groupIds);
+  const spaceGrantIds = new Set<string>();
+  for (const row of effective) {
+    if (row.targetType === 'space') spaceGrantIds.add(row.targetId);
+  }
+  if (spaceGrantIds.size === 0) return [];
+  return db
+    .select()
     .from(spaces)
-    .innerJoin(
-      grants,
-      and(
-        eq(grants.targetType, 'space'),
-        eq(grants.targetId, spaces.id),
-        eq(grants.subjectType, 'member'),
-        eq(grants.subjectId, user.id),
-      ),
-    );
-
-  return rows.map((row) => row.space);
+    .where(inArray(spaces.id, [...spaceGrantIds]));
 }
 
 export async function listReadableDocuments(
@@ -310,10 +340,15 @@ export async function listReadableDocuments(
 export async function listDirectoryDocuments(user: User | undefined, space?: SpaceRow) {
   if (!user) {
     const spaceScope = space ? [eq(documents.spaceId, space.id)] : [];
-    return db
+    // Candidates: every live doc in the (optional) scope. The directory uses
+    // `canSeeInDirectoryWithLookup` to drop non-published ones, so the wire only carries rows a
+    // guest could actually open via /share/:token.
+    const candidates = await db
       .select()
       .from(documents)
       .where(and(isNull(documents.deletedAt), ...spaceScope));
+    const lookup = await loadPermissionLookup(undefined);
+    return candidates.filter((doc) => canSeeInDirectoryWithLookup(undefined, doc, lookup));
   }
 
   return listReadableDocuments(user, space);

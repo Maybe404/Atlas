@@ -173,6 +173,35 @@ const I = {
       <path d="M4 5.5V4a2 2 0 0 1 4 0v1.5" stroke="currentColor" strokeWidth="1.3" />
     </svg>
   ),
+  lockLarge: (p: IconProps = {}) => (
+    <svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28" fill="none" {...p}>
+      <rect x="6" y="13" width="16" height="11" rx="2" stroke="currentColor" strokeWidth="1.6" />
+      <path
+        d="M9.5 13V10a4.5 4.5 0 0 1 9 0v3"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+      />
+      <path d="M14 17v3.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  ),
+  signIn: (p: IconProps = {}) => (
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
+      <path
+        d="M2 7h7M7 4l3 3-3 3"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M9.5 2h2A1 1 0 0 1 12.5 3v8a1 1 0 0 1-1 1h-2"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+      />
+    </svg>
+  ),
   check: (p: IconProps = {}) => (
     <svg aria-hidden="true" width="12" height="12" viewBox="0 0 12 12" fill="none" {...p}>
       <path
@@ -245,6 +274,17 @@ const I = {
     <svg aria-hidden="true" width="13" height="13" viewBox="0 0 13 13" fill="none" {...p}>
       <path
         d="M9 2.5l1.5 1.5L4 10.5H2.5V9L9 2.5z"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
+  code: (p: IconProps = {}) => (
+    <svg aria-hidden="true" width="13" height="13" viewBox="0 0 13 13" fill="none" {...p}>
+      <path
+        d="M4.8 3.8 2 6.5l2.8 2.7M8.2 3.8 11 6.5l-2.8 2.7"
         stroke="currentColor"
         strokeWidth="1.4"
         strokeLinecap="round"
@@ -445,15 +485,24 @@ function ThemePicker({ theme, onTheme }: Loose) {
 }
 
 function Sidebar({ ctx, spaces, user, collapsed, onToggleCollapse, onNavigate }: Loose) {
-  // Open every space by default so the directory reads as a single list
-  const initialExpanded = useMemo(() => {
-    const m: Record<string, boolean> = {};
-    spaces.forEach((s: Loose) => {
-      m[s.id] = true;
+  // Open every space by default so the directory reads as a single list.
+  // spaces arrive asynchronously (React Query), so we can't seed from them at
+  // first render — instead merge new spaces into the expanded map as they
+  // arrive, preserving any the user has already collapsed.
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    setExpanded((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const s of spaces) {
+        if (!(s.id in next)) {
+          next[s.id] = true;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
     });
-    return m;
-  }, [spaces.forEach]);
-  const [expanded, setExpanded] = useState(initialExpanded);
+  }, [spaces]);
   const toggle = (id: Loose) => setExpanded((e: Loose) => ({ ...e, [id]: !e[id] }));
 
   // re-key the inner animated wrappers on (un)collapse so items stagger in again
@@ -749,26 +798,28 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
   );
 }
 
+// AnimatedItem — viewport-driven scale/fade reveal. Items toggle as they enter
+// and leave the nearest scroll container so long lists keep the subtle "scroll
+// into view" motion, while the capped stagger prevents distant rows from
+// waiting behind an index-sized delay.
 function AnimatedItem({ children, index = 0 }: Loose) {
   const ref = useRef<Loose>(null);
   const [inView, setInView] = useState(false);
-  // Capped stagger: keep the cascade on mount / page-change, but never let the
-  // delay grow with the index — otherwise items far down the list sat at
-  // index*30ms (~0.5s+) and seemed to "wait" before showing while scrolling.
   const delay = Math.min(index, 8) * 14;
+
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    // find nearest scroll container
+
     let root = el.parentElement;
     while (root && root !== document.body) {
       const style = getComputedStyle(root);
       if (/(auto|scroll)/.test(style.overflowY)) break;
       root = root.parentElement;
     }
+
     const io = new IntersectionObserver(
       (entries: Loose) => {
-        // In/out: items animate as they enter AND leave view (triggerOnce: false).
         entries.forEach((en: Loose) => {
           setInView(en.isIntersecting);
         });
@@ -776,16 +827,18 @@ function AnimatedItem({ children, index = 0 }: Loose) {
       { root: root === document.body ? null : root, threshold: 0.2 },
     );
     io.observe(el);
-    // also flip on after a tick so initial items animate in
+
     const t = setTimeout(() => {
       const r = el.getBoundingClientRect();
       if (r.top < window.innerHeight && r.bottom > 0) setInView(true);
     }, 20 + delay);
+
     return () => {
       io.disconnect();
       clearTimeout(t);
     };
   }, [delay]);
+
   return (
     <div
       ref={ref}

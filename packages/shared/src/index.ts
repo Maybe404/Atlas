@@ -56,15 +56,14 @@ export const DocumentSchema = z.object({
   canRead: z.boolean().optional(),
   canEdit: z.boolean().optional(),
   locked: z.boolean().optional(),
+  // Working share token for published docs; lets the SPA build a /share/:token URL from the
+  // directory response. Null for non-published docs.
+  shareToken: z.string().nullable().optional(),
   deletedAt: z.string().nullable().optional(),
 });
 export type Document = z.infer<typeof DocumentSchema>;
 
 export const LockedDirectoryDocumentSchema = z.object({
-  id: z.string(),
-  spaceId: z.string(),
-  folderId: z.string().nullable().optional(),
-  title: z.string(),
   locked: z.literal(true),
   canRead: z.literal(false),
   canEdit: z.literal(false),

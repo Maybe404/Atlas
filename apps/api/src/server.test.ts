@@ -17,6 +17,7 @@ const { db } = await import('./db/client');
 const {
   auditLogs,
   documents,
+  folders,
   grants,
   groupMembers,
   groups,
@@ -99,10 +100,10 @@ async function loginAs(email = 'lin@atlas.team') {
 }
 
 describe('Atlas API', () => {
-  test('anonymous visitors see lightweight directory entries without document HTML', async () => {
+  test('anonymous visitors see only published docs in the directory', async () => {
     const res = await request('/spaces');
     expect(res.status).toBe(200);
-    const spaces = (await res.json()) as ApiSpace[];
+    const spaces = (await res.json()) as (ApiSpace & { personal?: boolean; folders?: unknown[] })[];
     const docs = spaces.flatMap(
       (space) =>
         space.children as {
@@ -111,6 +112,7 @@ describe('Atlas API', () => {
           canRead: boolean;
           canEdit?: boolean;
           locked?: boolean;
+          shareToken?: string | null;
           html?: string;
           desc?: string;
           author?: string;
@@ -118,32 +120,32 @@ describe('Atlas API', () => {
           updated?: string;
           tags?: string[];
           deletedAt?: string | null;
+          title?: string;
+          folderId?: string;
         }[],
     );
     expect(docs.length).toBeGreaterThan(0);
 
-    // Guests reach docs only through an enabled public share link (published); everything else is
-    // a locked placeholder.
-    const publishedDocs = docs.filter((doc) => doc.published === true);
-    const lockedDocs = docs.filter((doc) => doc.locked);
-    expect(publishedDocs.length).toBeGreaterThan(0);
-    expect(lockedDocs.length).toBeGreaterThan(0);
-    expect(publishedDocs.every((doc) => doc.canRead === true && doc.html === undefined)).toBe(true);
+    // Guests only see published docs in the directory; every card has a share token so the
+    // frontend can build a /share/:token URL. The directory never ships document HTML.
+    expect(docs.every((doc) => doc.published === true && doc.canRead === true)).toBe(true);
+    expect(
+      docs.every((doc) => typeof doc.shareToken === 'string' && doc.shareToken.length > 0),
+    ).toBe(true);
+    expect(docs.every((doc) => doc.html === undefined)).toBe(true);
 
-    for (const doc of lockedDocs) {
-      expect(doc.locked).toBe(true);
-      expect(doc.canRead).toBe(false);
-      expect(doc.canEdit).toBe(false);
-      expect(doc.html).toBeUndefined();
-      expect(doc.desc).toBeUndefined();
-      expect(doc.author).toBeUndefined();
-      expect(doc.authorName).toBeUndefined();
-      expect(doc.updated).toBeUndefined();
-      expect(doc.access).toBeUndefined();
-      expect(doc.published).toBeUndefined();
-      expect(doc.tags).toBeUndefined();
-      expect(doc.deletedAt).toBeUndefined();
-    }
+    // No locked placeholders for guests — non-published docs are simply not listed.
+    expect(docs.some((doc) => doc.locked)).toBe(false);
+
+    // Personal spaces are filtered out of the guest directory.
+    expect(spaces.some((space) => space.personal === true)).toBe(false);
+    // Folders are member-only; guests see an empty tree.
+    expect(spaces.every((space) => (space.folders ?? []).length === 0)).toBe(true);
+
+    // Guest direct access to /documents/:id is rejected (token is the only way in).
+    const published = docs[0]!;
+    const direct = await request(`/documents/${published.shareToken ? 'd1' : 'd1'}`);
+    expect(direct.status).toBe(404);
   });
 
   test('uploads raw HTML and infers document metadata', async () => {
@@ -1454,5 +1456,293 @@ describe('Atlas API', () => {
     expect(remainingGrants.length).toBe(0);
     const [gone] = await db.select().from(groups).where(eq(groups.id, groupId));
     expect(gone).toBeUndefined();
+  });
+
+  test('group grant on a space lets a non-admin member create and edit documents in it', async () => {
+    const admin = await loginAs();
+    // Fresh space with no per-member grant; u5 has no capability and no grant → 403.
+    const spaceRes = await request('/spaces', {
+      method: 'POST',
+      body: JSON.stringify({ name: '组写权限空间', accent: 'moss' }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    const { id: spaceId } = (await spaceRes.json()) as { id: string };
+
+    // Create a group with editor grant, no capabilities needed for the create.
+    const groupRes = await request('/groups', {
+      method: 'POST',
+      body: JSON.stringify({ name: '组编辑', capabilities: [] }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    const { id: groupId } = (await groupRes.json()) as { id: string };
+    await request(`/groups/${groupId}/members`, {
+      method: 'PUT',
+      body: JSON.stringify({ memberIds: ['u5'] }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    await request(`/groups/${groupId}/grants`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        grants: [{ targetType: 'space', targetId: spaceId, role: 'editor' }],
+      }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+
+    // u5 (no per-member grant) can now create a doc purely through the group grant.
+    const he = await loginAs('he@atlas.team');
+    const create = await request('/documents', {
+      method: 'POST',
+      body: JSON.stringify({
+        spaceId,
+        title: '组创建文档',
+        access: 'inherit',
+        html: '<p>hi</p>',
+      }),
+      headers: { 'content-type': 'application/json', ...he.headers },
+    });
+    expect(create.status).toBe(201);
+    const { id: docId } = (await create.json()) as { id: string };
+
+    // And edit it.
+    const patch = await request(`/documents/${docId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title: '组编辑后的标题' }),
+      headers: { 'content-type': 'application/json', ...he.headers },
+    });
+    expect(patch.status).toBe(200);
+
+    // The space must also show up in u5's directory so the UI surfaces it.
+    const dirRes = await request('/spaces', { headers: { cookie: he.cookie } });
+    const dir = (await dirRes.json()) as { id: string; role: string | null }[];
+    const entry = dir.find((s) => s.id === spaceId);
+    expect(entry).toBeDefined();
+    expect(entry?.role).toBe('editor');
+
+    // And the doc they just created shows up in the directory children.
+    const children = (entry as unknown as { children: { id: string }[] }).children;
+    expect(children.some((c) => c.id === docId)).toBe(true);
+  });
+
+  test('publish capability is required for every share write, including the document author', async () => {
+    const admin = await loginAs();
+    // u5 (he) is a regular member with no capability. Have them author a doc and verify they
+    // cannot manage its share despite being the author.
+    const create = await request('/documents', {
+      method: 'POST',
+      body: JSON.stringify({
+        spaceId: 's1',
+        title: '无 publish 能力作者的分享测试',
+        access: 'inherit',
+        html: '<p>x</p>',
+      }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(create.status).toBe(201);
+    const { id: docId } = (await create.json()) as { id: string };
+    await db.update(documents).set({ authorId: 'u5' }).where(eq(documents.id, docId));
+
+    const he = await loginAs('he@atlas.team');
+    const heShare = await request(`/documents/${docId}/share`, {
+      headers: { cookie: he.cookie },
+    });
+    expect(heShare.status).toBe(404);
+
+    const hePatch = await request(`/documents/${docId}/share`, {
+      method: 'PATCH',
+      body: JSON.stringify({ publicEnabled: true }),
+      headers: { 'content-type': 'application/json', ...he.headers },
+    });
+    expect(hePatch.status).toBe(404);
+
+    // u2 (chen) is in g1 (createSpace, publish) → author of d4 → can manage.
+    const chen = await loginAs('chen@atlas.team');
+    const chenPatch = await request('/documents/d4/share', {
+      method: 'PATCH',
+      body: JSON.stringify({ publicEnabled: true }),
+      headers: { 'content-type': 'application/json', ...chen.headers },
+    });
+    expect(chenPatch.status).toBe(200);
+  });
+
+  test('guest cannot read a published document via /documents/:id; the share token route works', async () => {
+    // Issue a fresh public token for d1 — the rotate test above invalidates the seeded one.
+    const admin = await loginAs();
+    const issue = await request('/documents/d1/share', {
+      method: 'PATCH',
+      body: JSON.stringify({ publicEnabled: true, rotateToken: true }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(issue.status).toBe(200);
+    const [link] = await db.select().from(shareLinks).where(eq(shareLinks.documentId, 'd1'));
+    const token = link?.token ?? '';
+
+    // The fresh public share link is reachable.
+    const publicRes = await request(`/documents/public/${token}`);
+    expect(publicRes.status).toBe(200);
+
+    // But guessing the doc id and going direct no longer works for anonymous visitors.
+    const direct = await request('/documents/d1');
+    expect(direct.status).toBe(404);
+  });
+
+  test('deleting a member who once deleted a folder clears the FK reference first', async () => {
+    const admin = await loginAs();
+    // Create a member and grant them editor on s1, so they can create + delete folders
+    // (the route requires the deleter to have a writable space grant). The password is the
+    // demo password so `loginAs(email)` works without a custom password.
+    const create = await request('/members', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: '待删会员',
+        email: 'deleter@atlas.team',
+        password: 'atlas-demo-password',
+        role: 'member',
+      }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(create.status).toBe(201);
+    const { id: memberId } = (await create.json()) as { id: string };
+    await setMemberSpaceRole(db, memberId, 's1', 'editor');
+
+    // The new member creates a folder and soft-deletes it themselves; folders.deletedBy now
+    // points at the member, NOT at the admin. This is the FK scenario we need to clear.
+    const member = await loginAs('deleter@atlas.team');
+    const folderRes = await request('/folders', {
+      method: 'POST',
+      body: JSON.stringify({ spaceId: 's1', name: '由待删会员创建的文件夹' }),
+      headers: { 'content-type': 'application/json', ...member.headers },
+    });
+    expect(folderRes.status).toBe(201);
+    const { id: folderId } = (await folderRes.json()) as { id: string };
+    const del = await request(`/folders/${folderId}`, {
+      method: 'DELETE',
+      headers: member.headers,
+    });
+    expect(del.status).toBe(200);
+
+    // Confirm the folder is in trash and points at the member.
+    const [trashedFolder] = await db.select().from(folders).where(eq(folders.id, folderId));
+    expect(trashedFolder?.deletedAt).toBeTruthy();
+    expect(trashedFolder?.deletedBy).toBe(memberId);
+
+    // Without the application-level cleanup, the member delete would trip a FOREIGN KEY
+    // constraint. With it, the route nulls the column first, then drops the member row.
+    const remove = await request(`/members/${memberId}`, {
+      method: 'DELETE',
+      headers: admin.headers,
+    });
+    expect(remove.status).toBe(200);
+
+    // The folder is still in trash, but its deletedBy is now NULL — no dangling FK.
+    const [afterMemberDelete] = await db.select().from(folders).where(eq(folders.id, folderId));
+    expect(afterMemberDelete?.deletedBy).toBeNull();
+
+    // Personal space is gone with the member.
+    const [orphanSpace] = await db
+      .select()
+      .from(spaces)
+      .where(eq(spaces.id, `sp_personal_${memberId}`));
+    expect(orphanSpace).toBeUndefined();
+  });
+
+  test('cascade-trashed documents cannot be individually restored; folder restore is the only path', async () => {
+    const admin = await loginAs();
+    // Build a fresh folder + doc pair, delete the folder, then try restoring the doc.
+    const folder = (await (
+      await request('/folders', {
+        method: 'POST',
+        body: JSON.stringify({ spaceId: 's1', name: '级联恢复测试' }),
+        headers: { 'content-type': 'application/json', ...admin.headers },
+      })
+    ).json()) as { id: string };
+    const doc = (await (
+      await request('/documents', {
+        method: 'POST',
+        body: JSON.stringify({
+          spaceId: 's1',
+          folderId: folder.id,
+          title: '级联文档',
+          access: 'inherit',
+          html: '<p>x</p>',
+        }),
+        headers: { 'content-type': 'application/json', ...admin.headers },
+      })
+    ).json()) as { id: string };
+
+    const del = await request(`/folders/${folder.id}`, {
+      method: 'DELETE',
+      headers: admin.headers,
+    });
+    expect(del.status).toBe(200);
+
+    const [trashedDoc] = await db.select().from(documents).where(eq(documents.id, doc.id));
+    expect(trashedDoc?.deletedAt).toBeTruthy();
+    expect(trashedDoc?.trashedUnderFolderId).toBe(folder.id);
+
+    // Direct doc restore is refused — the doc was trashed as part of a folder.
+    const badRestore = await request(`/documents/${doc.id}/restore`, {
+      method: 'POST',
+      headers: admin.headers,
+    });
+    expect(badRestore.status).toBe(409);
+
+    // Folder restore clears trashedUnderFolderId and brings the doc back.
+    const folderRestore = await request(`/folders/${folder.id}/restore`, {
+      method: 'POST',
+      headers: admin.headers,
+    });
+    expect(folderRestore.status).toBe(200);
+    const [restored] = await db.select().from(documents).where(eq(documents.id, doc.id));
+    expect(restored?.deletedAt).toBeFalsy();
+    expect(restored?.trashedUnderFolderId).toBeFalsy();
+  });
+
+  test('cannot create, move, or file a document under a trashed folder', async () => {
+    const admin = await loginAs();
+    const folder = (await (
+      await request('/folders', {
+        method: 'POST',
+        body: JSON.stringify({ spaceId: 's1', name: '回收站目标' }),
+        headers: { 'content-type': 'application/json', ...admin.headers },
+      })
+    ).json()) as { id: string };
+    await request(`/folders/${folder.id}`, { method: 'DELETE', headers: admin.headers });
+
+    // Filing a new doc under it is rejected.
+    const create = await request('/documents', {
+      method: 'POST',
+      body: JSON.stringify({
+        spaceId: 's1',
+        folderId: folder.id,
+        title: '不应创建',
+        access: 'inherit',
+        html: '<p>x</p>',
+      }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(create.status).toBe(400);
+
+    // Moving an existing doc into it is rejected.
+    const live = (await (
+      await request('/documents', {
+        method: 'POST',
+        body: JSON.stringify({ spaceId: 's1', title: '活文档', access: 'inherit', html: '' }),
+        headers: { 'content-type': 'application/json', ...admin.headers },
+      })
+    ).json()) as { id: string };
+    const move = await request(`/documents/${live.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ folderId: folder.id }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(move.status).toBe(400);
+
+    // Patching the folder itself is rejected (requireFolderEditor now refuses trashed folders).
+    const rename = await request(`/folders/${folder.id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name: '改名尝试' }),
+      headers: { 'content-type': 'application/json', ...admin.headers },
+    });
+    expect(rename.status).toBe(404);
   });
 });

@@ -85,6 +85,13 @@ export const folders = sqliteTable(
     // Soft delete to trash (mirrors documents). Deleting a folder soft-deletes its whole subtree
     // and the docs within, without touching folderId — so restore re-reveals files in place.
     deletedAt: text('deleted_at'),
+    // The application-level member-delete route clears this column before dropping the member
+    // row. We deliberately do NOT add `ON DELETE SET NULL` here: rebuilding the table to attach
+    // a different FK clause is risky (it can cascade into documents.folder_id under a future
+    // migration runner that enables PRAGMA foreign_keys), and the application code already
+    // owns the cleanup. Leaving the FK as `NO ACTION` keeps the table structure unchanged and
+    // makes any missed cleanup surface as an immediate, loud 500 — which is the right failure
+    // mode for a real FK violation.
     deletedBy: text('deleted_by').references(() => members.id),
     purgeAfter: text('purge_after'),
     // The trash-root folder this row was cascade-deleted under. NULL ⇒ this folder is itself the
@@ -214,3 +221,12 @@ export const auditLogs = sqliteTable(
     targetIdIdx: index('audit_logs_target_id_idx').on(table.targetId),
   }),
 );
+
+// Persistent login-failure counter shared across processes. Replaces the in-memory Map so a
+// multi-replica deployment (or a process restart) doesn't reset the rate-limit window. Rows
+// self-expire on read via `resetAt`; no background sweep is required.
+export const loginFailures = sqliteTable('login_failures', {
+  key: text('key').primaryKey(),
+  count: integer('count').notNull().default(0),
+  resetAt: text('reset_at').notNull(),
+});

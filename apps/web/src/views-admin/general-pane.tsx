@@ -15,7 +15,7 @@ export function GeneralPane() {
             letterSpacing: '-0.012em',
           }}
         >
-          工作区 · 林氏工作室
+          工作区 · 常规
         </div>
         <h1>常规</h1>
         <p className="pane-sub">工作区基本信息。</p>
@@ -26,7 +26,7 @@ export function GeneralPane() {
             <label className="field-label" htmlFor="ws-name">
               工作区名称
             </label>
-            <input id="ws-name" className="input" defaultValue="林氏工作室" />
+            <input id="ws-name" className="input" defaultValue="林氏工作室" disabled />
           </div>
           <div className="field">
             <label className="field-label" htmlFor="ws-slug">
@@ -50,6 +50,7 @@ export function GeneralPane() {
                 id="ws-slug"
                 className="input"
                 defaultValue="lin-studio"
+                disabled
                 style={{
                   flex: 1,
                   borderTopLeftRadius: 0,
@@ -71,6 +72,19 @@ export function GeneralPane() {
               ]}
               onChange={setLang}
             />
+          </div>
+          <div
+            style={{
+              marginTop: 16,
+              padding: '12px 14px',
+              background: 'var(--pearl)',
+              borderRadius: 'var(--r-md)',
+              fontSize: 12.5,
+              color: 'var(--ink-3)',
+              lineHeight: 1.6,
+            }}
+          >
+            工作区名称与 URL 标识符的编辑功能即将推出，当前为只读预览。语言偏好保存在本浏览器。
           </div>
         </div>
       </div>

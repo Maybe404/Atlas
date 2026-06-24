@@ -8,6 +8,7 @@
       "!dist",
       "!build",
       "!.turbo",
+      "!.claude",
       "!**/*.html",
       "!apps/web/src/styles.css",
       "!apps/api/src/db/migrations/meta"

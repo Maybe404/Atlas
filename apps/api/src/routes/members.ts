@@ -2,15 +2,15 @@ import { CreateMemberSchema, UpdateMemberSchema } from '@atlas/shared';
 import { and, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { db } from '../db/client';
-import { documents, grants, members, shareLinks } from '../db/schema';
+import { documents, folders, grants, members, shareLinks, spaces } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
 import { requireUser } from '../lib/auth';
-import { removeGrantsForSubject } from '../lib/grants';
+import { removeGrantsForSubject, removeGrantsForTarget } from '../lib/grants';
 import { badRequest, conflict, forbidden, notFound } from '../lib/http-error';
 import { makeId } from '../lib/id';
 import { getMemberCapabilities, requireCapability } from '../lib/permissions';
-import { createPersonalSpace } from '../lib/personal-space';
+import { createPersonalSpace, personalSpaceId } from '../lib/personal-space';
 import { toPublicMember } from '../lib/serializers';
 
 type User = typeof members.$inferSelect;
@@ -148,9 +148,21 @@ export const membersRouter = new Hono<AppEnv>()
 
     const [member] = await db.select().from(members).where(eq(members.id, id));
     if (!member) throw notFound();
+
+    // Wipe every FK reference to this member before deleting the row. The new ON DELETE SET
+    // NULL on folders.deletedBy is a defense-in-depth; the explicit UPDATEs keep the column
+    // state honest and avoid downstream trash-restore surprises.
     await db.update(documents).set({ authorId: user.id }).where(eq(documents.authorId, id));
     await db.update(documents).set({ deletedBy: null }).where(eq(documents.deletedBy, id));
+    await db.update(folders).set({ deletedBy: null }).where(eq(folders.deletedBy, id));
     await db.update(shareLinks).set({ createdBy: user.id }).where(eq(shareLinks.createdBy, id));
+
+    // Personal space (deterministic id) goes with the member: drop its space-scoped grants
+    // first, then the space itself. Other grants survive the member delete.
+    const personalId = personalSpaceId(id);
+    await removeGrantsForTarget(db, 'space', personalId);
+    await db.delete(spaces).where(eq(spaces.id, personalId));
+
     await removeGrantsForSubject(db, id);
     await db.delete(members).where(eq(members.id, id));
     await writeAudit({

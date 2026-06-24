@@ -113,19 +113,39 @@ export async function listGroupGrants(groupId: string) {
     .where(and(eq(grants.subjectType, 'group'), eq(grants.subjectId, groupId)));
 }
 
-export async function getMemberSpaceRole(memberId: string, spaceId: string) {
-  const [row] = await db
-    .select({ role: grants.role })
-    .from(grants)
-    .where(
-      and(
-        eq(grants.subjectType, 'member'),
-        eq(grants.subjectId, memberId),
-        eq(grants.targetType, 'space'),
-        eq(grants.targetId, spaceId),
-      ),
-    );
-  return row?.role ?? null;
+export async function getMemberSpaceRole(
+  memberId: string,
+  spaceId: string,
+  groupIds: string[] = [],
+) {
+  // Group-subject grants extend the member's effective role on a space, so a write path
+  // (create doc / folder) that goes through this resolver must see editor via the group as
+  // well. Fold across both subject shapes and take the highest role.
+  const subjectFilter =
+    groupIds.length > 0
+      ? or(
+          and(
+            eq(grants.subjectType, 'member'),
+            eq(grants.subjectId, memberId),
+            eq(grants.targetType, 'space'),
+            eq(grants.targetId, spaceId),
+          ),
+          and(
+            eq(grants.subjectType, 'group'),
+            inArray(grants.subjectId, groupIds),
+            eq(grants.targetType, 'space'),
+            eq(grants.targetId, spaceId),
+          ),
+        )
+      : and(
+          eq(grants.subjectType, 'member'),
+          eq(grants.subjectId, memberId),
+          eq(grants.targetType, 'space'),
+          eq(grants.targetId, spaceId),
+        );
+  const rows = await db.select({ role: grants.role }).from(grants).where(subjectFilter);
+  for (const row of rows) if (row.role === 'editor') return 'editor' as const;
+  return (rows[0]?.role as SpaceMemberRole | undefined) ?? null;
 }
 
 export async function getMemberDocumentRole(memberId: string, documentId: string) {

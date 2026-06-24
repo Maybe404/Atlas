@@ -1,10 +1,12 @@
 import { useCallback, useRef, useState } from 'react';
+import { useNavigate as useRouterNavigate } from 'react-router';
 import { canRead, firstPublicDoc } from '../auth';
 import { I } from '../chrome';
 import { useDocument } from '../data-hooks';
 import type { Loose } from '../loose-types';
 import { copyMarkdownRich, copyMarkdownSource } from '../markdown/copy';
 import { getScroll, setScroll } from '../reader-progress';
+import { Skeleton } from '../ui-kit';
 import { MarkdownEditorDialog } from './markdown-editor-dialog';
 import { MarkdownReader } from './markdown-reader';
 import { dotClass } from './shared';
@@ -24,6 +26,7 @@ export function ReaderView({
   onChromeScroll,
   mutations,
 }: Loose) {
+  const routerNavigate = useRouterNavigate();
   const requestedSpace = spaces.find((s: Loose) => s.id === ctx.spaceId);
   const space = requestedSpace || spaces[0];
   const requestedDoc = requestedSpace?.children?.find((c: Loose) => c.id === ctx.docId);
@@ -39,6 +42,16 @@ export function ReaderView({
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [copiedMode, setCopiedMode] = useState('');
+  // Guests can only enter published docs through /share/:token (the /spaces/:id/docs/:id route
+  // rejects anonymous readers). Members fall through to the regular /spaces/:id/docs/:id URL.
+  const browsePublic = useCallback(() => {
+    const target = firstPublicDoc(spaces as never);
+    if (!user && target.shareToken) {
+      routerNavigate(`/share/${target.shareToken}`);
+      return;
+    }
+    onNavigate({ view: 'reader', spaceId: target.spaceId, docId: target.docId });
+  }, [onNavigate, routerNavigate, spaces, user]);
   const isMarkdown = detailDoc?.format === 'markdown';
   const doCopy = async (mode: 'source' | 'rich') => {
     try {
@@ -84,11 +97,7 @@ export function ReaderView({
           <h2 className="reader-locked-title">「{requestedSpace.name}」还没有文档</h2>
           <p className="reader-locked-desc">这个空间目前是空的。上传或新建文档后会显示在这里。</p>
           <div className="reader-locked-actions">
-            <button
-              type="button"
-              className="reader-locked-secondary"
-              onClick={() => onNavigate({ view: 'reader', ...firstPublicDoc(spaces) })}
-            >
+            <button type="button" className="reader-locked-secondary" onClick={browsePublic}>
               浏览其他文档
             </button>
           </div>
@@ -101,7 +110,7 @@ export function ReaderView({
     const earlyDocId = detailDoc?.id || doc?.id || ctx.docId;
     return (
       <div className="main-card reader-card">
-        <div className={`reader-meta-bar ${chromeVisible ? '' : 'meta-bar-hidden'}`}>
+        <div className={`reader-meta-bar corner ${chromeVisible ? '' : 'meta-bar-hidden'}`}>
           {doc && (
             <>
               <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
@@ -116,7 +125,7 @@ export function ReaderView({
             </button>
           )}
           {allowed && earlyDocId && (
-            <button type="button" className="pill-btn" onClick={() => onShare(earlyDocId)}>
+            <button type="button" className="pill-btn ghost" onClick={() => onShare(earlyDocId)}>
               <_I.share />
               <span>分享</span>
             </button>
@@ -124,24 +133,7 @@ export function ReaderView({
         </div>
         <div className="reader-locked">
           <div className="reader-locked-glyph">
-            <svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28" fill="none">
-              <rect
-                x="6"
-                y="13"
-                width="16"
-                height="11"
-                rx="2"
-                stroke="currentColor"
-                strokeWidth="1.6"
-              />
-              <path
-                d="M9.5 13V10a4.5 4.5 0 0 1 9 0v3"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-              />
-              <path d="M14 17v3.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-            </svg>
+            <_I.lockLarge />
           </div>
           <h2 className="reader-locked-title">
             {user ? '没有权限查看这篇文档' : '这篇文档需要登录'}
@@ -153,38 +145,16 @@ export function ReaderView({
           </p>
           <div className="reader-locked-actions">
             {user ? (
-              <button
-                type="button"
-                className="reader-locked-secondary"
-                onClick={() => onNavigate({ view: 'reader', ...firstPublicDoc(spaces) })}
-              >
+              <button type="button" className="reader-locked-secondary" onClick={browsePublic}>
                 浏览可阅读文档
               </button>
             ) : (
               <>
                 <button type="button" className="reader-locked-primary" onClick={onLogin}>
-                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path
-                      d="M2 7h7M7 4l3 3-3 3"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M9.5 2h2A1 1 0 0 1 12.5 3v8a1 1 0 0 1-1 1h-2"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    />
-                  </svg>
+                  <_I.signIn />
                   登录账号
                 </button>
-                <button
-                  type="button"
-                  className="reader-locked-secondary"
-                  onClick={() => onNavigate({ view: 'reader', ...firstPublicDoc(spaces) })}
-                >
+                <button type="button" className="reader-locked-secondary" onClick={browsePublic}>
                   浏览公开文档
                 </button>
               </>
@@ -197,7 +167,7 @@ export function ReaderView({
 
   return (
     <div className="main-card reader-card">
-      <div className={`reader-meta-bar ${chromeVisible ? '' : 'meta-bar-hidden'}`}>
+      <div className={`reader-meta-bar corner ${chromeVisible ? '' : 'meta-bar-hidden'}`}>
         <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
         <span className="doc-title">{doc.title}</span>
         {allowed ? (
@@ -220,23 +190,27 @@ export function ReaderView({
               </button>
             )}
             {allowed && (
-              <button type="button" className="pill-btn" onClick={() => onShare(doc.id)}>
+              <button type="button" className="pill-btn ghost" onClick={() => onShare(doc.id)}>
                 <_I.share />
                 <span>分享</span>
               </button>
             )}
             {allowed && isMarkdown && (
               <>
-                <button type="button" className="pill-btn ghost" onClick={() => doCopy('source')}>
-                  {copiedMode === 'source' ? <_I.check /> : <_I.copy />}
-                  <span>{copiedMode === 'source' ? '已复制' : '复制源码'}</span>
-                </button>
                 <button type="button" className="pill-btn ghost" onClick={() => doCopy('rich')}>
                   {copiedMode === 'rich' ? <_I.check /> : <_I.copy />}
                   <span>{copiedMode === 'rich' ? '已复制' : '带格式'}</span>
                 </button>
+                <button type="button" className="pill-btn ghost" onClick={() => doCopy('source')}>
+                  {copiedMode === 'source' ? <_I.check /> : <_I.code />}
+                  <span>{copiedMode === 'source' ? '已复制' : '复制源码'}</span>
+                </button>
                 {detailDoc?.canEdit && (
-                  <button type="button" className="pill-btn" onClick={() => setEditing(true)}>
+                  <button
+                    type="button"
+                    className="pill-btn accent"
+                    onClick={() => setEditing(true)}
+                  >
                     <_I.edit />
                     <span>编辑</span>
                   </button>
@@ -257,7 +231,17 @@ export function ReaderView({
       <div className={`reader-iframe-wrap ${framedDoc ? 'framed' : ''}`} onScroll={onChromeScroll}>
         {allowed ? (
           detailQuery.isLoading ? (
-            <div className="app-state-banner">正在加载正文…</div>
+            <div className="reader-skeleton" role="status" aria-label="正在加载正文">
+              <Skeleton w="60%" h={28} r={6} />
+              <Skeleton w="40%" h={14} r={4} />
+              <div className="reader-skeleton-body">
+                <Skeleton w="100%" h={12} />
+                <Skeleton w="92%" h={12} />
+                <Skeleton w="78%" h={12} />
+                <Skeleton w="85%" h={12} />
+                <Skeleton w="60%" h={12} />
+              </div>
+            </div>
           ) : isMarkdown ? (
             <MarkdownReader
               content={detailDoc.html || ''}
@@ -278,24 +262,7 @@ export function ReaderView({
         ) : (
           <div className="reader-locked">
             <div className="reader-locked-glyph">
-              <svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28" fill="none">
-                <rect
-                  x="6"
-                  y="13"
-                  width="16"
-                  height="11"
-                  rx="2"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                />
-                <path
-                  d="M9.5 13V10a4.5 4.5 0 0 1 9 0v3"
-                  stroke="currentColor"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                />
-                <circle cx="14" cy="18.5" r="1.2" fill="currentColor" />
-              </svg>
+              <_I.lockLarge />
             </div>
             <h2 className="reader-locked-title">
               {user ? '没有权限查看这篇文档' : '这篇文档需要登录'}
@@ -312,31 +279,11 @@ export function ReaderView({
             <div className="reader-locked-actions">
               {!user && (
                 <button type="button" className="reader-locked-primary" onClick={onLogin}>
-                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <path
-                      d="M2 7h7M7 4l3 3-3 3"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M9.5 2h2A1 1 0 0 1 12.5 3v8a1 1 0 0 1-1 1h-2"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    />
-                  </svg>
+                  <_I.signIn />
                   登录账号
                 </button>
               )}
-              <button
-                type="button"
-                className="reader-locked-secondary"
-                onClick={() => {
-                  onNavigate({ view: 'reader', ...firstPublicDoc(spaces) });
-                }}
-              >
+              <button type="button" className="reader-locked-secondary" onClick={browsePublic}>
                 {user ? '浏览可阅读文档' : '浏览公开文档'}
               </button>
             </div>

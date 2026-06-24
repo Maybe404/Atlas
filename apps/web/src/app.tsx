@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate as useRouterNavigate } from 'react-router';
 import { firstPublicDoc, LoginView, useAuth } from './auth';
-import { Sidebar, Topbar } from './chrome';
+import { I, Sidebar, Topbar } from './chrome';
 import { useAtlasData, useAtlasMutations } from './data-hooks';
 import { CmdK, ShareDialog, SpaceManagerDialog, ToastWrap } from './dialogs';
 import type { Loose, RouteState, Toast } from './loose-types';
@@ -17,6 +17,56 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/ {
   framedDoc: false,
   dockMagnify: true,
 } /*EDITMODE-END*/;
+
+// Persisted across reloads under atlas_tweaks (framedDoc, dockMagnify, and the
+// last-applied theme for fast restore). Whether the user *explicitly* picked a
+// theme is tracked SEPARATELY under atlas_theme_explicit — that flag, not the
+// mere presence of a persisted theme, is what locks the OS-follow behaviour.
+// (Persisting the theme alone used to lock OS-follow after the very first load;
+// the separate flag is the fix — T5.)
+const TWEAKS_STORAGE_KEY = 'atlas_tweaks';
+const THEME_EXPLICIT_KEY = 'atlas_theme_explicit';
+
+function prefersDarkScheme(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+}
+
+// True only once the user has actively chosen a theme (toolbar toggle / tweaks
+// panel). An OS-followed value never sets this, so follow-the-system keeps
+// working until there's a real choice to respect.
+function themeChosenExplicitly(): boolean {
+  try {
+    return localStorage.getItem(THEME_EXPLICIT_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function markThemeExplicit() {
+  try {
+    localStorage.setItem(THEME_EXPLICIT_KEY, '1');
+  } catch {}
+}
+
+function readSavedTweaks(): Partial<typeof TWEAK_DEFAULTS> | null {
+  try {
+    const raw = localStorage.getItem(TWEAKS_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed === 'object') return parsed;
+  } catch {}
+  return null;
+}
+
+function writeSavedTweaks(tweaks: typeof TWEAK_DEFAULTS) {
+  try {
+    localStorage.setItem(TWEAKS_STORAGE_KEY, JSON.stringify(tweaks));
+  } catch {}
+}
 
 // Views that keep the directory sidebar (reader + the per-space index — admin
 // pages are full-width). Clicking a space name navigates to its index without
@@ -96,6 +146,41 @@ function App() {
   const [chromeVisible, setChromeVisible] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [tweakInitialized, setTweakInitialized] = useState(false);
+
+  // Boot: hydrate once. Non-theme prefs always restore from storage. The theme
+  // restores from storage ONLY if it was an explicit choice — otherwise we take
+  // the current OS scheme, never a stale OS-followed value that happened to be
+  // persisted last session. useTweaks seeds from defaults, so this is the one
+  // moment we override them.
+  useEffect(() => {
+    if (tweakInitialized) return;
+    setTweakInitialized(true);
+    const saved = readSavedTweaks();
+    const theme =
+      themeChosenExplicitly() && saved?.theme ? saved.theme : prefersDarkScheme() ? 'dark' : 'warm';
+    setTweak({ ...TWEAK_DEFAULTS, ...(saved ?? {}), theme });
+  }, [setTweak, tweakInitialized]);
+
+  // Persist whenever tweaks change (after the initial hydration settles in).
+  // Safe to persist the theme here even when it's OS-followed — boot only reuses
+  // a persisted theme when the explicit flag is set.
+  useEffect(() => {
+    if (!tweakInitialized) return;
+    writeSavedTweaks(tweaks as typeof TWEAK_DEFAULTS);
+  }, [tweaks, tweakInitialized]);
+
+  // Follow OS color-scheme changes until the user explicitly picks a theme.
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const handler = (e: MediaQueryListEvent) => {
+      if (themeChosenExplicitly()) return;
+      setTweak({ theme: e.matches ? 'dark' : 'warm' });
+    };
+    mq.addEventListener('change', handler);
+    return () => mq.removeEventListener('change', handler);
+  }, [setTweak]);
 
   useEffect(() => {
     document.documentElement.setAttribute(
@@ -110,8 +195,19 @@ function App() {
     setTimeout(() => setToasts((ts: Loose) => ts.filter((t: Loose) => t.id !== id)), 2200);
   }, []);
 
-  const { spaces, members, groups, permissions, currentUser, session, isLoading, error } =
-    useAtlasData();
+  const {
+    spaces,
+    members,
+    groups,
+    permissions,
+    hasCapability,
+    canManageMembers,
+    canManageGroups,
+    currentUser,
+    session,
+    isLoading,
+    error,
+  } = useAtlasData();
   const auth = useAuth({ currentUser, session });
   const { user, login, logout, switchTo } = auth;
   const isGuest = !user;
@@ -151,8 +247,14 @@ function App() {
       (returnTo.view === 'public' || returnDoc?.published === true);
     const target = canReturnAsGuest ? returnTo : firstPublicDoc(spaces as never);
     setReturnTo(null);
+    // Guests can only enter published docs through the share-link route (the direct
+    // /spaces/:id/docs/:id endpoint rejects anonymous readers).
+    if (target.shareToken) {
+      routerNavigate(`/share/${target.shareToken}`);
+      return;
+    }
     navigate(target);
-  }, [navigate, returnTo, spaces]);
+  }, [navigate, returnTo, routerNavigate, spaces]);
 
   const handleLogin = useCallback(
     async (email: string, password: string) => {
@@ -171,12 +273,18 @@ function App() {
   const handleLogout = useCallback(async () => {
     await logout();
     if (!['reader', 'public'].includes(view)) {
-      routerNavigate(urlForState(firstPublicDoc(spaces as never)));
+      const fallback = firstPublicDoc(spaces as never);
+      if (fallback.shareToken) {
+        routerNavigate(`/share/${fallback.shareToken}`);
+      } else {
+        routerNavigate(urlForState(fallback));
+      }
     }
   }, [logout, routerNavigate, spaces, view]);
 
   const cycleTheme = useCallback(
     (to: string) => {
+      markThemeExplicit();
       setTweak({ theme: to });
     },
     [setTweak],
@@ -206,6 +314,13 @@ function App() {
     if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
     chromeHideTimer.current = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
   }, []);
+  // Reading is the default — scrolling means "I'm reading", so it HIDES the
+  // chrome rather than waking it. The dock / corner toolbar come back only when
+  // the pointer reaches the edge that owns them (see onMouseMove below).
+  const hideChrome = useCallback(() => {
+    if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
+    setChromeVisible(false);
+  }, []);
   useEffect(() => {
     chromeHideTimer.current = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
 
@@ -217,20 +332,25 @@ function App() {
       if ((e.target as Element | null)?.closest(INTERACTIVE)) return;
       wakeChrome();
     };
+    // Edge-reveal: bottom strip owns the dock; top-right corner owns the reader
+    // toolbar. Moving into either zone wakes the chrome; the wide middle (where
+    // you read) never does.
     const onMouseMove = (e: MouseEvent) => {
-      if (e.clientY < 70 || window.innerHeight - e.clientY < 90) wakeChrome();
+      const nearBottom = window.innerHeight - e.clientY < 90;
+      const nearTopRight = e.clientY < 120 && window.innerWidth - e.clientX < 240;
+      if (nearBottom || nearTopRight) wakeChrome();
     };
 
     document.addEventListener('click', onClick);
     document.addEventListener('mousemove', onMouseMove);
-    document.addEventListener('wheel', wakeChrome, { passive: true });
+    document.addEventListener('wheel', hideChrome, { passive: true });
     return () => {
       if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
       document.removeEventListener('click', onClick);
       document.removeEventListener('mousemove', onMouseMove);
-      document.removeEventListener('wheel', wakeChrome);
+      document.removeEventListener('wheel', hideChrome);
     };
-  }, [wakeChrome]);
+  }, [wakeChrome, hideChrome]);
 
   const ctx = { view, spaceId, docId, pane: routeState.pane };
   const isLogin = view === 'login';
@@ -239,10 +359,14 @@ function App() {
   // The backend lets space editors create/edit documents in spaces they can edit, so the doc and
   // upload back-office is open to them. Member/permission/trash/space settings stay admin-only.
   const hasEditableSpace = spaces.some((s: Loose) => s.role === 'editor');
+  // Settings access: admin OR the manage* capabilities (or the legacy createSpace fallback
+  // for the upload pane, which is a capability we keep listing for backwards compat).
+  const canSeeSettings =
+    isWorkspaceAdmin || canManageMembers || canManageGroups || hasCapability('createSpace');
   const lacksAdminAccess =
     isAdminView &&
     user &&
-    (view === 'admin-settings' ? !isWorkspaceAdmin : !isWorkspaceAdmin && !hasEditableSpace);
+    (view === 'admin-settings' ? !canSeeSettings : !isWorkspaceAdmin && !hasEditableSpace);
   const hasSidebar = SIDEBAR_VIEWS.has(view) && !isLogin;
   const isPublicView = view === 'public';
 
@@ -275,6 +399,45 @@ function App() {
     if (view === 'reader' && activeDoc) setLastReader(spaceId, activeDoc.id);
   }, [view, activeDoc, spaceId]);
   const readerHome = readerTarget({ view: 'reader', spaceId: 's1', docId: 'd1' });
+
+  // Global shortcuts — the ones advertised in CmdK. ⌘K (open the palette) lives
+  // in its own listener above; these are the direct shortcuts for commands that
+  // have a stable target. ⌘D (browser bookmark) and ⌘N (new window) are
+  // intentionally NOT bound here — they clash with native browser behaviour, so
+  // CmdK no longer advertises them either (see dialogs.tsx).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      const key = e.key.toLowerCase();
+      if (e.shiftKey && key === 'u') {
+        e.preventDefault();
+        navigate({ view: 'admin-upload' });
+        return;
+      }
+      if (e.shiftKey && key === 'd') {
+        e.preventDefault();
+        navigate({ view: 'admin-docs', spaceId: 'all' });
+        return;
+      }
+      if (e.shiftKey && key === 'i') {
+        e.preventDefault();
+        navigate({ view: 'admin-settings', pane: 'members' });
+        return;
+      }
+      if (e.shiftKey && key === 's') {
+        e.preventDefault();
+        openShare(shareDocId);
+        return;
+      }
+      if (e.key === ',') {
+        e.preventDefault();
+        navigate({ view: 'admin-settings' });
+        return;
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [navigate, openShare, shareDocId]);
 
   if (isLogin) {
     return (
@@ -342,7 +505,7 @@ function App() {
       <main
         className="main"
         ref={mainRef}
-        onScroll={wakeChrome}
+        onScroll={hideChrome}
         data-screen-label={
           view === 'reader'
             ? '01 Reader · Doc (iframe)'
@@ -370,12 +533,12 @@ function App() {
             onNavigate={navigate}
             onShare={(id: string) => openShare(id)}
             onLogin={openLogin}
-            onChromeScroll={wakeChrome}
+            onChromeScroll={hideChrome}
             mutations={mutations}
           />
         )}
         {view === 'public' && (
-          <PublicDocumentView token={routeState.token} onChromeScroll={wakeChrome} />
+          <PublicDocumentView token={routeState.token} onChromeScroll={hideChrome} />
         )}
         {view === 'space' && (
           <SpaceIndexView
@@ -489,7 +652,10 @@ function App() {
           <TweakRadio
             label="模式"
             value={tweaks.theme}
-            onChange={(v: Loose) => setTweak({ theme: v })}
+            onChange={(v: Loose) => {
+              markThemeExplicit();
+              setTweak({ theme: v });
+            }}
             options={[
               { label: '浅', value: 'light' },
               { label: '暖', value: 'warm' },
@@ -769,24 +935,7 @@ function AdminAccessDenied({ user, onNavigate, readerHome }: Loose) {
     <div className="main-card">
       <div className="admin-denied">
         <div className="reader-locked-glyph">
-          <svg aria-hidden="true" width="28" height="28" viewBox="0 0 28 28" fill="none">
-            <rect
-              x="6"
-              y="13"
-              width="16"
-              height="11"
-              rx="2"
-              stroke="currentColor"
-              strokeWidth="1.6"
-            />
-            <path
-              d="M9.5 13V10a4.5 4.5 0 0 1 9 0v3"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-            />
-            <path d="M14 17v3.8" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
-          </svg>
+          <I.lockLarge />
         </div>
         <h2 className="reader-locked-title">需要管理员权限</h2>
         <p className="reader-locked-desc">

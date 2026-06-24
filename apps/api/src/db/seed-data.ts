@@ -436,6 +436,7 @@ export const ATLAS_DATA = (() => {
   const groupMembers = [
     { groupId: 'g1', memberId: 'u2' },
     { groupId: 'g1', memberId: 'u3' },
+    { groupId: 'g1', memberId: 'u4' },
     { groupId: 'g2', memberId: 'u6' },
   ];
 
