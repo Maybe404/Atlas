@@ -4920,6 +4920,33 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 .wb-item:hover { background: var(--pearl); color: var(--ink); }
 .wb-item.active { background: var(--accent-tint, rgba(199,107,61,0.12)); color: var(--ink); }
 .wb-item .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.wb-folder { display: flex; flex-direction: column; }
+.wb-folder-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 10px 5px;
+  color: var(--ink-3);
+}
+.wb-folder-head svg { flex-shrink: 0; color: var(--ink-4); }
+.wb-folder-name {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-2);
+}
+.wb-folder-head .count {
+  font-size: 10px;
+  color: var(--ink-4);
+  background: rgba(0,0,0,0.05);
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+}
+[data-theme="dark"] .wb-folder-head .count { background: rgba(255,255,255,0.08); }
 .wb-item-title {
   flex: 1;
   font-size: 13px;
@@ -4967,7 +4994,7 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   align-items: baseline;
   gap: 8px;
   min-width: 0;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
 }
 .wb-pv-title h3 {
   font-family: var(--font-display);
@@ -4985,15 +5012,6 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   font-size: 10px; font-weight: 500;
   background: rgba(0,0,0,0.05); color: var(--ink-3);
   flex-shrink: 0;
-}
-.wb-pv-crumb {
-  font-size: 10.5px;
-  color: var(--ink-4);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 1 1 auto;
-  min-width: 60px;
 }
 .wb-pv-actions {
   display: flex;

@@ -16,6 +16,10 @@ const _I = I;
 const VIEW_KEY = 'atlas:admin-docs-view';
 const MENU_IGNORE = ['.doc-more-menu', '[data-more-trigger]'];
 
+// Sum the docs (recursively) under a folder-tree branch — used for the rail counts.
+const countInTree = (acc: number, f: Loose) =>
+  acc + f.docs.length + f.folders.reduce(countInTree, 0);
+
 const editGlyph = (
   <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none">
     <path
@@ -261,25 +265,55 @@ export function AdminDocsView({
     return r;
   }, [docs, status, spaceFilter, effectiveFolderFilter, visFilter]);
 
-  // Group filtered docs by space (insertion order) for the workbench rail.
+  // Group filtered docs by space (insertion order) for the workbench rail, then
+  // nest docs under their real folder hierarchy (folders carry parentId → tree).
   const groups = useMemo(() => {
     const map = new Map<string, Loose>();
     filtered.forEach((d: Loose) => {
       let g = map.get(d.spaceId);
       if (!g) {
+        const space = spaces.find((s: Loose) => s.id === d.spaceId);
         g = {
           id: d.spaceId,
           name: d.spaceName,
           accent: d.spaceAccent,
           mark: d.spaceMark,
-          docs: [],
+          folders: space?.folders || [],
+          rootDocs: [],
+          folderTree: [],
         };
         map.set(d.spaceId, g);
       }
-      g.docs.push(d);
+      g.rootDocs.push(d);
     });
+    for (const g of map.values()) {
+      // Bucket docs by their folderId.
+      const docsByFolder = new Map<string | null, Loose[]>();
+      for (const d of g.rootDocs) {
+        const key = d.folderId ?? null;
+        docsByFolder.set(key, [...(docsByFolder.get(key) ?? []), d]);
+      }
+      g.rootDocs = docsByFolder.get(null) ?? [];
+      // Build nested folder tree from the flat list (parentId links).
+      const byParent = new Map<string | null, Loose[]>();
+      for (const f of g.folders as Loose[]) {
+        const key = f.parentId ?? null;
+        byParent.set(key, [...(byParent.get(key) ?? []), f]);
+      }
+      const build = (parent: string | null, depth: number): Loose[] =>
+        (byParent.get(parent) ?? [])
+          .sort((a: Loose, b: Loose) => a.order - b.order || a.name.localeCompare(b.name))
+          .map((f: Loose) => ({
+            id: f.id,
+            name: f.name,
+            depth,
+            docs: docsByFolder.get(f.id) ?? [],
+            folders: build(f.id, depth + 1),
+          }));
+      g.folderTree = build(null, 0);
+    }
     return Array.from(map.values());
-  }, [filtered]);
+  }, [filtered, spaces]);
 
   // Keep the workbench selection valid as filters change, without an effect.
   const effectiveSelected = useMemo(() => {
@@ -293,6 +327,34 @@ export function AdminDocsView({
       spaceFilter !== 'all' ||
       visFilter !== 'all' ||
       effectiveFolderFilter !== 'all',
+  );
+
+  // Recursive render of a folder node in the workbench rail: folder head + its
+  // docs, then nested sub-folders. Indentation tracks depth via inline padding.
+  const renderFolder = (folder: Loose) => (
+    <div key={folder.id} className="wb-folder">
+      <div className="wb-folder-head" style={{ paddingLeft: 10 + folder.depth * 14 }}>
+        <_I.folder width="13" height="13" />
+        <span className="wb-folder-name">{folder.name}</span>
+        <span className="count mono">
+          {folder.docs.length + folder.folders.reduce(countInTree, 0)}
+        </span>
+      </div>
+      {folder.docs.map((doc: Loose) => (
+        <button
+          type="button"
+          key={doc.id}
+          className={`wb-item ${effectiveSelected === doc.id ? 'active' : ''}`}
+          style={{ paddingLeft: 28 + folder.depth * 14 }}
+          onClick={() => setSelectedId(doc.id)}
+        >
+          <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
+          <span className="wb-item-title">{doc.title}</span>
+          <span className="format-badge sm">{formatBadge(doc)}</span>
+        </button>
+      ))}
+      {folder.folders.map((f: Loose) => renderFolder(f))}
+    </div>
   );
 
   const startRename = (doc: Loose) => {
@@ -679,9 +741,11 @@ export function AdminDocsView({
                       {g.mark || g.name.slice(0, 1)}
                     </span>
                     <span className="wb-group-name">{g.name}</span>
-                    <span className="count mono">{g.docs.length}</span>
+                    <span className="count mono">
+                      {g.rootDocs.length + g.folderTree.reduce(countInTree, 0)}
+                    </span>
                   </div>
-                  {g.docs.map((doc: Loose) => (
+                  {g.rootDocs.map((doc: Loose) => (
                     <button
                       type="button"
                       key={doc.id}
@@ -693,6 +757,7 @@ export function AdminDocsView({
                       <span className="format-badge sm">{formatBadge(doc)}</span>
                     </button>
                   ))}
+                  {g.folderTree.map((f: Loose) => renderFolder(f))}
                 </div>
               ))}
             </div>
@@ -751,7 +816,6 @@ function WorkbenchPreview({
   const isMarkdown = detailDoc.format === 'markdown';
   const chip = docChip(doc);
   const accent = SPACE_COLOR_MAP[doc.spaceAccent] || SPACE_COLOR_MAP.accent;
-  const crumb = `atlas.team / ${doc.spaceName}${doc.folderPath ? ` / ${doc.folderPath}` : ''} / ${doc.id}${isMarkdown ? '.md' : '.html'}`;
 
   return (
     <>
@@ -779,7 +843,6 @@ function WorkbenchPreview({
           )}
           <span className={`vis-chip ${chip.cls}`}>{chip.label}</span>
         </div>
-        <span className="wb-pv-crumb mono">{crumb}</span>
         <div className="wb-pv-actions">
           {doc.canEdit && (
             <button type="button" className="btn secondary" onClick={() => actions.edit(doc)}>
