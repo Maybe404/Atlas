@@ -404,56 +404,6 @@ export function AdminDocsView({
   return (
     <div className="main-card">
       <div className="main-scroll">
-        <div className="page-head">
-          <div className="left">
-            <div className="eyebrow">团队后台 · 文章管理</div>
-            <h1>所有文章</h1>
-            <p className="lead">
-              管理空间内的 HTML
-              文章：直接编辑内容、重命名、调整可见性、删除。画廊浏览全部，工作台聚焦单篇预览。
-            </p>
-          </div>
-          {canCreate && (
-            <div className="right">
-              <button
-                type="button"
-                className="btn secondary"
-                onClick={() => onNavigate({ view: 'admin-upload' })}
-              >
-                <_I.upload width="13" height="13" />
-                <span>上传 HTML</span>
-              </button>
-              <div style={{ position: 'relative' }}>
-                <button
-                  type="button"
-                  className="btn primary"
-                  data-new-trigger
-                  onClick={() => setShowNewMenu((o) => !o)}
-                >
-                  <_I.plus />
-                  <span>新建文章</span>
-                </button>
-                {showNewMenu && (
-                  <div
-                    className="space-picker-pop"
-                    style={{ top: 'calc(100% + 4px)', right: 0, left: 'auto' }}
-                  >
-                    <div
-                      className="space-picker-row"
-                      {...clickableProps(() => startNew('markdown'))}
-                    >
-                      <span>新建 Markdown</span>
-                    </div>
-                    <div className="space-picker-row" {...clickableProps(() => startNew('html'))}>
-                      <span>新建 HTML</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-        </div>
-
         <div className="filter-bar">
           <div className="filter-search">
             <_I.search />
@@ -581,6 +531,45 @@ export function AdminDocsView({
               <span>工作台</span>
             </button>
           </div>
+          {canCreate && (
+            <div className="filter-actions">
+              <button
+                type="button"
+                className="btn secondary"
+                onClick={() => onNavigate({ view: 'admin-upload' })}
+              >
+                <_I.upload width="13" height="13" />
+                <span>上传 HTML</span>
+              </button>
+              <div style={{ position: 'relative' }}>
+                <button
+                  type="button"
+                  className="btn primary"
+                  data-new-trigger
+                  onClick={() => setShowNewMenu((o) => !o)}
+                >
+                  <_I.plus />
+                  <span>新建文章</span>
+                </button>
+                {showNewMenu && (
+                  <div
+                    className="space-picker-pop"
+                    style={{ top: 'calc(100% + 4px)', right: 0, left: 'auto' }}
+                  >
+                    <div
+                      className="space-picker-row"
+                      {...clickableProps(() => startNew('markdown'))}
+                    >
+                      <span>新建 Markdown</span>
+                    </div>
+                    <div className="space-picker-row" {...clickableProps(() => startNew('html'))}>
+                      <span>新建 HTML</span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {filtered.length === 0 ? (
