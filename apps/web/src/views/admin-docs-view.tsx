@@ -1,6 +1,6 @@
 import { extractHtmlMetadata, extractMarkdownMetadata } from '@atlas/shared';
 import { useMemo, useState } from 'react';
-import { AnimatedItem, AnimatedScrollList, I } from '../chrome';
+import { AnimatedItem, I } from '../chrome';
 import { useDocument } from '../data-hooks';
 import { docCategory, docChip } from '../labels';
 import type { Loose } from '../loose-types';
@@ -329,30 +329,37 @@ export function AdminDocsView({
       effectiveFolderFilter !== 'all',
   );
 
+  let railIndex = 0;
+  const nextRailIndex = () => railIndex++;
+  const renderRailDoc = (doc: Loose, paddingLeft?: number) => (
+    <AnimatedItem key={doc.id} index={nextRailIndex()}>
+      <button
+        type="button"
+        className={`wb-item ${effectiveSelected === doc.id ? 'active' : ''}`}
+        style={paddingLeft == null ? undefined : { paddingLeft }}
+        onClick={() => setSelectedId(doc.id)}
+      >
+        <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
+        <span className="wb-item-title">{doc.title}</span>
+        <span className="format-badge sm">{formatBadge(doc)}</span>
+      </button>
+    </AnimatedItem>
+  );
+
   // Recursive render of a folder node in the workbench rail: folder head + its
   // docs, then nested sub-folders. Indentation tracks depth via inline padding.
   const renderFolder = (folder: Loose) => (
     <div key={folder.id} className="wb-folder">
-      <div className="wb-folder-head" style={{ paddingLeft: 10 + folder.depth * 14 }}>
-        <_I.folder width="13" height="13" />
-        <span className="wb-folder-name">{folder.name}</span>
-        <span className="count mono">
-          {folder.docs.length + folder.folders.reduce(countInTree, 0)}
-        </span>
-      </div>
-      {folder.docs.map((doc: Loose) => (
-        <button
-          type="button"
-          key={doc.id}
-          className={`wb-item ${effectiveSelected === doc.id ? 'active' : ''}`}
-          style={{ paddingLeft: 28 + folder.depth * 14 }}
-          onClick={() => setSelectedId(doc.id)}
-        >
-          <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
-          <span className="wb-item-title">{doc.title}</span>
-          <span className="format-badge sm">{formatBadge(doc)}</span>
-        </button>
-      ))}
+      <AnimatedItem index={nextRailIndex()}>
+        <div className="wb-folder-head" style={{ paddingLeft: 10 + folder.depth * 14 }}>
+          <_I.folder width="13" height="13" />
+          <span className="wb-folder-name">{folder.name}</span>
+          <span className="count mono">
+            {folder.docs.length + folder.folders.reduce(countInTree, 0)}
+          </span>
+        </div>
+      </AnimatedItem>
+      {folder.docs.map((doc: Loose) => renderRailDoc(doc, 28 + folder.depth * 14))}
       {folder.folders.map((f: Loose) => renderFolder(f))}
     </div>
   );
@@ -730,37 +737,41 @@ export function AdminDocsView({
           </div>
         ) : (
           <div className="workbench">
-            <AnimatedScrollList className="wb-rail">
-              {groups.map((g: Loose) => (
-                <div key={g.id} className="wb-group">
-                  <div className="wb-group-head">
-                    <span
-                      className="sm-mark"
-                      style={{ background: SPACE_COLOR_MAP[g.accent] || SPACE_COLOR_MAP.accent }}
-                    >
-                      {g.mark || g.name.slice(0, 1)}
-                    </span>
-                    <span className="wb-group-name">{g.name}</span>
-                    <span className="count mono">
-                      {g.rootDocs.length + g.folderTree.reduce(countInTree, 0)}
-                    </span>
+            <div className="tree-scroll wb-rail">
+              <div
+                className="scroll-list"
+                onScroll={(e: Loose) => {
+                  const t = e.currentTarget as Loose;
+                  t.style.setProperty('--top-op', Math.min(t.scrollTop / 50, 1));
+                  const bd = t.scrollHeight - (t.scrollTop + t.clientHeight);
+                  t.style.setProperty(
+                    '--bot-op',
+                    t.scrollHeight <= t.clientHeight ? 0 : Math.min(bd / 50, 1),
+                  );
+                }}
+              >
+                {groups.map((g: Loose) => (
+                  <div key={g.id} className="wb-group">
+                    <div className="wb-group-head">
+                      <span
+                        className="sm-mark"
+                        style={{ background: SPACE_COLOR_MAP[g.accent] || SPACE_COLOR_MAP.accent }}
+                      >
+                        {g.mark || g.name.slice(0, 1)}
+                      </span>
+                      <span className="wb-group-name">{g.name}</span>
+                      <span className="count mono">
+                        {g.rootDocs.length + g.folderTree.reduce(countInTree, 0)}
+                      </span>
+                    </div>
+                    {g.rootDocs.map((doc: Loose) => renderRailDoc(doc))}
+                    {g.folderTree.map((f: Loose) => renderFolder(f))}
                   </div>
-                  {g.rootDocs.map((doc: Loose) => (
-                    <button
-                      type="button"
-                      key={doc.id}
-                      className={`wb-item ${effectiveSelected === doc.id ? 'active' : ''}`}
-                      onClick={() => setSelectedId(doc.id)}
-                    >
-                      <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
-                      <span className="wb-item-title">{doc.title}</span>
-                      <span className="format-badge sm">{formatBadge(doc)}</span>
-                    </button>
-                  ))}
-                  {g.folderTree.map((f: Loose) => renderFolder(f))}
-                </div>
-              ))}
-            </AnimatedScrollList>
+                ))}
+              </div>
+              <div className="top-gradient" style={{ opacity: 'var(--top-op, 0)' }}></div>
+              <div className="bottom-gradient" style={{ opacity: 'var(--bot-op, 1)' }}></div>
+            </div>
             <div className="wb-preview">
               {selectedDoc ? (
                 <WorkbenchPreview

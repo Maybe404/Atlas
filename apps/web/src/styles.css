@@ -4881,7 +4881,7 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 }
 .wb-rail .top-gradient { background: linear-gradient(to bottom, var(--canvas), transparent); }
 .wb-rail .bottom-gradient { background: linear-gradient(to top, var(--canvas), transparent); }
-.wb-rail .scroll-list > .tree-anim-item { transform-origin: left center; }
+.wb-rail .tree-anim-item { transform-origin: left center; }
 .wb-group { margin-bottom: 8px; }
 .wb-group-head {
   display: flex;
