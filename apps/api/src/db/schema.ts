@@ -85,10 +85,14 @@ export const folders = sqliteTable(
     // Soft delete to trash (mirrors documents). Deleting a folder soft-deletes its whole subtree
     // and the docs within, without touching folderId — so restore re-reveals files in place.
     deletedAt: text('deleted_at'),
-    // `set null` on member delete so removing a former folder-deleter doesn't trip the FK. The
-    // app-level delete flow also clears this column, but the FK change makes the cleanup
-    // idempotent and avoids surprise 500s on race conditions.
-    deletedBy: text('deleted_by').references(() => members.id, { onDelete: 'set null' }),
+    // The application-level member-delete route clears this column before dropping the member
+    // row. We deliberately do NOT add `ON DELETE SET NULL` here: rebuilding the table to attach
+    // a different FK clause is risky (it can cascade into documents.folder_id under a future
+    // migration runner that enables PRAGMA foreign_keys), and the application code already
+    // owns the cleanup. Leaving the FK as `NO ACTION` keeps the table structure unchanged and
+    // makes any missed cleanup surface as an immediate, loud 500 — which is the right failure
+    // mode for a real FK violation.
+    deletedBy: text('deleted_by').references(() => members.id),
     purgeAfter: text('purge_after'),
     // The trash-root folder this row was cascade-deleted under. NULL ⇒ this folder is itself the
     // root the user deleted (the only kind shown as a top-level trash entry).

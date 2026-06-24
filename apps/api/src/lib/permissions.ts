@@ -1,7 +1,7 @@
 import { ALL_CAPABILITIES, type Capability, type SpaceMemberRole } from '@atlas/shared';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db } from '../db/client';
-import { documents, folders, grants, groups, members, shareLinks, spaces } from '../db/schema';
+import { documents, folders, groups, members, shareLinks, spaces } from '../db/schema';
 import { nowIso } from './dates';
 import { getMemberSpaceRole, listEffectiveGrants, listGroupIdsForMember } from './grants';
 import { forbidden, notFound } from './http-error';
@@ -294,20 +294,22 @@ export async function listReadableSpaces(user: User | undefined) {
     return db.select().from(spaces);
   }
 
-  const rows = await db
-    .select({ space: spaces })
+  // A member sees a space when EITHER (a) they hold a direct member-subject grant on it OR
+  // (b) one of their groups does. `listEffectiveGrants` already unions those shapes; we just
+  // need to dedupe by space id and join with the spaces table. Without the group-subject
+  // branch, a member whose only access to a space is via a group grant would be able to
+  // write into it but couldn't navigate to it in the directory.
+  const groupIds = await listGroupIdsForMember(user.id);
+  const effective = await listEffectiveGrants(user.id, groupIds);
+  const spaceGrantIds = new Set<string>();
+  for (const row of effective) {
+    if (row.targetType === 'space') spaceGrantIds.add(row.targetId);
+  }
+  if (spaceGrantIds.size === 0) return [];
+  return db
+    .select()
     .from(spaces)
-    .innerJoin(
-      grants,
-      and(
-        eq(grants.targetType, 'space'),
-        eq(grants.targetId, spaces.id),
-        eq(grants.subjectType, 'member'),
-        eq(grants.subjectId, user.id),
-      ),
-    );
-
-  return rows.map((row) => row.space);
+    .where(inArray(spaces.id, [...spaceGrantIds]));
 }
 
 export async function listReadableDocuments(

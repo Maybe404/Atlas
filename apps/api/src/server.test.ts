@@ -1510,6 +1510,17 @@ describe('Atlas API', () => {
       headers: { 'content-type': 'application/json', ...he.headers },
     });
     expect(patch.status).toBe(200);
+
+    // The space must also show up in u5's directory so the UI surfaces it.
+    const dirRes = await request('/spaces', { headers: { cookie: he.cookie } });
+    const dir = (await dirRes.json()) as { id: string; role: string | null }[];
+    const entry = dir.find((s) => s.id === spaceId);
+    expect(entry).toBeDefined();
+    expect(entry?.role).toBe('editor');
+
+    // And the doc they just created shows up in the directory children.
+    const children = (entry as unknown as { children: { id: string }[] }).children;
+    expect(children.some((c) => c.id === docId)).toBe(true);
   });
 
   test('publish capability is required for every share write, including the document author', async () => {
@@ -1574,43 +1585,57 @@ describe('Atlas API', () => {
     expect(direct.status).toBe(404);
   });
 
-  test('deleting a member who once deleted a folder does not trip a foreign-key error', async () => {
+  test('deleting a member who once deleted a folder clears the FK reference first', async () => {
     const admin = await loginAs();
-    // Create a member, then have them create + soft-delete a folder, then delete the member.
+    // Create a member and grant them editor on s1, so they can create + delete folders
+    // (the route requires the deleter to have a writable space grant). The password is the
+    // demo password so `loginAs(email)` works without a custom password.
     const create = await request('/members', {
       method: 'POST',
       body: JSON.stringify({
         name: '待删会员',
         email: 'deleter@atlas.team',
-        password: 'longenoughpw',
+        password: 'atlas-demo-password',
         role: 'member',
       }),
       headers: { 'content-type': 'application/json', ...admin.headers },
     });
     expect(create.status).toBe(201);
     const { id: memberId } = (await create.json()) as { id: string };
+    await setMemberSpaceRole(db, memberId, 's1', 'editor');
 
+    // The new member creates a folder and soft-deletes it themselves; folders.deletedBy now
+    // points at the member, NOT at the admin. This is the FK scenario we need to clear.
+    const member = await loginAs('deleter@atlas.team');
     const folderRes = await request('/folders', {
       method: 'POST',
       body: JSON.stringify({ spaceId: 's1', name: '由待删会员创建的文件夹' }),
-      headers: { 'content-type': 'application/json', ...admin.headers },
+      headers: { 'content-type': 'application/json', ...member.headers },
     });
+    expect(folderRes.status).toBe(201);
     const { id: folderId } = (await folderRes.json()) as { id: string };
-    await request(`/folders/${folderId}`, { method: 'DELETE', headers: admin.headers });
+    const del = await request(`/folders/${folderId}`, {
+      method: 'DELETE',
+      headers: member.headers,
+    });
+    expect(del.status).toBe(200);
 
-    // Confirm the folder is in trash and its deletedBy is the deleting admin (u1).
+    // Confirm the folder is in trash and points at the member.
     const [trashedFolder] = await db.select().from(folders).where(eq(folders.id, folderId));
     expect(trashedFolder?.deletedAt).toBeTruthy();
-    expect(trashedFolder?.deletedBy).toBe('u1');
+    expect(trashedFolder?.deletedBy).toBe(memberId);
 
-    // Now delete the member — should clean up personal space + the folders.deletedBy reference
-    // (u1 isn't being deleted here, so the column isn't actually changed; this is mostly a
-    // regression check that the new code path doesn't regress against FK constraints).
+    // Without the application-level cleanup, the member delete would trip a FOREIGN KEY
+    // constraint. With it, the route nulls the column first, then drops the member row.
     const remove = await request(`/members/${memberId}`, {
       method: 'DELETE',
       headers: admin.headers,
     });
     expect(remove.status).toBe(200);
+
+    // The folder is still in trash, but its deletedBy is now NULL — no dangling FK.
+    const [afterMemberDelete] = await db.select().from(folders).where(eq(folders.id, folderId));
+    expect(afterMemberDelete?.deletedBy).toBeNull();
 
     // Personal space is gone with the member.
     const [orphanSpace] = await db
