@@ -11,7 +11,6 @@ import { HTMLEditorDialog } from './html-editor-dialog';
 import { MarkdownEditorDialog } from './markdown-editor-dialog';
 import { MarkdownReader } from './markdown-reader';
 import { dotClass, flattenFolders, folderPathLabel } from './shared';
-import { SpaceChipPicker } from './space-chip-picker';
 
 const _I = I;
 const VIEW_KEY = 'atlas:admin-docs-view';
@@ -635,13 +634,7 @@ export function AdminDocsView({
                             {doc.folderPath ? ` · ${doc.folderPath}` : ''}
                           </div>
                           <div className="gx-page-title">{doc.title || '未命名文章'}</div>
-                          <span className="gx-page-rule" style={{ background: accent }}></span>
                           <p className="gx-page-desc">{doc.desc || '暂无摘要，点击编辑补充。'}</p>
-                          <div className="gx-page-lines" aria-hidden="true">
-                            <i></i>
-                            <i></i>
-                            <i></i>
-                          </div>
                         </div>
                       </div>
                       <span className="format-badge gx-ext">{formatBadge(doc)}</span>
@@ -738,7 +731,6 @@ export function AdminDocsView({
                 <WorkbenchPreview
                   key={selectedDoc.id}
                   doc={selectedDoc}
-                  spaces={spaces}
                   author={members.find((m: Loose) => m.id === selectedDoc.author)}
                   actions={actions}
                   renaming={renaming === selectedDoc.id}
@@ -746,7 +738,6 @@ export function AdminDocsView({
                   setRenameVal={setRenameVal}
                   commitRename={commitRename}
                   cancelRename={() => setRenaming(null)}
-                  mutations={mutations}
                 />
               ) : (
                 <div className="wb-preview-empty">选择左侧的文档以预览。</div>
@@ -777,7 +768,6 @@ export function AdminDocsView({
 
 function WorkbenchPreview({
   doc,
-  spaces,
   author,
   actions,
   renaming,
@@ -785,7 +775,6 @@ function WorkbenchPreview({
   setRenameVal,
   commitRename,
   cancelRename,
-  mutations,
 }: Loose) {
   const detailQuery = useDocument(doc.id, Boolean(doc.id));
   const detailDoc = detailQuery.data || doc;
@@ -842,13 +831,6 @@ function WorkbenchPreview({
         </div>
       </div>
 
-      <div className="wb-pv-chrome">
-        <span className="wb-dot r"></span>
-        <span className="wb-dot y"></span>
-        <span className="wb-dot g"></span>
-        <span className="wb-pv-url mono">{crumb}</span>
-      </div>
-
       <div className="wb-pv-body">
         {detailQuery.isLoading ? (
           <div className="wb-pv-skeleton" role="status" aria-label="正在加载正文">
@@ -882,16 +864,6 @@ function WorkbenchPreview({
         <span className="avatar small">{author?.initials}</span>
         <span>{author?.name}</span>
         <span className="dim">· 更新于 {doc.updated}</span>
-        <div style={{ flex: 1 }} />
-        {doc.canEdit ? (
-          <SpaceChipPicker
-            doc={doc}
-            spaces={spaces}
-            onPick={(s: Loose) => mutations.updateDocument(doc.id, { spaceId: s.id })}
-          />
-        ) : (
-          <span className="vis-chip">{doc.spaceName}</span>
-        )}
       </div>
     </>
   );
