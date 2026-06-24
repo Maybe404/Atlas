@@ -1,6 +1,6 @@
 import { extractHtmlMetadata, extractMarkdownMetadata } from '@atlas/shared';
 import { useMemo, useState } from 'react';
-import { AnimatedItem, I } from '../chrome';
+import { AnimatedItem, AnimatedScrollList, I } from '../chrome';
 import { useDocument } from '../data-hooks';
 import { docCategory, docChip } from '../labels';
 import type { Loose } from '../loose-types';
@@ -730,7 +730,7 @@ export function AdminDocsView({
           </div>
         ) : (
           <div className="workbench">
-            <div className="wb-rail">
+            <AnimatedScrollList className="wb-rail">
               {groups.map((g: Loose) => (
                 <div key={g.id} className="wb-group">
                   <div className="wb-group-head">
@@ -760,7 +760,7 @@ export function AdminDocsView({
                   {g.folderTree.map((f: Loose) => renderFolder(f))}
                 </div>
               ))}
-            </div>
+            </AnimatedScrollList>
             <div className="wb-preview">
               {selectedDoc ? (
                 <WorkbenchPreview

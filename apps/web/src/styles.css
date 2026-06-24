@@ -4871,12 +4871,17 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   margin: 0 auto;
 }
 .wb-rail {
-  overflow-y: auto;
+  min-height: 0;
+}
+.wb-rail .scroll-list {
   padding: 2px 6px 24px 2px;
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
+.wb-rail .top-gradient { background: linear-gradient(to bottom, var(--canvas), transparent); }
+.wb-rail .bottom-gradient { background: linear-gradient(to top, var(--canvas), transparent); }
+.wb-rail .scroll-list > .tree-anim-item { transform-origin: left center; }
 .wb-group { margin-bottom: 8px; }
 .wb-group-head {
   display: flex;
