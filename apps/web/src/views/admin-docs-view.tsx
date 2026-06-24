@@ -224,7 +224,6 @@ export function AdminDocsView({
   );
   const [visFilter, setVisFilter] = useState('all'); // all | public | invite | private
   const [folderFilter, setFolderFilter] = useState('all'); // all | <folderId>
-  const [search, setSearch] = useState('');
 
   // Folder filter only makes sense scoped to a single space.
   const folderOptions = useMemo(() => {
@@ -259,14 +258,8 @@ export function AdminDocsView({
         effectiveFolderFilter === '__root__' ? !d.folderId : d.folderId === effectiveFolderFilter,
       );
     if (visFilter !== 'all') r = r.filter((d: Loose) => docCategory(d) === visFilter);
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      r = r.filter(
-        (d: Loose) => d.title.toLowerCase().includes(q) || (d.desc || '').toLowerCase().includes(q),
-      );
-    }
     return r;
-  }, [docs, status, spaceFilter, effectiveFolderFilter, visFilter, search]);
+  }, [docs, status, spaceFilter, effectiveFolderFilter, visFilter]);
 
   // Group filtered docs by space (insertion order) for the workbench rail.
   const groups = useMemo(() => {
@@ -296,8 +289,7 @@ export function AdminDocsView({
   const selectedDoc = filtered.find((d: Loose) => d.id === effectiveSelected) || null;
 
   const hasFilter = Boolean(
-    search.trim() ||
-      status !== 'all' ||
+    status !== 'all' ||
       spaceFilter !== 'all' ||
       visFilter !== 'all' ||
       effectiveFolderFilter !== 'all',
@@ -404,25 +396,6 @@ export function AdminDocsView({
     <div className="main-card">
       <div className="main-scroll">
         <div className="filter-bar">
-          <div className="filter-search">
-            <_I.search />
-            <input
-              type="text"
-              placeholder="按标题或摘要搜索…"
-              value={search}
-              onChange={(e: Loose) => setSearch(e.target.value)}
-            />
-            {search && (
-              <button
-                type="button"
-                className="filter-search-clear"
-                onClick={() => setSearch('')}
-                title="清除"
-              >
-                <_I.close />
-              </button>
-            )}
-          </div>
           <div className="filter-group">
             <span className="filter-label">状态</span>
             <div className="segmented">
@@ -491,9 +464,6 @@ export function AdminDocsView({
               ))}
             </div>
           </div>
-          <span className="filter-count mono">
-            {filtered.length} / {docs.length}
-          </span>
           <div className="segmented view-toggle">
             <button
               type="button"
@@ -802,16 +772,14 @@ function WorkbenchPreview({
                 if (e.key === 'Enter') commitRename();
                 if (e.key === 'Escape') cancelRename();
               }}
-              style={{ fontSize: 16, fontWeight: 600, width: '100%', padding: '4px 8px' }}
+              style={{ fontSize: 15, fontWeight: 600, width: '100%', padding: '3px 8px' }}
             />
           ) : (
-            <div className="wb-pv-title-row">
-              <h3>{doc.title}</h3>
-              <span className={`vis-chip ${chip.cls}`}>{chip.label}</span>
-            </div>
+            <h3>{doc.title}</h3>
           )}
-          <div className="wb-pv-crumb mono">{crumb}</div>
+          <span className={`vis-chip ${chip.cls}`}>{chip.label}</span>
         </div>
+        <span className="wb-pv-crumb mono">{crumb}</span>
         <div className="wb-pv-actions">
           {doc.canEdit && (
             <button type="button" className="btn secondary" onClick={() => actions.edit(doc)}>
