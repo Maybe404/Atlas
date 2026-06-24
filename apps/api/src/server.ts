@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { join, relative, sep } from 'node:path';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
@@ -118,8 +118,13 @@ async function serveSpa(pathname: string): Promise<Response> {
   const decoded = decodeURIComponent(pathname);
   const requested = join(webDist, decoded === '/' ? '/index.html' : decoded);
 
-  // Path-traversal guard: never serve anything outside the dist directory.
-  let file = requested.startsWith(webDist) ? Bun.file(requested) : null;
+  // Path-traversal guard: never serve anything outside the dist directory. `relative()` is the
+  // safe primitive here — `startsWith(webDist)` would also be true for a sibling directory
+  // sharing the same prefix (e.g. `dist-evil/` next to `dist/`), and a strict `startsWith` with
+  // a path separator would still need careful handling of platform-specific separators.
+  const rel = relative(webDist, requested);
+  const isInsideDist = rel !== '..' && !rel.startsWith(`..${sep}`) && !rel.startsWith('../');
+  let file = isInsideDist ? Bun.file(requested) : null;
   const isAsset = decoded.startsWith('/assets/') && file !== null && (await file.exists());
 
   if (!file || !(await file.exists())) {

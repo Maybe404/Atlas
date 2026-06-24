@@ -1,4 +1,4 @@
-import { LoginSchema } from '@atlas/shared';
+import { ALL_CAPABILITIES, LoginSchema } from '@atlas/shared';
 import { eq, lt } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { deleteCookie, setCookie } from 'hono/cookie';
@@ -19,36 +19,46 @@ import {
 } from '../lib/auth';
 import { nowIso } from '../lib/dates';
 import { forbidden, unauthorized } from '../lib/http-error';
-import { isAdmin } from '../lib/permissions';
+import { getMemberCapabilities, isAdmin } from '../lib/permissions';
 import { toPublicMember } from '../lib/serializers';
 
 const DUMMY_PASSWORD_HASH = '$2b$04$RhYUNqiT505iO9sAwUaXGO/9c55aKJYZtRSazB2H0mHtPbH.m5eF.';
 
 export const authRouter = new Hono<AppEnv>()
-  .get('/me', (c) =>
-    c.json({
-      user: c.get('user') ? toPublicMember(c.get('user')!) : null,
+  .get('/me', async (c) => {
+    const user = c.get('user');
+    // Expose the effective capability set so the SPA can gate admin/management UI without
+    // re-fetching every member- or group-scoped resource. Admins hold all capabilities; guests
+    // hold none.
+    const capabilities = user
+      ? isAdmin(user)
+        ? [...ALL_CAPABILITIES]
+        : [...(await getMemberCapabilities(user))]
+      : [];
+    return c.json({
+      user: user ? toPublicMember(user) : null,
       session: {
         id: c.get('sessionId') ?? null,
         csrfToken: c.get('csrfToken') ?? null,
         demo: false,
       },
-    }),
-  )
+      capabilities,
+    });
+  })
   .post('/login', async (c) => {
     const body = LoginSchema.parse(await c.req.json());
-    assertLoginAllowed(c, body.email);
+    await assertLoginAllowed(c, body.email);
 
     const [member] = await db.select().from(members).where(eq(members.email, body.email));
     const passwordHash = member?.passwordHash ?? DUMMY_PASSWORD_HASH;
     const ok = body.password ? await Bun.password.verify(body.password, passwordHash) : false;
 
     if (!member?.passwordHash || !ok) {
-      recordLoginFailure(c, body.email);
+      await recordLoginFailure(c, body.email);
       throw unauthorized(LOGIN_FAILURE_MESSAGE);
     }
 
-    clearLoginFailures(c, body.email);
+    await clearLoginFailures(c, body.email);
     const session = await createSession(member.id);
     const secure = shouldUseSecureCookies();
     setCookie(c, SESSION_COOKIE, session.id, {

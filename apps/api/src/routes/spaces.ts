@@ -41,7 +41,11 @@ async function requireSpaceById(id: string) {
   return space;
 }
 
-function toDoc(doc: DocumentRow, author?: User | null, options: { canRead?: boolean } = {}) {
+function toDoc(
+  doc: DocumentRow,
+  author?: User | null,
+  options: { canRead?: boolean; shareToken?: string | null } = {},
+) {
   return {
     id: doc.id,
     spaceId: doc.spaceId,
@@ -58,15 +62,15 @@ function toDoc(doc: DocumentRow, author?: User | null, options: { canRead?: bool
     deletedAt: doc.deletedAt,
     canRead: options.canRead ?? false,
     locked: false,
+    // Included for guest published docs so the directory can hand out a working /share/:token URL.
+    shareToken: options.shareToken ?? null,
   };
 }
 
-function toLockedDoc(doc: DocumentRow) {
+// Locked placeholder: never leaks title/folderId/author. Members and guests without a grant see
+// only a "you don't have access" card with no identifying metadata.
+function toLockedDoc() {
   return {
-    id: doc.id,
-    spaceId: doc.spaceId,
-    folderId: doc.folderId,
-    title: doc.title,
     locked: true,
     canRead: false,
     canEdit: false,
@@ -112,23 +116,38 @@ function buildChildren(
   authorsById: Map<string, User>,
   lookup: PermissionLookup,
 ) {
-  return docs.map((doc) => {
-    const canRead = canReadDocumentWithLookup(user, doc, lookup);
-    if (!canRead) return toLockedDoc(doc);
+  return docs
+    .map((doc) => {
+      const canRead = canReadDocumentWithLookup(user, doc, lookup);
+      // For guests, the directory entries are already filtered to published docs by
+      // listDirectoryDocuments — those are reachable via /share/:token even though the strict read
+      // path rejects them. Treat directory-visible rows as readable for guest serialization.
+      const visibleToGuest = !user && lookup.publishedDocIds.has(doc.id);
+      if (!canRead && !visibleToGuest) {
+        // Members without a grant still see a "locked" card; guests never see non-published docs.
+        if (!user) return null;
+        return toLockedDoc();
+      }
 
-    return {
-      ...toDoc(doc, authorsById.get(doc.authorId), { canRead: true }),
-      published: lookup.publishedDocIds.has(doc.id),
-      canEdit: canEditDocumentWithLookup(user, doc, lookup),
-    };
-  });
+      const isPublished = lookup.publishedDocIds.has(doc.id);
+      return {
+        ...toDoc(doc, authorsById.get(doc.authorId), {
+          canRead: true,
+          shareToken: isPublished ? (lookup.publishedTokensByDoc.get(doc.id) ?? null) : null,
+        }),
+        published: isPublished,
+        canEdit: user ? canEditDocumentWithLookup(user, doc, lookup) : false,
+      };
+    })
+    .filter((child): child is NonNullable<typeof child> => child !== null);
 }
 
 async function spaceWithChildren(user: User | undefined, sp: SpaceRow, lookup: PermissionLookup) {
   const docs = await listDirectoryDocuments(user, sp);
   const authorsById = await authorsByIdFor(docs);
   const children = buildChildren(user, docs, authorsById, lookup);
-  const folderMap = await foldersBySpaceIds([sp.id]);
+  // Folders are member-only metadata; guests never see the directory tree structure.
+  const folderMap = user ? await foldersBySpaceIds([sp.id]) : new Map<string, Folder[]>();
   return {
     ...sp,
     count: children.length,
@@ -149,7 +168,14 @@ export const spacesRouter = new Hono<AppEnv>()
       ...directoryDocs.map((doc) => doc.spaceId),
     ]);
     const allSpaces = isAdmin(user) ? membershipSpaces : await db.select().from(spaces);
-    const readableSpaces = allSpaces.filter((sp) => readableSpaceIds.has(sp.id));
+    // Guests must never see personal spaces — they belong to a specific member. The published
+    // docs inside them (if any) are reachable via /share/:token, not the directory.
+    const visibleSpaces = user
+      ? allSpaces
+      : allSpaces.filter((sp) => !sp.personal && readableSpaceIds.has(sp.id));
+    const readableSpaces = user
+      ? allSpaces.filter((sp) => readableSpaceIds.has(sp.id))
+      : visibleSpaces;
     const authorsById = await authorsByIdFor(directoryDocs);
     const docsBySpaceId = new Map<string, DocumentRow[]>();
 
@@ -159,7 +185,9 @@ export const spacesRouter = new Hono<AppEnv>()
       docsBySpaceId.set(doc.spaceId, existing);
     }
 
-    const folderMap = await foldersBySpaceIds(readableSpaces.map((sp) => sp.id));
+    const folderMap = user
+      ? await foldersBySpaceIds(readableSpaces.map((sp) => sp.id))
+      : new Map<string, Folder[]>();
     const result = readableSpaces.map((sp) => {
       const children = buildChildren(user, docsBySpaceId.get(sp.id) ?? [], authorsById, lookup);
       return {

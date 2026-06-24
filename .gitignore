@@ -28,6 +28,9 @@ apps/api/*.sqlite-*
 # Brainstorming visual companion
 .superpowers/
 
+# Local Claude worktrees (each carries its own biome.json and breaks root-level lint).
+.claude/worktrees/
+
 # codegragh
 .codegraph/
 

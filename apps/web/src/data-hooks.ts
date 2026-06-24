@@ -58,7 +58,13 @@ export function useAtlasData() {
     queryFn: () => apiGet('/auth/me'),
   });
   const currentUser = meQuery.data?.user;
+  const capabilities: string[] = meQuery.data?.capabilities ?? [];
+  const hasCapability = (cap: string) => capabilities.includes(cap);
+  // Admin (workspace-level) OR a holder of the relevant capability unlocks the management
+  // surface. The backend enforces the same rule, so this is purely a UI optimization.
   const isWorkspaceAdmin = currentUser?.role === 'admin';
+  const canManageMembers = isWorkspaceAdmin || hasCapability('manageMembers');
+  const canManageGroups = isWorkspaceAdmin || hasCapability('manageGroups');
 
   const spacesQuery = useQuery({
     queryKey: atlasKeys.spaces,
@@ -67,34 +73,40 @@ export function useAtlasData() {
   const membersQuery = useQuery({
     queryKey: atlasKeys.members,
     queryFn: () => apiGet('/members'),
-    enabled: isWorkspaceAdmin,
+    enabled: canManageMembers,
   });
   const permissionsQuery = useQuery({
     queryKey: atlasKeys.permissions,
     queryFn: () => apiGet('/members/permissions'),
-    enabled: isWorkspaceAdmin,
+    enabled: canManageMembers,
   });
   const groupsQuery = useQuery({
     queryKey: atlasKeys.groups,
     queryFn: () => apiGet('/groups'),
-    enabled: isWorkspaceAdmin,
+    enabled: canManageGroups,
   });
 
   return {
     spaces: spacesQuery.data || [],
-    members: isWorkspaceAdmin ? membersQuery.data || [] : [],
-    groups: isWorkspaceAdmin ? groupsQuery.data || [] : [],
-    permissions: isWorkspaceAdmin ? permissionsQuery.data || [] : [],
+    members: canManageMembers ? membersQuery.data || [] : [],
+    groups: canManageGroups ? groupsQuery.data || [] : [],
+    permissions: canManageMembers ? permissionsQuery.data || [] : [],
+    capabilities,
+    hasCapability,
+    canManageMembers,
+    canManageGroups,
     currentUser,
     session: meQuery.data?.session,
     isLoading:
       spacesQuery.isLoading ||
       meQuery.isLoading ||
-      (isWorkspaceAdmin && (membersQuery.isLoading || permissionsQuery.isLoading)),
+      (canManageMembers && (membersQuery.isLoading || permissionsQuery.isLoading)) ||
+      (canManageGroups && groupsQuery.isLoading),
     error:
       spacesQuery.error ||
       meQuery.error ||
-      (isWorkspaceAdmin ? membersQuery.error || permissionsQuery.error : null),
+      (canManageMembers ? membersQuery.error || permissionsQuery.error : null) ||
+      (canManageGroups ? groupsQuery.error : null),
   };
 }
 

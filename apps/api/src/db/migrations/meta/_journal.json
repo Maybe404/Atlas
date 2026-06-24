@@ -92,6 +92,20 @@
       "when": 1781672302861,
       "tag": "0012_lying_celestials",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "6",
+      "when": 1781672303000,
+      "tag": "0013_member_delete_cleanup",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "6",
+      "when": 1781672303500,
+      "tag": "0014_login_rate_limit",
+      "breakpoints": true
     }
   ]
 }

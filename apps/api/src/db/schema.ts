@@ -85,7 +85,10 @@ export const folders = sqliteTable(
     // Soft delete to trash (mirrors documents). Deleting a folder soft-deletes its whole subtree
     // and the docs within, without touching folderId — so restore re-reveals files in place.
     deletedAt: text('deleted_at'),
-    deletedBy: text('deleted_by').references(() => members.id),
+    // `set null` on member delete so removing a former folder-deleter doesn't trip the FK. The
+    // app-level delete flow also clears this column, but the FK change makes the cleanup
+    // idempotent and avoids surprise 500s on race conditions.
+    deletedBy: text('deleted_by').references(() => members.id, { onDelete: 'set null' }),
     purgeAfter: text('purge_after'),
     // The trash-root folder this row was cascade-deleted under. NULL ⇒ this folder is itself the
     // root the user deleted (the only kind shown as a top-level trash entry).
@@ -214,3 +217,12 @@ export const auditLogs = sqliteTable(
     targetIdIdx: index('audit_logs_target_id_idx').on(table.targetId),
   }),
 );
+
+// Persistent login-failure counter shared across processes. Replaces the in-memory Map so a
+// multi-replica deployment (or a process restart) doesn't reset the rate-limit window. Rows
+// self-expire on read via `resetAt`; no background sweep is required.
+export const loginFailures = sqliteTable('login_failures', {
+  key: text('key').primaryKey(),
+  count: integer('count').notNull().default(0),
+  resetAt: text('reset_at').notNull(),
+});

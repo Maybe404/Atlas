@@ -2,7 +2,7 @@ import { and, eq, gt } from 'drizzle-orm';
 import type { Context, Next } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { db } from '../db/client';
-import { members, sessions } from '../db/schema';
+import { loginFailures, members, sessions } from '../db/schema';
 import { addDaysIso, nowIso } from './dates';
 import { envFlag, envPositiveNumber, isProductionRuntime } from './env';
 import { forbidden, tooManyRequests, unauthorized } from './http-error';
@@ -32,13 +32,6 @@ const LOGIN_FAILURE_WINDOW_MS = envPositiveNumber(
   10 * 60 * 1000,
 );
 
-type LoginFailureState = {
-  count: number;
-  resetAt: number;
-};
-
-const loginFailures = new Map<string, LoginFailureState>();
-
 export function shouldUseSecureCookies() {
   if (isProductionRuntime()) return true;
   return envFlag('ATLAS_COOKIE_SECURE');
@@ -65,36 +58,50 @@ function loginFailureKey(c: Context<AppEnv>, email: string) {
   return `${clientIpForAuth(c)}:${email.trim().toLowerCase()}`;
 }
 
-export function assertLoginAllowed(c: Context<AppEnv>, email: string) {
+// `resetAt` is stored as an ISO-8601 string in the DB so the value survives restarts cleanly
+// (epoch numbers would also work, but the date lib in this project is text-based everywhere
+// else). `assertLoginAllowed` reads the row, expires stale ones inline, and refuses the
+// request if the window is still active and full.
+export async function assertLoginAllowed(c: Context<AppEnv>, email: string) {
   const key = loginFailureKey(c, email);
-  const state = loginFailures.get(key);
-  const now = Date.now();
-
-  if (!state) return;
-  if (state.resetAt <= now) {
-    loginFailures.delete(key);
+  const now = nowIso();
+  const [row] = await db.select().from(loginFailures).where(eq(loginFailures.key, key));
+  if (!row) return;
+  if (row.resetAt <= now) {
+    await db.delete(loginFailures).where(eq(loginFailures.key, key));
     return;
   }
-  if (state.count >= LOGIN_FAILURE_LIMIT) {
+  if (row.count >= LOGIN_FAILURE_LIMIT) {
     throw tooManyRequests(LOGIN_RATE_LIMIT_MESSAGE);
   }
 }
 
-export function recordLoginFailure(c: Context<AppEnv>, email: string) {
+export async function recordLoginFailure(c: Context<AppEnv>, email: string) {
   const key = loginFailureKey(c, email);
-  const now = Date.now();
-  const state = loginFailures.get(key);
+  const nowMs = Date.now();
+  const newResetAtIso = new Date(nowMs + LOGIN_FAILURE_WINDOW_MS).toISOString();
+  const nowIsoStr = nowIso();
 
-  if (!state || state.resetAt <= now) {
-    loginFailures.set(key, { count: 1, resetAt: now + LOGIN_FAILURE_WINDOW_MS });
+  const [existing] = await db.select().from(loginFailures).where(eq(loginFailures.key, key));
+  if (!existing || existing.resetAt <= nowIsoStr) {
+    // Fresh window — upsert. SQLite supports `onConflictDoUpdate` via Drizzle.
+    await db
+      .insert(loginFailures)
+      .values({ key, count: 1, resetAt: newResetAtIso })
+      .onConflictDoUpdate({
+        target: loginFailures.key,
+        set: { count: 1, resetAt: newResetAtIso },
+      });
     return;
   }
-
-  state.count += 1;
+  await db
+    .update(loginFailures)
+    .set({ count: existing.count + 1 })
+    .where(eq(loginFailures.key, key));
 }
 
-export function clearLoginFailures(c: Context<AppEnv>, email: string) {
-  loginFailures.delete(loginFailureKey(c, email));
+export async function clearLoginFailures(c: Context<AppEnv>, email: string) {
+  await db.delete(loginFailures).where(eq(loginFailures.key, loginFailureKey(c, email)));
 }
 
 export async function createSession(memberId: string) {

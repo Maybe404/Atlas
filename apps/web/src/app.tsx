@@ -195,8 +195,19 @@ function App() {
     setTimeout(() => setToasts((ts: Loose) => ts.filter((t: Loose) => t.id !== id)), 2200);
   }, []);
 
-  const { spaces, members, groups, permissions, currentUser, session, isLoading, error } =
-    useAtlasData();
+  const {
+    spaces,
+    members,
+    groups,
+    permissions,
+    hasCapability,
+    canManageMembers,
+    canManageGroups,
+    currentUser,
+    session,
+    isLoading,
+    error,
+  } = useAtlasData();
   const auth = useAuth({ currentUser, session });
   const { user, login, logout, switchTo } = auth;
   const isGuest = !user;
@@ -236,8 +247,14 @@ function App() {
       (returnTo.view === 'public' || returnDoc?.published === true);
     const target = canReturnAsGuest ? returnTo : firstPublicDoc(spaces as never);
     setReturnTo(null);
+    // Guests can only enter published docs through the share-link route (the direct
+    // /spaces/:id/docs/:id endpoint rejects anonymous readers).
+    if (target.shareToken) {
+      routerNavigate(`/share/${target.shareToken}`);
+      return;
+    }
     navigate(target);
-  }, [navigate, returnTo, spaces]);
+  }, [navigate, returnTo, routerNavigate, spaces]);
 
   const handleLogin = useCallback(
     async (email: string, password: string) => {
@@ -256,7 +273,12 @@ function App() {
   const handleLogout = useCallback(async () => {
     await logout();
     if (!['reader', 'public'].includes(view)) {
-      routerNavigate(urlForState(firstPublicDoc(spaces as never)));
+      const fallback = firstPublicDoc(spaces as never);
+      if (fallback.shareToken) {
+        routerNavigate(`/share/${fallback.shareToken}`);
+      } else {
+        routerNavigate(urlForState(fallback));
+      }
     }
   }, [logout, routerNavigate, spaces, view]);
 
@@ -337,10 +359,14 @@ function App() {
   // The backend lets space editors create/edit documents in spaces they can edit, so the doc and
   // upload back-office is open to them. Member/permission/trash/space settings stay admin-only.
   const hasEditableSpace = spaces.some((s: Loose) => s.role === 'editor');
+  // Settings access: admin OR the manage* capabilities (or the legacy createSpace fallback
+  // for the upload pane, which is a capability we keep listing for backwards compat).
+  const canSeeSettings =
+    isWorkspaceAdmin || canManageMembers || canManageGroups || hasCapability('createSpace');
   const lacksAdminAccess =
     isAdminView &&
     user &&
-    (view === 'admin-settings' ? !isWorkspaceAdmin : !isWorkspaceAdmin && !hasEditableSpace);
+    (view === 'admin-settings' ? !canSeeSettings : !isWorkspaceAdmin && !hasEditableSpace);
   const hasSidebar = SIDEBAR_VIEWS.has(view) && !isLogin;
   const isPublicView = view === 'public';
 

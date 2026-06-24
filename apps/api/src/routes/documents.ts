@@ -122,12 +122,14 @@ function publicShareUrl(token: string | null | undefined) {
   return token ? `/share/${token}` : null;
 }
 
-// A document's folder (if any) must live in the same space as the document.
+// A document's folder (if any) must live in the same space as the document AND be live (not
+// in trash). A trashed folder is unwritable; restore it first.
 async function validateFolder(folderId: string | null | undefined, spaceId: string) {
   if (!folderId) return null;
   const [folder] = await db.select().from(folders).where(eq(folders.id, folderId));
   if (!folder || folder.spaceId !== spaceId)
     throw badRequest('Folder must belong to the document space.');
+  if (folder.deletedAt) throw badRequest('Cannot file a document under a trashed folder.');
   return folderId;
 }
 
@@ -342,11 +344,23 @@ export const documentsRouter = new Hono<AppEnv>()
       .from(documents)
       .where(eq(documents.id, c.req.param('id')));
     if (!doc) throw notFound();
+    // Refuse to restore a cascade-trashed doc through the loose-doc route — the trash entry
+    // for it is grouped under the originating folder, and only the folder restore should
+    // re-reveal it. This mirrors the folder restore's invariant.
+    if (doc.trashedUnderFolderId) {
+      throw conflict('This document was trashed as part of a folder. Restore the folder instead.');
+    }
     const [space] = await db.select().from(spaces).where(eq(spaces.id, doc.spaceId));
     if (!space) throw conflict('The original space no longer exists.');
     await db
       .update(documents)
-      .set({ deletedAt: null, deletedBy: null, purgeAfter: null, updated: nowIso() })
+      .set({
+        deletedAt: null,
+        deletedBy: null,
+        purgeAfter: null,
+        trashedUnderFolderId: null,
+        updated: nowIso(),
+      })
       .where(eq(documents.id, doc.id));
     await writeAudit({
       actorId: user.id,

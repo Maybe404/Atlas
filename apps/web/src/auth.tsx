@@ -88,13 +88,26 @@ export function canRead(doc?: DirectoryDocument | null, _user?: Member | null) {
 export function firstPublicDoc(spaces: Space[] = []) {
   for (const space of spaces) {
     const doc = (space.children || []).find(
-      (candidate: Loose) => 'published' in candidate && candidate.published === true,
-    );
-    if (doc) return { spaceId: space.id, docId: doc.id };
+      (candidate: Loose) =>
+        'published' in candidate &&
+        candidate.published === true &&
+        typeof candidate.id === 'string',
+    ) as { id: string; shareToken?: string | null } | undefined;
+    if (doc) {
+      return {
+        spaceId: space.id,
+        docId: doc.id,
+        // The directory surfaces a working share token alongside every published doc, so guests
+        // can navigate to /share/:token directly. Logged-in members can ignore the token and
+        // fall back to the regular /spaces/:id/docs/:id URL.
+        shareToken: doc.shareToken ?? null,
+      };
+    }
   }
-  const firstSpace = spaces[0];
-  const firstDoc = firstSpace?.children?.[0];
-  return firstDoc ? { spaceId: firstSpace.id, docId: firstDoc.id } : { spaceId: 's1', docId: 'd4' };
+  // No published doc anywhere; fall back to a hardcoded seed id (d4) so the URL bar isn't
+  // empty. Locked placeholders don't carry an id, so the firstSpace fallback only kicks in
+  // when there is genuinely nothing readable to point at.
+  return { spaceId: 's1', docId: 'd4', shareToken: null };
 }
 
 export function useAuth({

@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { useNavigate as useRouterNavigate } from 'react-router';
 import { canRead, firstPublicDoc } from '../auth';
 import { I } from '../chrome';
 import { useDocument } from '../data-hooks';
@@ -25,6 +26,7 @@ export function ReaderView({
   onChromeScroll,
   mutations,
 }: Loose) {
+  const routerNavigate = useRouterNavigate();
   const requestedSpace = spaces.find((s: Loose) => s.id === ctx.spaceId);
   const space = requestedSpace || spaces[0];
   const requestedDoc = requestedSpace?.children?.find((c: Loose) => c.id === ctx.docId);
@@ -40,6 +42,16 @@ export function ReaderView({
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [copiedMode, setCopiedMode] = useState('');
+  // Guests can only enter published docs through /share/:token (the /spaces/:id/docs/:id route
+  // rejects anonymous readers). Members fall through to the regular /spaces/:id/docs/:id URL.
+  const browsePublic = useCallback(() => {
+    const target = firstPublicDoc(spaces as never);
+    if (!user && target.shareToken) {
+      routerNavigate(`/share/${target.shareToken}`);
+      return;
+    }
+    onNavigate({ view: 'reader', spaceId: target.spaceId, docId: target.docId });
+  }, [onNavigate, routerNavigate, spaces, user]);
   const isMarkdown = detailDoc?.format === 'markdown';
   const doCopy = async (mode: 'source' | 'rich') => {
     try {
@@ -85,11 +97,7 @@ export function ReaderView({
           <h2 className="reader-locked-title">「{requestedSpace.name}」还没有文档</h2>
           <p className="reader-locked-desc">这个空间目前是空的。上传或新建文档后会显示在这里。</p>
           <div className="reader-locked-actions">
-            <button
-              type="button"
-              className="reader-locked-secondary"
-              onClick={() => onNavigate({ view: 'reader', ...firstPublicDoc(spaces) })}
-            >
+            <button type="button" className="reader-locked-secondary" onClick={browsePublic}>
               浏览其他文档
             </button>
           </div>
@@ -137,11 +145,7 @@ export function ReaderView({
           </p>
           <div className="reader-locked-actions">
             {user ? (
-              <button
-                type="button"
-                className="reader-locked-secondary"
-                onClick={() => onNavigate({ view: 'reader', ...firstPublicDoc(spaces) })}
-              >
+              <button type="button" className="reader-locked-secondary" onClick={browsePublic}>
                 浏览可阅读文档
               </button>
             ) : (
@@ -150,11 +154,7 @@ export function ReaderView({
                   <_I.signIn />
                   登录账号
                 </button>
-                <button
-                  type="button"
-                  className="reader-locked-secondary"
-                  onClick={() => onNavigate({ view: 'reader', ...firstPublicDoc(spaces) })}
-                >
+                <button type="button" className="reader-locked-secondary" onClick={browsePublic}>
                   浏览公开文档
                 </button>
               </>
@@ -283,13 +283,7 @@ export function ReaderView({
                   登录账号
                 </button>
               )}
-              <button
-                type="button"
-                className="reader-locked-secondary"
-                onClick={() => {
-                  onNavigate({ view: 'reader', ...firstPublicDoc(spaces) });
-                }}
-              >
+              <button type="button" className="reader-locked-secondary" onClick={browsePublic}>
                 {user ? '浏览可阅读文档' : '浏览公开文档'}
               </button>
             </div>
