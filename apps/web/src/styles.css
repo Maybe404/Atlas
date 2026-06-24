@@ -2232,13 +2232,13 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 /* AnimatedScrollList sits inside .card-body of setting-card. Override the
    default flow there: card-body becomes a scrollable column. */
 .card-body-scroll {
-  max-height: 420px;
+  max-height: 560px;
   overflow: hidden;
   padding: 0;
 }
 .rows-scroll {
   position: relative;
-  height: 420px;
+  height: 560px;
 }
 .rows-scroll .scroll-list {
   height: 100%;
