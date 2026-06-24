@@ -4882,84 +4882,11 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 .wb-rail .top-gradient { background: linear-gradient(to bottom, var(--canvas), transparent); }
 .wb-rail .bottom-gradient { background: linear-gradient(to top, var(--canvas), transparent); }
 .wb-rail .tree-anim-item { transform-origin: left center; }
-.wb-group { margin-bottom: 8px; }
-.wb-group-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px 6px;
-}
-.wb-group-head .sm-mark {
-  width: 20px; height: 20px;
-  border-radius: 6px;
-  font-size: 10px;
-  flex: 0 0 auto;
-}
-.wb-group-name {
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  color: var(--ink-2);
-  flex: 1;
-}
-.wb-group-head .count {
-  font-size: 10.5px;
-  color: var(--ink-4);
-  background: rgba(0,0,0,0.05);
-  padding: 1px 7px;
-  border-radius: var(--r-pill);
-}
-[data-theme="dark"] .wb-group-head .count { background: rgba(255,255,255,0.08); }
-.wb-item {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  width: 100%;
-  padding: 9px 11px;
-  border-radius: var(--r-sm);
-  text-align: left;
-  color: var(--ink-2);
-  cursor: pointer;
-  transition: background var(--dur-fast), color var(--dur-fast);
-}
-.wb-item:hover { background: var(--pearl); color: var(--ink); }
-.wb-item.active { background: var(--accent-tint, rgba(199,107,61,0.12)); color: var(--ink); }
-.wb-item .dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.wb-group { margin-bottom: 2px; }
 .wb-folder { display: flex; flex-direction: column; }
-.wb-folder-head {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 10px 5px;
-  color: var(--ink-3);
-}
-.wb-folder-head svg { flex-shrink: 0; color: var(--ink-4); }
-.wb-folder-name {
-  flex: 1;
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--ink-2);
-}
-.wb-folder-head .count {
-  font-size: 10px;
-  color: var(--ink-4);
-  background: rgba(0,0,0,0.05);
-  padding: 1px 6px;
-  border-radius: var(--r-pill);
-}
-[data-theme="dark"] .wb-folder-head .count { background: rgba(255,255,255,0.08); }
-.wb-item-title {
-  flex: 1;
-  font-size: 13px;
-  letter-spacing: -0.01em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.wb-rail .tree-node { width: 100%; }
+.wb-rail .tree-children { margin-bottom: 2px; }
+.wb-tree-doc .format-badge { flex: 0 0 auto; margin-left: auto; }
 
 .wb-preview {
   min-width: 0;

@@ -10,10 +10,11 @@ import { documentReaderUrl } from '../url-utils';
 import { HTMLEditorDialog } from './html-editor-dialog';
 import { MarkdownEditorDialog } from './markdown-editor-dialog';
 import { MarkdownReader } from './markdown-reader';
-import { dotClass, flattenFolders, folderPathLabel } from './shared';
+import { dotClass, flattenFolders, folderPathLabel, spaceTreeDotClass } from './shared';
 
 const _I = I;
 const VIEW_KEY = 'atlas:admin-docs-view';
+const VIEW_MODES = new Set(['gallery', 'workbench']);
 const MENU_IGNORE = ['.doc-more-menu', '[data-more-trigger]'];
 
 // Sum the docs (recursively) under a folder-tree branch — used for the rail counts.
@@ -204,20 +205,36 @@ export function AdminDocsView({
   const [showNewMenu, setShowNewMenu] = useState(false);
   const [viewMode, setViewMode] = useState<string>(() => {
     try {
-      return localStorage.getItem(VIEW_KEY) || 'gallery';
+      const saved = localStorage.getItem(VIEW_KEY);
+      return saved && VIEW_MODES.has(saved) ? saved : 'gallery';
     } catch {
       return 'gallery';
     }
   });
   const [selectedId, setSelectedId] = useState<Loose>(null);
+  const [collapsedRailSpaces, setCollapsedRailSpaces] = useState<Loose>(() => new Set());
+  const [collapsedRailFolders, setCollapsedRailFolders] = useState<Loose>(() => new Set());
   useDismiss(showNewMenu, () => setShowNewMenu(false), ['.space-picker-pop', '[data-new-trigger]']);
 
   const setView = (v: string) => {
+    if (!VIEW_MODES.has(v)) return;
     setViewMode(v);
     try {
       localStorage.setItem(VIEW_KEY, v);
     } catch {}
   };
+  const toggleRailSpace = (id: string) =>
+    setCollapsedRailSpaces((prev: Loose) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  const toggleRailFolder = (id: string) =>
+    setCollapsedRailFolders((prev: Loose) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
 
   // filter state
   const [status, setStatus] = useState('all'); // all | published | draft
@@ -331,38 +348,55 @@ export function AdminDocsView({
 
   let railIndex = 0;
   const nextRailIndex = () => railIndex++;
-  const renderRailDoc = (doc: Loose, paddingLeft?: number) => (
+  const renderRailDoc = (doc: Loose) => (
     <AnimatedItem key={doc.id} index={nextRailIndex()}>
       <button
         type="button"
-        className={`wb-item ${effectiveSelected === doc.id ? 'active' : ''}`}
-        style={paddingLeft == null ? undefined : { paddingLeft }}
+        className={`tree-node wb-tree-doc ${effectiveSelected === doc.id ? 'active' : ''}`}
+        aria-current={effectiveSelected === doc.id ? 'page' : undefined}
         onClick={() => setSelectedId(doc.id)}
       >
         <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
-        <span className="wb-item-title">{doc.title}</span>
+        <span className="name doc-title-text">{doc.title}</span>
         <span className="format-badge sm">{formatBadge(doc)}</span>
       </button>
     </AnimatedItem>
   );
 
   // Recursive render of a folder node in the workbench rail: folder head + its
-  // docs, then nested sub-folders. Indentation tracks depth via inline padding.
-  const renderFolder = (folder: Loose) => (
-    <div key={folder.id} className="wb-folder">
-      <AnimatedItem index={nextRailIndex()}>
-        <div className="wb-folder-head" style={{ paddingLeft: 10 + folder.depth * 14 }}>
-          <_I.folder width="13" height="13" />
-          <span className="wb-folder-name">{folder.name}</span>
-          <span className="count mono">
-            {folder.docs.length + folder.folders.reduce(countInTree, 0)}
-          </span>
-        </div>
-      </AnimatedItem>
-      {folder.docs.map((doc: Loose) => renderRailDoc(doc, 28 + folder.depth * 14))}
-      {folder.folders.map((f: Loose) => renderFolder(f))}
-    </div>
-  );
+  // docs, then nested sub-folders. It mirrors the reader sidebar tree rows.
+  const renderFolder = (folder: Loose) => {
+    const open = !collapsedRailFolders.has(folder.id);
+    return (
+      <div key={folder.id} className="wb-folder">
+        <AnimatedItem index={nextRailIndex()}>
+          <button
+            type="button"
+            className={`tree-node tree-folder wb-tree-folder ${open ? 'expanded' : ''}`}
+            aria-expanded={open}
+            onClick={() => toggleRailFolder(folder.id)}
+          >
+            <span className="chev">
+              <_I.chev />
+            </span>
+            <span className="tree-folder-ico">
+              <_I.folder />
+            </span>
+            <span className="name">{folder.name}</span>
+            <span className="count mono">
+              {folder.docs.length + folder.folders.reduce(countInTree, 0)}
+            </span>
+          </button>
+        </AnimatedItem>
+        {open && (
+          <div className="tree-children">
+            {folder.docs.map((doc: Loose) => renderRailDoc(doc))}
+            {folder.folders.map((f: Loose) => renderFolder(f))}
+          </div>
+        )}
+      </div>
+    );
+  };
 
   const startRename = (doc: Loose) => {
     setRenaming(doc.id);
@@ -751,22 +785,16 @@ export function AdminDocsView({
                 }}
               >
                 {groups.map((g: Loose) => (
-                  <div key={g.id} className="wb-group">
-                    <div className="wb-group-head">
-                      <span
-                        className="sm-mark"
-                        style={{ background: SPACE_COLOR_MAP[g.accent] || SPACE_COLOR_MAP.accent }}
-                      >
-                        {g.mark || g.name.slice(0, 1)}
-                      </span>
-                      <span className="wb-group-name">{g.name}</span>
-                      <span className="count mono">
-                        {g.rootDocs.length + g.folderTree.reduce(countInTree, 0)}
-                      </span>
-                    </div>
+                  <RailSpace
+                    key={g.id}
+                    group={g}
+                    open={!collapsedRailSpaces.has(g.id)}
+                    index={nextRailIndex()}
+                    onToggle={() => toggleRailSpace(g.id)}
+                  >
                     {g.rootDocs.map((doc: Loose) => renderRailDoc(doc))}
                     {g.folderTree.map((f: Loose) => renderFolder(f))}
-                  </div>
+                  </RailSpace>
                 ))}
               </div>
               <div className="top-gradient" style={{ opacity: 'var(--top-op, 0)' }}></div>
@@ -808,6 +836,38 @@ export function AdminDocsView({
             onSave={(html: Loose, patch: Loose) => saveDoc(html, patch)}
           />
         ))}
+    </div>
+  );
+}
+
+function RailSpace({ group, open, index, onToggle, children }: Loose) {
+  const count = group.rootDocs.length + group.folderTree.reduce(countInTree, 0);
+  return (
+    <div className="wb-group">
+      <AnimatedItem index={index}>
+        <div className="tree-space-head" style={{ position: 'relative' }}>
+          <div className="tree-node tree-space-row">
+            <button
+              type="button"
+              className={`chev chev-btn ${open ? 'expanded' : ''}`}
+              aria-label={open ? `收起 ${group.name}` : `展开 ${group.name}`}
+              aria-expanded={open}
+              onClick={(e: Loose) => {
+                e.stopPropagation();
+                onToggle();
+              }}
+            >
+              <I.chev />
+            </button>
+            <button type="button" className="tree-space-name" onClick={onToggle}>
+              <span className={`dot ${spaceTreeDotClass(group.accent)}`}></span>
+              <span className="name">{group.name}</span>
+              <span className="count">{count}</span>
+            </button>
+          </div>
+        </div>
+      </AnimatedItem>
+      {open && <div className="tree-children">{children}</div>}
     </div>
   );
 }
