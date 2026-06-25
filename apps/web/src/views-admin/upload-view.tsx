@@ -21,6 +21,18 @@ function folderDepth(folder: Loose, folders: Loose[]) {
   return depth;
 }
 
+function folderPath(folder: Loose, folders: Loose[]) {
+  const names = [folder.name];
+  let parentId = folder.parentId;
+  while (parentId) {
+    const parent = folders.find((candidate: Loose) => candidate.id === parentId);
+    if (!parent) break;
+    names.unshift(parent.name);
+    parentId = parent.parentId;
+  }
+  return names.join(' / ');
+}
+
 export function AdminUploadView({
   ctx: _ctx,
   spaces = [],
@@ -45,9 +57,20 @@ export function AdminUploadView({
   const [meta, setMeta] = useState({
     title: '',
     spaceId: editableSpaces[0]?.id || '',
+    folderId: '',
     access: 'inherit',
     desc: '',
   });
+  const selectedSpace = editableSpaces.find((s: Loose) => s.id === meta.spaceId);
+  const selectedFolders = (selectedSpace?.folders || []) as Loose[];
+  const selectedFolder = selectedFolders.find((folder: Loose) => folder.id === meta.folderId);
+  const folderOptions = [
+    { value: '', label: '空间根目录' },
+    ...selectedFolders.map((folder: Loose) => ({
+      value: folder.id,
+      label: `${'　'.repeat(folderDepth(folder, selectedFolders))}${folderPath(folder, selectedFolders)}`,
+    })),
+  ];
 
   useEffect(() => {
     const editable = spaces.filter((s: Loose) => s.role === 'editor');
@@ -55,6 +78,11 @@ export function AdminUploadView({
     setMeta((m: Loose) => ({
       ...m,
       spaceId: editable.some((s: Loose) => s.id === m.spaceId) ? m.spaceId : editable[0].id,
+      folderId: editable
+        .find((s: Loose) => s.id === m.spaceId)
+        ?.folders?.some((folder: Loose) => folder.id === m.folderId)
+        ? m.folderId
+        : '',
     }));
   }, [spaces]);
 
@@ -237,7 +265,9 @@ export function AdminUploadView({
                       ariaLabel="归属空间"
                       value={meta.spaceId}
                       options={editableSpaces.map((s: Loose) => ({ value: s.id, label: s.name }))}
-                      onChange={(v: string) => setMeta((m: Loose) => ({ ...m, spaceId: v }))}
+                      onChange={(v: string) =>
+                        setMeta((m: Loose) => ({ ...m, spaceId: v, folderId: '' }))
+                      }
                     />
                   </div>
                   <div className="field">
@@ -253,6 +283,19 @@ export function AdminUploadView({
                       onChange={(v: string) => setMeta((m: Loose) => ({ ...m, access: v }))}
                     />
                   </div>
+                </div>
+                <div className="field">
+                  <span className="field-label">归属文件夹</span>
+                  <Select
+                    className="input"
+                    ariaLabel="归属文件夹"
+                    value={meta.folderId}
+                    options={folderOptions}
+                    onChange={(v: string) => setMeta((m: Loose) => ({ ...m, folderId: v }))}
+                  />
+                  <span className="muted" style={{ fontSize: 12 }}>
+                    文件夹列表跟随当前归属空间，默认上传到空间根目录。
+                  </span>
                 </div>
                 <div className="field">
                   <label className="field-label" htmlFor="up-desc">
@@ -431,7 +474,8 @@ export function AdminUploadView({
                         {accessLabel(meta.access)}
                       </span>
                       <span className="mono" style={{ fontSize: 11, color: 'var(--ink-3)' }}>
-                        {spaces.find((s: Loose) => s.id === meta.spaceId)?.name}
+                        {selectedSpace?.name}
+                        {selectedFolder ? ` / ${folderPath(selectedFolder, selectedFolders)}` : ''}
                       </span>
                     </div>
                   </div>
@@ -452,6 +496,7 @@ export function AdminUploadView({
                         formData.set('title', meta.title.trim());
                         formData.set('desc', meta.desc);
                         formData.set('spaceId', meta.spaceId);
+                        formData.set('folderId', meta.folderId);
                         formData.set('access', meta.access);
                         formData.set('format', selectedFormat);
                         mutations.uploadDocument(formData, {

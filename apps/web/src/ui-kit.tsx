@@ -105,7 +105,10 @@ export function Select({
   // Fixed-positioned menu detaches on scroll/resize — reposition or close.
   useEffect(() => {
     if (!open) return;
-    const onScroll = () => close();
+    const onScroll = (event: Event) => {
+      if (menuRef.current?.contains(event.target as Node | null)) return;
+      close();
+    };
     const onResize = () => place();
     window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', onResize);
