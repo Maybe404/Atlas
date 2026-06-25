@@ -4,7 +4,6 @@ import { I } from '../chrome';
 import { useDocument, usePublicDocument } from '../data-hooks';
 import type { Loose } from '../loose-types';
 import { copyMarkdownRich, copyMarkdownSource } from '../markdown/copy';
-import { getScroll, setScroll } from '../reader-progress';
 import { Skeleton } from '../ui-kit';
 import { MarkdownEditorDialog } from './markdown-editor-dialog';
 import { MarkdownReader } from './markdown-reader';
@@ -66,22 +65,10 @@ export function ReaderView({
 
   const iframeRef = useRef<Loose>(null);
   const scrollKey = detailDoc?.id || doc?.id;
-  const bindIframeScroll = useCallback(() => {
-    try {
-      const win = iframeRef.current?.contentWindow;
-      if (!win) return;
-      const saved = getScroll(scrollKey);
-      if (saved > 0) win.scrollTo(0, saved);
-      win.addEventListener(
-        'scroll',
-        (e: Loose) => {
-          if (scrollKey) setScroll(scrollKey, win.scrollY || 0);
-          onChromeScroll?.(e);
-        },
-        { passive: true },
-      );
-    } catch (_e) {}
-  }, [onChromeScroll, scrollKey]);
+  // No parent-side scroll binding for the HTML iframe: it's a sandboxed opaque origin,
+  // so reaching into contentWindow throws cross-origin. Auto-immersion for HTML docs is
+  // driven from inside the frame by lib/raw-html's CHROME_BRIDGE, which postMessages
+  // scroll / edge-reveal events that app.tsx turns into hide / wake.
 
   // A space that exists but has no documents is not an access problem — show a
   // dedicated empty state rather than the "need to login / no access" screen.
@@ -264,7 +251,6 @@ export function ReaderView({
               }
               title={detailDoc.title}
               sandbox="allow-scripts allow-forms allow-popups"
-              onLoad={bindIframeScroll}
             />
           )
         ) : (

@@ -29,24 +29,38 @@ const SCROLL_GUARD = `<script>(function(){try{var S=Element.prototype.scrollInto
 // Marker the API tests assert on without pinning the whole minified body.
 export const SCROLL_GUARD_MARKER = 'Element.prototype.scrollIntoView=function';
 
+// Bridge for the reader's auto-immersion. The iframe is a sandboxed opaque origin
+// (no allow-same-origin), so the parent frame can't observe its scrolling directly
+// — reading contentWindow.scrollY / addEventListener throws cross-origin. Instead we
+// notify the parent by postMessage: on every scroll (it recedes the topbar), and when
+// the pointer genuinely reaches a screen edge or Esc is pressed (it brings the nav
+// back). The same-coordinate check skips the synthetic mousemoves browsers fire while
+// the page scrolls under a still pointer — otherwise a scroll would hide the chrome
+// and the synthetic move would immediately reveal it again. Parent side: app.tsx's
+// 'message' handler maps type 'scroll' → hideChrome and 'reveal' → wakeChrome.
+const CHROME_BRIDGE = `<script>(function(){try{function post(t){try{parent.postMessage({source:"atlas-reader",type:t},"*");}catch(_e){}}var st=false;function fs(){st=false;post("scroll");}document.addEventListener("scroll",function(){if(st)return;st=true;(window.requestAnimationFrame||window.setTimeout)(fs);},{capture:true,passive:true});var lx=-1,ly=-1;document.addEventListener("mousemove",function(e){if(e.clientX===lx&&e.clientY===ly)return;lx=e.clientX;ly=e.clientY;var nb=innerHeight-e.clientY<90,nt=e.clientY<16,ntr=e.clientY<120&&(innerWidth-e.clientX)<240;if(nb||nt||ntr)post("reveal");},{passive:true});document.addEventListener("keydown",function(e){if(e.key==="Escape")post("reveal");});}catch(_e){}})();</script>`;
+
 // Insert the guard as early as possible so the prototype patch is in place before the
 // document's own scripts run. Prefer right after <head>, then <body>; fall back to after
 // a leading doctype (prepending a <script> before <!doctype> would force quirks mode).
 export function injectScrollGuard(html: string): string {
   if (!html) return html;
+  // SCROLL_GUARD first so the scrollIntoView marker keeps its position; CHROME_BRIDGE
+  // rides along in the same insertion point.
+  const inject = SCROLL_GUARD + CHROME_BRIDGE;
   const head = html.match(/<head[^>]*>/i);
   if (head?.index != null) {
     const at = head.index + head[0].length;
-    return html.slice(0, at) + SCROLL_GUARD + html.slice(at);
+    return html.slice(0, at) + inject + html.slice(at);
   }
   const body = html.match(/<body[^>]*>/i);
   if (body?.index != null) {
     const at = body.index + body[0].length;
-    return html.slice(0, at) + SCROLL_GUARD + html.slice(at);
+    return html.slice(0, at) + inject + html.slice(at);
   }
   const doctype = html.match(/^\s*<!doctype[^>]*>/i);
   if (doctype) {
-    return html.slice(0, doctype[0].length) + SCROLL_GUARD + html.slice(doctype[0].length);
+    return html.slice(0, doctype[0].length) + inject + html.slice(doctype[0].length);
   }
-  return SCROLL_GUARD + html;
+  return inject + html;
 }

@@ -291,13 +291,17 @@ function App() {
     return () => window.removeEventListener('keydown', onKey);
   }, []);
 
-  // Unified chrome auto-hide: topbar + dock + reader meta bar hide only after a
-  // stretch of genuine stillness. Scrolling / wheel now *wakes* the chrome and
-  // resets the idle timer (it used to vanish the instant you scrolled, which
-  // made the nav feel like it was running away while reading). Click on blank
-  // area (NOT on buttons / interactive elements) wakes. Mouse near edges wakes.
+  // Unified chrome auto-hide. Two ways the topbar / dock / reader meta bar recede:
+  //   • idle   — after HIDE_DELAY of genuine stillness (wakeChrome's timer), and
+  //   • scroll — wheel / scroll means "I'm reading", so it hides immediately.
+  // They come back via: a click on blank area (NOT interactive controls), the
+  // pointer genuinely reaching an edge that owns a bar, or Esc. The edge check
+  // ignores the synthetic mousemoves browsers fire during scroll (see onMouseMove).
   const mainRef = useRef<Loose>(null);
   const chromeHideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Last genuine pointer position — lets onMouseMove tell a real move from the
+  // synthetic, same-coordinate mousemoves a browser fires while the page scrolls.
+  const lastPointer = useRef({ x: -1, y: -1 });
   const HIDE_DELAY = 4000;
   const wakeChrome = useCallback(() => {
     setChromeVisible(true);
@@ -327,6 +331,14 @@ function App() {
     // recedes when idle, so the top edge is how you call it back. The sidebar is
     // user-controlled (its own collapse button), so there's no left-edge reveal.
     const onMouseMove = (e: MouseEvent) => {
+      // Browsers (Chrome / Safari) emit synthetic mousemove events while the page
+      // scrolls under a STATIONARY pointer — identical viewport coords, no real
+      // move. Those must NOT wake the chrome: with the cursor parked near an edge
+      // (e.g. the bottom dock zone) while scrolling, they'd keep reviving the
+      // topbar so it never recedes — which read as "scrolling doesn't hide it".
+      // Only a genuine change in pointer position counts as intent to summon nav.
+      if (e.clientX === lastPointer.current.x && e.clientY === lastPointer.current.y) return;
+      lastPointer.current = { x: e.clientX, y: e.clientY };
       const nearBottom = window.innerHeight - e.clientY < 90;
       const nearTop = e.clientY < 16;
       const nearTopRight = e.clientY < 120 && window.innerWidth - e.clientX < 240;
@@ -338,17 +350,29 @@ function App() {
     const onEsc = (e: KeyboardEvent) => {
       if (e.key === 'Escape') wakeChrome();
     };
+    // The reader's HTML <iframe> is a sandboxed opaque origin, so we can't watch its
+    // scrolling from here — it postMessages instead (see lib/raw-html CHROME_BRIDGE):
+    // 'scroll' recedes the topbar, 'reveal' (genuine edge-hover / Esc inside the frame)
+    // brings the nav back. Markdown needs none of this — it lives in this document.
+    const onMessage = (e: MessageEvent) => {
+      const d = e.data as Loose;
+      if (!d || d.source !== 'atlas-reader') return;
+      if (d.type === 'scroll') hideChrome();
+      else if (d.type === 'reveal') wakeChrome();
+    };
 
     document.addEventListener('click', onClick);
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('wheel', hideChrome, { passive: true });
     document.addEventListener('keydown', onEsc);
+    window.addEventListener('message', onMessage);
     return () => {
       if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
       document.removeEventListener('click', onClick);
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('wheel', hideChrome);
       document.removeEventListener('keydown', onEsc);
+      window.removeEventListener('message', onMessage);
     };
   }, [wakeChrome, hideChrome]);
 
