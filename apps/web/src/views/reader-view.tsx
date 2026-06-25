@@ -7,6 +7,7 @@ import type { Loose } from '../loose-types';
 import { copyMarkdownRich, copyMarkdownSource } from '../markdown/copy';
 import { getScroll, setScroll } from '../reader-progress';
 import { Skeleton } from '../ui-kit';
+import { useHtmlBlobUrl } from '../use-html-blob';
 import { MarkdownEditorDialog } from './markdown-editor-dialog';
 import { MarkdownReader } from './markdown-reader';
 import { dotClass } from './shared';
@@ -87,6 +88,12 @@ export function ReaderView({
       );
     } catch (_e) {}
   }, [onChromeScroll, scrollKey]);
+
+  // Render HTML through a blob: URL so in-page TOC anchors scroll instead of blanking the
+  // sandboxed iframe (see use-html-blob.ts). Hooks must run before the early returns below.
+  const frameUrl = useHtmlBlobUrl(
+    detailDoc?.html || '<!doctype html><html><body><p>暂无内容</p></body></html>',
+  );
 
   // A space that exists but has no documents is not an access problem — show a
   // dedicated empty state rather than the "need to login / no access" screen.
@@ -253,7 +260,7 @@ export function ReaderView({
             <iframe
               ref={iframeRef}
               className="reader-iframe"
-              srcDoc={detailDoc.html || '<!doctype html><html><body><p>暂无内容</p></body></html>'}
+              src={frameUrl}
               title={detailDoc.title}
               sandbox="allow-scripts allow-forms allow-popups"
               onLoad={bindIframeScroll}

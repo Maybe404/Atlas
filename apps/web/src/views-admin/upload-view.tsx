@@ -4,6 +4,7 @@ import { I } from '../chrome';
 import { accessLabel } from '../labels';
 import type { Loose } from '../loose-types';
 import { Select } from '../ui-kit';
+import { useHtmlBlobUrl } from '../use-html-blob';
 import { MarkdownReader } from '../views/markdown-reader';
 
 const _I2 = I;
@@ -21,6 +22,12 @@ export function AdminUploadView({
   const [selectedHtml, setSelectedHtml] = useState('');
   const [selectedFormat, setSelectedFormat] = useState('html');
   const [over, setOver] = useState(false);
+  // blob: URL so in-page TOC anchors scroll instead of blanking the preview (see use-html-blob.ts).
+  const previewUrl = useHtmlBlobUrl(
+    selectedFormat === 'markdown'
+      ? null
+      : selectedHtml || '<!doctype html><html><body></body></html>',
+  );
   // Uploads require space-editor access; only offer spaces the user can actually write to.
   const editableSpaces = spaces.filter((s: Loose) => s.role === 'editor');
   const [meta, setMeta] = useState({
@@ -346,7 +353,7 @@ export function AdminUploadView({
                     ) : (
                       <iframe
                         className="upload-html-preview"
-                        srcDoc={selectedHtml || '<!doctype html><html><body></body></html>'}
+                        src={previewUrl}
                         title="HTML 预览"
                         sandbox="allow-scripts allow-forms allow-popups"
                       />

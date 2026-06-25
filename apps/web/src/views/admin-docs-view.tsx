@@ -7,6 +7,7 @@ import type { Loose } from '../loose-types';
 import { SPACE_COLOR_MAP } from '../theme-tokens';
 import { clickableProps, EmptyState, Select, Skeleton, useDismiss } from '../ui-kit';
 import { documentReaderUrl } from '../url-utils';
+import { useHtmlBlobUrl } from '../use-html-blob';
 import { HTMLEditorDialog } from './html-editor-dialog';
 import { MarkdownEditorDialog } from './markdown-editor-dialog';
 import { MarkdownReader } from './markdown-reader';
@@ -885,6 +886,11 @@ function WorkbenchPreview({
   const detailQuery = useDocument(doc.id, Boolean(doc.id));
   const detailDoc = detailQuery.data || doc;
   const isMarkdown = detailDoc.format === 'markdown';
+  // blob: URL so in-page TOC anchors scroll instead of blanking the iframe (see use-html-blob.ts).
+  const frameUrl = useHtmlBlobUrl(
+    detailDoc.html ||
+      '<!doctype html><html><body style="font-family:sans-serif;color:#888;padding:24px">暂无内容</body></html>',
+  );
   const chip = docChip(doc);
   const accent = SPACE_COLOR_MAP[doc.spaceAccent] || SPACE_COLOR_MAP.accent;
 
@@ -952,10 +958,7 @@ function WorkbenchPreview({
         ) : (
           <iframe
             className="wb-pv-frame"
-            srcDoc={
-              detailDoc.html ||
-              '<!doctype html><html><body style="font-family:sans-serif;color:#888;padding:24px">暂无内容</body></html>'
-            }
+            src={frameUrl}
             title={detailDoc.title}
             sandbox="allow-scripts allow-popups"
           />

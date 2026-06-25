@@ -4,6 +4,7 @@ import { I } from '../chrome';
 import { useDocument } from '../data-hooks';
 import type { Loose } from '../loose-types';
 import { clickableProps, Select } from '../ui-kit';
+import { useHtmlBlobUrl } from '../use-html-blob';
 import { accentDot, dotClass, flattenFolders } from './shared';
 
 const _I = I;
@@ -113,6 +114,9 @@ function HTMLEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) {
   const [showSpaceRequired, setShowSpaceRequired] = useState(false);
   const [tab, setTab] = useState(doc.isNew ? 'source' : 'source'); // 'source' | 'preview'
   const [dirty, setDirty] = useState(false);
+  // blob: URL preview so in-page TOC anchors scroll instead of blanking (see use-html-blob.ts).
+  // Only built while the preview tab is open, so typing in the source tab stays cheap.
+  const previewUrl = useHtmlBlobUrl(tab === 'preview' ? html : null);
   const taRef = useRef<Loose>(null);
   const spaceWrapRef = useRef<Loose>(null);
 
@@ -407,7 +411,7 @@ function HTMLEditorDialogBody({ doc, spaces = [], onClose, onSave }: Loose) {
           ) : (
             <iframe
               className="editor-preview"
-              srcDoc={html}
+              src={previewUrl}
               title="预览"
               sandbox="allow-scripts allow-forms allow-popups"
             />

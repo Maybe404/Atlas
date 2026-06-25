@@ -39,7 +39,10 @@ const DEFAULT_CSP = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "script-src 'self'",
   "connect-src 'self'",
-  "frame-src 'self'",
+  // blob: lets us frame uploaded HTML via a blob: URL instead of srcdoc. A sandboxed srcdoc frame
+  // (about:srcdoc) blanks out when an in-page TOC anchor is clicked; a blob: URL is a real URL so
+  // the #fragment is an ordinary same-document scroll. Frames stay sandboxed (no allow-same-origin).
+  "frame-src 'self' blob:",
   "worker-src 'self' blob:",
 ].join('; ');
 
