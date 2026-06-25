@@ -322,23 +322,34 @@ function App() {
       if ((e.target as Element | null)?.closest(INTERACTIVE)) return;
       wakeChrome();
     };
-    // Edge-reveal: bottom strip owns the dock; top-right corner owns the reader
-    // toolbar. Moving into either zone wakes the chrome; the wide middle (where
-    // you read) never does.
+    // Edge-reveal: any screen edge wakes the chrome — the bottom owns the dock,
+    // the top edge the breadcrumb bar, the left edge the sidebar. The wide
+    // middle (where you read) never does. In the reader the topbar + sidebar
+    // recede with the chrome, so these edges are how you call them back.
     const onMouseMove = (e: MouseEvent) => {
       const nearBottom = window.innerHeight - e.clientY < 90;
+      const nearTop = e.clientY < 16;
+      const nearLeft = e.clientX < 18;
       const nearTopRight = e.clientY < 120 && window.innerWidth - e.clientX < 240;
-      if (nearBottom || nearTopRight) wakeChrome();
+      if (nearBottom || nearTop || nearLeft || nearTopRight) wakeChrome();
+    };
+    // Esc is the keyboard way out of an immersed reading view — brings the nav
+    // back without reaching for the mouse. Closing a dialog with Esc also wakes
+    // it, which is fine: the nav should be up once you're back in the app.
+    const onEsc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') wakeChrome();
     };
 
     document.addEventListener('click', onClick);
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('wheel', hideChrome, { passive: true });
+    document.addEventListener('keydown', onEsc);
     return () => {
       if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
       document.removeEventListener('click', onClick);
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('wheel', hideChrome);
+      document.removeEventListener('keydown', onEsc);
     };
   }, [wakeChrome, hideChrome]);
 
@@ -443,6 +454,7 @@ function App() {
         'app ' +
         (!hasSidebar ? 'no-sidebar ' : '') +
         (isPublicView ? 'public-shell ' : '') +
+        (view === 'reader' ? 'immersive-reader ' : '') +
         (sidebarCollapsed ? 'sidebar-collapsed ' : '') +
         (chromeVisible ? '' : 'chrome-hidden ')
       }

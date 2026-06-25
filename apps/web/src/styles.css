@@ -180,7 +180,9 @@ html { transition: background 0.3s var(--ease-soft); }
   padding: 12px;
   gap: 12px;
   overflow: hidden;
-  transition: grid-template-columns var(--dur) var(--ease-soft);
+  transition:
+    grid-template-columns var(--dur) var(--ease-soft),
+    grid-template-rows var(--dur) var(--ease-soft);
 }
 .app.no-sidebar { grid-template-columns: 0 1fr; gap: 12px 0; }
 .app.public-shell {
@@ -213,6 +215,10 @@ html { transition: background 0.3s var(--ease-soft); }
   gap: 14px;
   position: relative;
   z-index: 30;
+  transition:
+    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.32s var(--ease-soft);
+  will-change: transform;
 }
 .brand {
   display: flex;
@@ -2151,6 +2157,26 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 /* When chrome is hidden, the app pulls the main grid up — softens the gap */
 .app.chrome-hidden {
   /* no layout shift; just visual fading via element-level transforms */
+}
+
+/* Reader immersion: an idle stretch in the reader recedes the topbar AND the
+   sidebar, collapsing their grid tracks so the article reclaims that space (the
+   topbar row was ~56px that used to sit empty). The pointer reaching the top /
+   left edge, or Esc, wakes them back (see app.tsx onMouseMove / onEsc). Gated to
+   the reader so admin and index views keep their nav permanently. */
+.app.immersive-reader.chrome-hidden {
+  grid-template-columns: 0 1fr;
+  grid-template-rows: 0 1fr;
+}
+.app.immersive-reader.chrome-hidden .topbar {
+  transform: translateY(calc(-100% - 12px));
+  opacity: 0;
+  pointer-events: none;
+}
+.app.immersive-reader.chrome-hidden .sidebar {
+  transform: translateX(calc(-100% - 24px));
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* ─── 2. HIDE RIGHT-SIDE SCROLLBARS ─── */
