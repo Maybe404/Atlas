@@ -382,6 +382,26 @@ export async function publicDocumentByToken(token: string) {
   return row;
 }
 
+// Same access check as publicDocumentByToken but WITHOUT bumping the view counter — used by the
+// raw-HTML iframe endpoint, since the metadata fetch on the same page already counted the view.
+export async function publicDocumentHtmlByToken(token: string) {
+  const [row] = await db
+    .select({ link: shareLinks, doc: documents })
+    .from(shareLinks)
+    .innerJoin(documents, eq(shareLinks.documentId, documents.id))
+    .where(
+      and(
+        eq(shareLinks.token, token),
+        eq(shareLinks.enabled, true),
+        isNull(shareLinks.revokedAt),
+        isNull(documents.deletedAt),
+      ),
+    );
+  if (!row) throw notFound();
+  if (row.link.expiresAt && new Date(row.link.expiresAt).getTime() < Date.now()) throw notFound();
+  return row.doc;
+}
+
 export function roleCanEdit(role: SpaceMemberRole | null) {
   return role === 'editor';
 }

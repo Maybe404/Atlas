@@ -176,6 +176,54 @@ describe('Atlas API', () => {
     expect(body.canEdit).toBe(true);
   });
 
+  test('serves raw document HTML for iframe framing with sandboxing headers', async () => {
+    const admin = await loginAs();
+
+    // The full doc gives us the html to compare against.
+    const detail = (await (
+      await request('/documents/d1', { headers: { cookie: admin.cookie } })
+    ).json()) as ApiDoc;
+
+    const raw = await request('/documents/d1/raw', { headers: { cookie: admin.cookie } });
+    expect(raw.status).toBe(200);
+    expect(raw.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    // Sandbox the response itself so a direct top-level open can't act as the Atlas origin, while
+    // still letting our own app frame it (the global DENY / frame-ancestors 'none' would not).
+    expect(raw.headers.get('x-frame-options')).toBe('SAMEORIGIN');
+    const csp = raw.headers.get('content-security-policy') ?? '';
+    expect(csp).toContain('sandbox');
+    expect(csp).toContain("frame-ancestors 'self'");
+    expect(csp).not.toContain('allow-same-origin');
+    expect(await raw.text()).toBe(detail.html);
+
+    // Read still requires permission — guests get nothing.
+    expect((await request('/documents/d1/raw')).status).toBe(404);
+  });
+
+  test('public raw HTML endpoint serves the body without bumping the view counter', async () => {
+    // Grab a published doc's share token from the guest directory.
+    const spaces = (await (await request('/spaces')).json()) as {
+      children: { shareToken?: string | null }[];
+    }[];
+    const token = spaces
+      .flatMap((space) => space.children)
+      .map((doc) => doc.shareToken)
+      .find((t): t is string => typeof t === 'string' && t.length > 0)!;
+    expect(token).toBeTruthy();
+
+    type PublicDoc = { html: string; publicLink: { accessCount: number } };
+    const meta1 = (await (await request(`/documents/public/${token}`)).json()) as PublicDoc;
+
+    const raw = await request(`/documents/public/${token}/raw`);
+    expect(raw.status).toBe(200);
+    expect(raw.headers.get('content-type')).toBe('text/html; charset=utf-8');
+    expect(await raw.text()).toBe(meta1.html);
+
+    // The metadata fetch counts the visit; the raw body fetch must not double-count it.
+    const meta2 = (await (await request(`/documents/public/${token}`)).json()) as PublicDoc;
+    expect(meta2.publicLink.accessCount).toBe(meta1.publicLink.accessCount + 1);
+  });
+
   test('returns the same login error for unknown, passwordless and incorrect accounts', async () => {
     const genericLoginError = {
       code: 'unauthorized',

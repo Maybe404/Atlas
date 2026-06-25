@@ -4,7 +4,6 @@ import { apiGet } from '../api-client';
 import { I } from '../chrome';
 import type { Loose } from '../loose-types';
 import { EmptyState, Skeleton } from '../ui-kit';
-import { useHtmlBlobUrl } from '../use-html-blob';
 import { MarkdownReader } from './markdown-reader';
 import { dotClass } from './shared';
 
@@ -29,10 +28,6 @@ export function PublicDocumentView({ token, onChromeScroll }: Loose) {
     enabled: Boolean(token),
   });
   const doc = publicQuery.data;
-  // blob: URL so in-page TOC anchors scroll instead of blanking the iframe (see use-html-blob.ts).
-  const frameUrl = useHtmlBlobUrl(
-    doc?.html || '<!doctype html><html><body><p>暂无内容</p></body></html>',
-  );
 
   if (publicQuery.isLoading) {
     return (
@@ -98,7 +93,9 @@ export function PublicDocumentView({ token, onChromeScroll }: Loose) {
           <iframe
             ref={iframeRef}
             className="reader-iframe"
-            src={frameUrl}
+            // Same-origin raw endpoint (not srcDoc/blob) so in-page TOC anchors scroll instead of
+            // blanking the frame. Stays sandboxed; the endpoint sends its own sandbox CSP.
+            src={`/api/documents/public/${token}/raw`}
             title={doc.title}
             sandbox="allow-scripts allow-forms allow-popups"
             onLoad={bindIframeScroll}

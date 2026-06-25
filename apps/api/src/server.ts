@@ -39,9 +39,10 @@ const DEFAULT_CSP = [
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "script-src 'self'",
   "connect-src 'self'",
-  // blob: lets us frame uploaded HTML via a blob: URL instead of srcdoc. A sandboxed srcdoc frame
-  // (about:srcdoc) blanks out when an in-page TOC anchor is clicked; a blob: URL is a real URL so
-  // the #fragment is an ordinary same-document scroll. Frames stay sandboxed (no allow-same-origin).
+  // Uploaded HTML is framed two ways, both kept sandboxed (no allow-same-origin): saved docs load
+  // the same-origin /documents/:id/raw endpoint ('self'); unsaved editor/upload previews use a
+  // blob: URL. (A srcdoc frame blanks out when an in-page TOC anchor is clicked; a real URL makes
+  // the #fragment an ordinary same-document scroll.)
   "frame-src 'self' blob:",
   "worker-src 'self' blob:",
 ].join('; ');
@@ -60,7 +61,9 @@ const app = new Hono<AppEnv>()
   .use('*', logger())
   .use('*', async (c, next) => {
     await next();
-    setSecurityHeaders(c.res.headers);
+    // The raw-HTML routes set their own sandboxing headers; don't clobber them with the strict
+    // app policy (whose X-Frame-Options: DENY / frame-ancestors 'none' would block self-framing).
+    if (!c.get('rawHtml')) setSecurityHeaders(c.res.headers);
   })
   .use(
     '*',

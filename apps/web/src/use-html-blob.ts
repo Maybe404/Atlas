@@ -1,15 +1,18 @@
 import { useEffect, useState } from 'react';
 
-// Render uploaded HTML through a blob: URL instead of an iframe `srcDoc`.
+// Render UNSAVED uploaded HTML (live editor + upload previews) through a blob: URL instead of an
+// iframe `srcDoc`. Saved documents go through the same-origin /documents/:id/raw endpoint instead
+// (see reader-view / public-document-view / admin-docs-view) — that's the only way in-page TOC
+// anchors actually SCROLL. Previews have no served URL, so blob is the best available option.
 //
-// A `srcDoc` document lives at the special `about:srcdoc` URL. Our HTML iframes are sandboxed
-// WITHOUT `allow-same-origin` (so untrusted uploads stay on an opaque origin and can't script the
-// Atlas page). Clicking an in-page table-of-contents link (`<a href="#section">`) navigates that
-// frame to `about:srcdoc#section`; Chromium cannot re-render the opaque-origin srcdoc on that
-// navigation, so the whole article goes blank until the iframe is re-created.
+// Why not srcDoc: a `srcDoc` document lives at the special `about:srcdoc` URL. Our HTML iframes are
+// sandboxed WITHOUT `allow-same-origin` (untrusted uploads stay opaque and can't script the Atlas
+// page). Clicking an in-page anchor navigates a sandboxed srcdoc frame to `about:srcdoc#x`, which
+// Chromium cannot re-render → the article goes blank. A blob: URL avoids the blanking.
 //
-// A blob: URL is a real, fetchable URL, so the identical `#section` click is just an ordinary
-// same-document scroll — no blanking. The sandbox stays opaque, so isolation is unchanged.
+// Caveat: blob: (like about:srcdoc) does NOT perform same-document fragment scrolling, so TOC
+// clicks in these previews won't jump to the section — only a real network URL does (the raw
+// endpoint). That's an accepted limitation for the authoring previews.
 // Requires `frame-src blob:` in the server CSP (apps/api/src/server.ts) for production.
 export function useHtmlBlobUrl(html: string | null | undefined): string | undefined {
   const [url, setUrl] = useState<string>();

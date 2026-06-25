@@ -15,6 +15,9 @@ export type AuthVariables = {
   sessionId?: string;
   csrfToken?: string;
   authSource?: 'cookie' | 'bearer';
+  // Set by the raw-HTML document routes: they serve untrusted uploaded HTML and need their own
+  // sandboxing headers, so the global setSecurityHeaders pass must not overwrite them.
+  rawHtml?: boolean;
 };
 
 export type AppEnv = {

@@ -7,7 +7,7 @@ import {
   UpdateDocumentShareSchema,
 } from '@atlas/shared';
 import { and, desc, eq, inArray, isNotNull, isNull, like, lte, ne, or } from 'drizzle-orm';
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import { db } from '../db/client';
 import { auditLogs, documents, folders, members, shareLinks, spaces } from '../db/schema';
 import { writeAudit } from '../lib/audit';
@@ -25,6 +25,7 @@ import {
   loadPermissionLookup,
   type PermissionLookup,
   publicDocumentByToken,
+  publicDocumentHtmlByToken,
   requireDocumentEditor,
   requireDocumentRead,
   requireDocumentShareManager,
@@ -122,6 +123,30 @@ function publicShareUrl(token: string | null | undefined) {
   return token ? `/share/${token}` : null;
 }
 
+// Serve a document's raw HTML for an <iframe src> instead of srcDoc/blob, so in-page TOC anchors
+// scroll instead of blanking the frame (blob:/about:srcdoc don't do same-document fragment nav).
+// The frame stays sandboxed via its sandbox attribute; the response is ALSO sandboxed via CSP so a
+// direct top-level open gets an opaque origin (can't touch the Atlas session). frame-ancestors
+// 'self' lets our own app frame it. Caller marks c.rawHtml so the global headers aren't reapplied.
+function rawHtmlResponse(c: Context<AppEnv>, html: string) {
+  c.set('rawHtml', true);
+  const body =
+    html ||
+    '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"></head>' +
+      '<body style="font-family:sans-serif;color:#888;padding:24px">暂无内容</body></html>';
+  return new Response(body, {
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Content-Security-Policy':
+        "sandbox allow-scripts allow-popups allow-forms; frame-ancestors 'self'",
+      'X-Frame-Options': 'SAMEORIGIN',
+      'X-Content-Type-Options': 'nosniff',
+      'Referrer-Policy': 'strict-origin-when-cross-origin',
+      'Cache-Control': 'no-store',
+    },
+  });
+}
+
 // A document's folder (if any) must live in the same space as the document AND be live (not
 // in trash). A trashed folder is unwritable; restore it first.
 async function validateFolder(folderId: string | null | undefined, spaceId: string) {
@@ -171,11 +196,23 @@ export const documentsRouter = new Hono<AppEnv>()
       },
     });
   })
+  // Raw HTML body for the public reader's <iframe src>. Does not bump the view counter — the
+  // /public/:token metadata fetch on the same page already counted the visit.
+  .get('/public/:token/raw', async (c) => {
+    const doc = await publicDocumentHtmlByToken(c.req.param('token'));
+    return rawHtmlResponse(c, doc.html);
+  })
   .get('/:id', async (c) => {
     const user = c.get('user');
     const doc = await requireDocumentRead(user, c.req.param('id'));
     const lookup = await loadPermissionLookup(user);
     return c.json(await hydrateDoc(doc, { canRead: true, user, lookup }));
+  })
+  // Raw HTML body for the in-app reader's <iframe src>. Same read check as GET /:id.
+  .get('/:id/raw', async (c) => {
+    const user = c.get('user');
+    const doc = await requireDocumentRead(user, c.req.param('id'));
+    return rawHtmlResponse(c, doc.html);
   })
   .post('/', async (c) => {
     const user = requireUser(c.get('user'));
