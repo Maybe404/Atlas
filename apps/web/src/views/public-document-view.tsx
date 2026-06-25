@@ -1,19 +1,11 @@
-import { useCallback, useRef, useState } from 'react';
-import { I } from '../chrome';
+import { useCallback, useRef } from 'react';
 import { usePublicDocument } from '../data-hooks';
 import type { Loose } from '../loose-types';
 import { EmptyState, Skeleton } from '../ui-kit';
 import { MarkdownReader } from './markdown-reader';
-import { dotClass } from './shared';
 
 export function PublicDocumentView({ token, onChromeScroll }: Loose) {
   const iframeRef = useRef<Loose>(null);
-  const [copied, setCopied] = useState(false);
-  const copyLink = () => {
-    navigator.clipboard?.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1400);
-  };
   const bindIframeScroll = useCallback(() => {
     try {
       iframeRef.current?.contentWindow?.addEventListener('scroll', onChromeScroll, {
@@ -66,21 +58,6 @@ export function PublicDocumentView({ token, onChromeScroll }: Loose) {
 
   return (
     <div className="main-card reader-card">
-      <div className="reader-meta-bar">
-        <span className={`dot ${dotClass(doc.dot || 'slate')}`}></span>
-        <span className="doc-title">{doc.title}</span>
-        <span className="sep">·</span>
-        <span className="author">{doc.authorName || '公开文档'}</span>
-        <span className="sep">·</span>
-        <span className="mono dim" style={{ fontSize: 11 }}>
-          {doc.updated}
-        </span>
-        <div style={{ flex: 1 }} />
-        <button type="button" className="pill-btn ghost" onClick={copyLink}>
-          {copied ? <I.check /> : <I.link />}
-          <span>{copied ? '已复制' : '复制链接'}</span>
-        </button>
-      </div>
       <div className="reader-iframe-wrap" onScroll={onChromeScroll}>
         {doc.format === 'markdown' ? (
           <MarkdownReader content={doc.html || ''} onScroll={onChromeScroll} tocPanel />
