@@ -253,6 +253,7 @@ export const documentsRouter = new Hono<AppEnv>()
     const title = String(form.get('title') || '');
     const descText = String(form.get('desc') || '');
     const spaceId = String(form.get('spaceId') || '');
+    const folderId = String(form.get('folderId') || '');
     const access = String(form.get('access') || 'inherit');
 
     if (!(file instanceof File)) throw badRequest('Upload requires a file field.');
@@ -270,6 +271,7 @@ export const documentsRouter = new Hono<AppEnv>()
       title: title || metadata.title || filenameBase,
       desc: descText,
       spaceId,
+      folderId: folderId || null,
       access,
       format,
       html: content,
@@ -278,11 +280,13 @@ export const documentsRouter = new Hono<AppEnv>()
     });
 
     await requireSpaceEditor(user, body.spaceId);
+    const checkedFolderId = await validateFolder(body.folderId, body.spaceId);
     const checked = validateContentForStorage(body.html);
     const id = makeId('d');
     await db.insert(documents).values({
       id,
       spaceId: body.spaceId,
+      folderId: checkedFolderId,
       authorId: user.id,
       title: body.title,
       desc: body.desc || metadata.summary,
@@ -298,7 +302,7 @@ export const documentsRouter = new Hono<AppEnv>()
       action: 'document.upload',
       targetType: 'document',
       targetId: id,
-      details: { spaceId: body.spaceId, filename: file.name, format },
+      details: { spaceId: body.spaceId, folderId: checkedFolderId, filename: file.name, format },
     });
 
     return c.json({ id, filename: file.name, stored: { size: checked.size } }, 201);

@@ -703,7 +703,11 @@ function Dock({ view, onNavigate, onLogin, visible, magnify, isGuest, readerHome
     { id: 'admin-upload', label: '上传', icon: 'upload', go: { view: 'admin-upload' } },
     { id: 'admin-settings', label: '设置', icon: 'settings', go: { view: 'admin-settings' } },
   ];
-  const items = isGuest ? [allItems[0]] : allItems;
+  const guestItems = [
+    allItems[0],
+    { id: 'login', label: '登录', icon: 'login', guest: true, action: 'login' },
+  ];
+  const items = isGuest ? guestItems : allItems;
 
   const BASE = 34;
   const MAG = 48;

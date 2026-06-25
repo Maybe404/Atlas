@@ -9,6 +9,18 @@ import { MarkdownReader } from '../views/markdown-reader';
 
 const _I2 = I;
 
+function folderDepth(folder: Loose, folders: Loose[]) {
+  let depth = 0;
+  let parentId = folder.parentId;
+  while (parentId) {
+    const parent = folders.find((candidate: Loose) => candidate.id === parentId);
+    if (!parent) break;
+    depth += 1;
+    parentId = parent.parentId;
+  }
+  return depth;
+}
+
 export function AdminUploadView({
   ctx: _ctx,
   spaces = [],
