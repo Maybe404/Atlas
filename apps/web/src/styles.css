@@ -4232,6 +4232,52 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
 }
 
 /* md-body rendered markdown styles */
+/* Reading column. The body used to be full-bleed; the masthead needs a measured
+   column to read as a real article opening, so both share one centred 720px
+   column (matching the load skeleton's 48px/64px proportions, so render doesn't
+   jump). */
+.md-article {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 48px 64px 72px;
+}
+.md-masthead {
+  margin: 0 0 30px;
+}
+.md-masthead .eyebrow {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: -0.012em;
+  color: var(--accent);
+  margin: 0 0 12px;
+}
+.md-masthead h1 {
+  font-family: var(--font-display);
+  font-size: 30px;
+  font-weight: 600;
+  line-height: 1.18;
+  letter-spacing: -0.021em;
+  color: var(--ink);
+  margin: 0 0 16px;
+}
+.md-masthead .byline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  font-size: 13px;
+  color: var(--ink-4);
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--hairline-2);
+}
+.md-masthead .byline-item { display: inline-flex; align-items: center; gap: 9px; }
+.md-masthead .byline .nm { color: var(--ink-2); }
+.md-masthead .byline .d { width: 3px; height: 3px; border-radius: 50%; background: var(--ink-5); }
+@media (max-width: 760px) {
+  .md-article { padding: 32px 22px 56px; }
+  .md-masthead h1 { font-size: 26px; }
+}
+
 .md-body {
   font-family: var(--font-body, -apple-system, "Noto Sans SC", sans-serif);
   font-size: 14px;

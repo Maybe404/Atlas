@@ -243,6 +243,13 @@ export function ReaderView({
               onScroll={onChromeScroll}
               tocPanel
               scrollKey={scrollKey}
+              masthead={{
+                eyebrow: space?.name,
+                title: detailDoc?.title || doc?.title,
+                author: author?.name,
+                date: detailDoc?.updated || doc?.updated,
+                format: 'Markdown',
+              }}
             />
           ) : (
             <iframe

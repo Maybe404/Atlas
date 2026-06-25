@@ -27,7 +27,33 @@ function buildToc(root: HTMLElement): Loose[] {
   return secs;
 }
 
-export function MarkdownReader({ content, onScroll, tocPanel = false, scrollKey }: Loose) {
+// Strip the document's leading title so the masthead can own it without a
+// duplicate. Only the first top-level ATX (`# …`) or setext (`===` underline)
+// title is removed; deeper headings and any later H1 stay intact. Returns the
+// source unchanged when it doesn't open with a title.
+function stripLeadingTitle(md: string): string {
+  const lines = md.split('\n');
+  let i = 0;
+  while (i < lines.length && lines[i]!.trim() === '') i++;
+  if (i >= lines.length) return md;
+  if (/^#\s+\S/.test(lines[i]!)) {
+    lines.splice(0, i + 1); // drop leading blanks + the `# title` line
+  } else if (i + 1 < lines.length && /^=+\s*$/.test(lines[i + 1]!)) {
+    lines.splice(0, i + 2); // drop the setext title + its `===` underline
+  } else {
+    return md;
+  }
+  while (lines.length && lines[0]!.trim() === '') lines.shift();
+  return lines.join('\n');
+}
+
+export function MarkdownReader({
+  content,
+  onScroll,
+  tocPanel = false,
+  scrollKey,
+  masthead,
+}: Loose) {
   const [html, setHtml] = useState('');
   const [loading, setLoading] = useState(true);
   const ref = useRef<HTMLDivElement>(null); // .md-body
@@ -101,10 +127,15 @@ export function MarkdownReader({ content, onScroll, tocPanel = false, scrollKey 
     list.scrollTop = Math.min(Math.max(offK + f * (offN - offK) - anchor, 0), max);
   }, []);
 
+  // When a masthead owns the title, drop the body's leading title heading so it
+  // isn't rendered twice. Stable string → the effect below won't re-run unless
+  // the actual source changes.
+  const source = masthead ? stripLeadingTitle(content || '') : content || '';
+
   useEffect(() => {
     let alive = true;
     setLoading(true);
-    renderMarkdownWithDiagrams(content || '')
+    renderMarkdownWithDiagrams(source)
       .then((out) => {
         if (alive) {
           setHtml(out);
@@ -117,7 +148,7 @@ export function MarkdownReader({ content, onScroll, tocPanel = false, scrollKey 
     return () => {
       alive = false;
     };
-  }, [content]);
+  }, [source]);
 
   // html already has mermaid SVGs inlined by renderMarkdownWithDiagrams, so there
   // is no post-render DOM mutation to do — just rebuild the TOC from the headings.
@@ -204,9 +235,30 @@ export function MarkdownReader({ content, onScroll, tocPanel = false, scrollKey 
         onScroll={handleScroll}
         style={{ height: '100%', overflow: 'auto' }}
       >
-        {/* content already sanitized by renderer's DOMPurify pass */}
-        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: content already sanitized by renderer's DOMPurify pass */}
-        <div className="md-body" ref={ref} dangerouslySetInnerHTML={{ __html: html }} />
+        <div className="md-article">
+          {masthead ? (
+            <header className="md-masthead">
+              {masthead.eyebrow ? <p className="eyebrow">{masthead.eyebrow}</p> : null}
+              <h1>{masthead.title}</h1>
+              {[masthead.author, masthead.date, masthead.format].some(Boolean) ? (
+                <div className="byline">
+                  {[masthead.author, masthead.date, masthead.format]
+                    .filter(Boolean)
+                    .map((item: Loose, idx: number) => (
+                      // biome-ignore lint/suspicious/noArrayIndexKey: static byline, order is stable
+                      <span className="byline-item" key={idx}>
+                        {idx > 0 ? <span className="d" aria-hidden="true" /> : null}
+                        <span className={idx === 0 ? 'nm' : undefined}>{item}</span>
+                      </span>
+                    ))}
+                </div>
+              ) : null}
+            </header>
+          ) : null}
+          {/* content already sanitized by renderer's DOMPurify pass */}
+          {/* biome-ignore lint/security/noDangerouslySetInnerHtml: content already sanitized by renderer's DOMPurify pass */}
+          <div className="md-body" ref={ref} dangerouslySetInnerHTML={{ __html: html }} />
+        </div>
       </div>
       {tocPanel && toc.length > 0 && (
         <>
