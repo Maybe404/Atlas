@@ -146,15 +146,51 @@ async function spaceWithChildren(user: User | undefined, sp: SpaceRow, lookup: P
   const docs = await listDirectoryDocuments(user, sp);
   const authorsById = await authorsByIdFor(docs);
   const children = buildChildren(user, docs, authorsById, lookup);
-  // Folders are member-only metadata; guests never see the directory tree structure.
-  const folderMap = user ? await foldersBySpaceIds([sp.id]) : new Map<string, Folder[]>();
+  // Members see the full folder tree; guests only see folders that have at least one published
+  // descendant and no restricted ancestor on the path — see `filterGuestFolders` for the
+  // reasoning (preserves directory navigation for published docs without leaking restricted
+  // branches).
+  const folderMap = await foldersBySpaceIds([sp.id]);
+  const rawFolders = folderMap.get(sp.id) ?? [];
   return {
     ...sp,
     count: children.length,
-    folders: folderMap.get(sp.id) ?? [],
+    folders: user
+      ? rawFolders
+      : filterGuestFolders(
+          rawFolders,
+          (children as { folderId: string | null }[]).map((child) => child.folderId),
+        ),
     children,
     role: getSpaceRoleFromLookup(user, lookup, sp.id),
   };
+}
+
+// Guests get the directory tree, but only the branches that actually lead to a published doc.
+// Walking up from each published doc's folder marks every non-restricted ancestor as visible;
+// the walk stops the moment it hits a restricted folder, so restricted branches stay hidden even
+// if a deeper non-restricted descendant has its own public link. Folder ids are looked up via
+// local maps (O(1)) since `allFolders` is a small per-space list, not a global table.
+function filterGuestFolders(
+  allFolders: Folder[],
+  publishedDocFolderIds: Iterable<string | null>,
+): Folder[] {
+  if (allFolders.length === 0) return [];
+  const folderById = new Map(allFolders.map((folder) => [folder.id, folder]));
+  const parentById = new Map(allFolders.map((folder) => [folder.id, folder.parentId ?? null]));
+  const visible = new Set<string>();
+  for (const folderId of publishedDocFolderIds) {
+    if (!folderId) continue;
+    let current: string | null = folderId;
+    while (current !== null) {
+      if (visible.has(current)) break;
+      const folder = folderById.get(current);
+      if (!folder || folder.restricted) break;
+      visible.add(current);
+      current = parentById.get(current) ?? null;
+    }
+  }
+  return allFolders.filter((folder) => visible.has(folder.id));
 }
 
 export const spacesRouter = new Hono<AppEnv>()
@@ -185,15 +221,19 @@ export const spacesRouter = new Hono<AppEnv>()
       docsBySpaceId.set(doc.spaceId, existing);
     }
 
-    const folderMap = user
-      ? await foldersBySpaceIds(readableSpaces.map((sp) => sp.id))
-      : new Map<string, Folder[]>();
+    const folderMap = await foldersBySpaceIds(readableSpaces.map((sp) => sp.id));
     const result = readableSpaces.map((sp) => {
       const children = buildChildren(user, docsBySpaceId.get(sp.id) ?? [], authorsById, lookup);
+      const rawFolders = folderMap.get(sp.id) ?? [];
       return {
         ...sp,
         count: children.length,
-        folders: folderMap.get(sp.id) ?? [],
+        folders: user
+          ? rawFolders
+          : filterGuestFolders(
+              rawFolders,
+              (children as { folderId: string | null }[]).map((child) => child.folderId),
+            ),
         children,
         role: getSpaceRoleFromLookup(user, lookup, sp.id),
       };

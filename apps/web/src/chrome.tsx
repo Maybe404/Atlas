@@ -1,5 +1,6 @@
 // Atlas chrome — coral warm-default, folder theme switch, animated tree
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate as useRouterNavigate } from 'react-router';
 import { canRead, UserMenu } from './auth';
 import type { Loose } from './loose-types';
 import { spaceTreeDotClass } from './theme-tokens';
@@ -490,6 +491,7 @@ function Sidebar({ ctx, spaces, user, collapsed, onToggleCollapse, onNavigate }:
   // first render — instead merge new spaces into the expanded map as they
   // arrive, preserving any the user has already collapsed.
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const routerNavigate = useRouterNavigate();
   useEffect(() => {
     setExpanded((prev) => {
       let changed = false;
@@ -540,6 +542,7 @@ function Sidebar({ ctx, spaces, user, collapsed, onToggleCollapse, onNavigate }:
           collapsed={false}
           user={user}
           onNavigate={onNavigate}
+          routerNavigate={routerNavigate}
         />
       </div>
     </aside>
@@ -639,7 +642,16 @@ export { TocList };
 // ANIMATED TREE LIST — items fade+scale in on scroll into view, with
 // fading top/bottom gradient masks (inspired by React Bits AnimatedList)
 // ─────────────────────────────────────────────────────────────────────────
-function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNavigate }: Loose) {
+function AnimatedTreeList({
+  spaces,
+  ctx,
+  expanded,
+  toggle,
+  collapsed,
+  user,
+  onNavigate,
+  routerNavigate,
+}: Loose) {
   const listRef = useRef<Loose>(null);
   const [topOpacity, setTopOpacity] = useState(0);
   const [botOpacity, setBotOpacity] = useState(1);
@@ -706,6 +718,12 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
     const docs = (space.children || []).filter((d: Loose) => (d.folderId ?? null) === parentId);
     for (const doc of docs) {
       const locked = !canRead(doc, user);
+      // Guests can only open published docs through /share/:token (the /spaces/:id/docs/:id
+      // route rejects anonymous readers and lands on the "needs login" screen). The directory
+      // attaches a working shareToken to every published row, so the sidebar hands it off to
+      // the router directly instead of going through the membership-aware reader route.
+      const guestShareLink =
+        !user && doc.published && typeof doc.shareToken === 'string' ? doc.shareToken : null;
       nodes.push(
         <AnimatedItem key={doc.id} index={counter.n++}>
           <div
@@ -714,6 +732,10 @@ function AnimatedTreeList({ spaces, ctx, expanded, toggle, collapsed, user, onNa
             {...clickableProps(
               (e: Loose) => {
                 e.stopPropagation();
+                if (guestShareLink) {
+                  routerNavigate(`/share/${guestShareLink}`);
+                  return;
+                }
                 onNavigate({ view: 'reader', spaceId: space.id, docId: doc.id });
               },
               { label: doc.title },

@@ -103,7 +103,11 @@ describe('Atlas API', () => {
   test('anonymous visitors see only published docs in the directory', async () => {
     const res = await request('/spaces');
     expect(res.status).toBe(200);
-    const spaces = (await res.json()) as (ApiSpace & { personal?: boolean; folders?: unknown[] })[];
+    const spaces = (await res.json()) as (ApiSpace & {
+      id: string;
+      personal?: boolean;
+      folders?: { id: string; parentId: string | null; restricted?: boolean }[];
+    })[];
     const docs = spaces.flatMap(
       (space) =>
         space.children as {
@@ -139,13 +143,106 @@ describe('Atlas API', () => {
 
     // Personal spaces are filtered out of the guest directory.
     expect(spaces.some((space) => space.personal === true)).toBe(false);
-    // Folders are member-only; guests see an empty tree.
-    expect(spaces.every((space) => (space.folders ?? []).length === 0)).toBe(true);
+    // Guests see the directory tree, but only the branches that lead to a published doc.
+    // The seed files d1 under f_demo_child, so the guest directory should expose both folders
+    // (f_demo_child holds d1, f_demo_parent is its non-restricted ancestor). Other spaces
+    // without any published docs in folders stay empty.
+    const spaceById = new Map(spaces.map((space) => [space.id, space]));
+    const engineering = spaceById.get('s1');
+    expect(engineering).toBeDefined();
+    const engineeringFolderIds = (
+      (engineering as { folders?: { id: string }[] }).folders ?? []
+    ).map((folder) => folder.id);
+    expect(new Set(engineeringFolderIds)).toEqual(new Set(['f_demo_parent', 'f_demo_child']));
+    // Restricted branches never surface, even if a deeper non-restricted descendant had a link.
+    // The current seed has no restricted folders, so we just assert "no folder is marked restricted
+    // in the guest view" to guard the invariant.
+    for (const space of spaces) {
+      for (const folder of (space.folders ?? []) as { restricted?: boolean }[]) {
+        expect(folder.restricted).toBeFalsy();
+      }
+    }
 
     // Guest direct access to /documents/:id is rejected (token is the only way in).
     const published = docs[0]!;
     const direct = await request(`/documents/${published.shareToken ? 'd1' : 'd1'}`);
     expect(direct.status).toBe(404);
+  });
+
+  test('guest directory hides restricted folders and the branches above them', async () => {
+    // Set up: a restricted folder inside s1, with a published doc filed under it. The guest
+    // directory should expose neither the restricted folder nor any non-restricted ancestor on
+    // the same chain (otherwise the existence of the restricted branch leaks via the tree).
+    const admin = await loginAs();
+
+    const ancestorRes = await request('/folders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...admin.headers },
+      body: JSON.stringify({ spaceId: 's1', parentId: null, name: '游客测试 · 上级', order: 0 }),
+    });
+    expect(ancestorRes.status).toBe(201);
+    const ancestorBody = (await ancestorRes.json()) as { id: string };
+    const resolvedAncestorId = ancestorBody.id;
+
+    const restrictedRes = await request('/folders', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...admin.headers },
+      body: JSON.stringify({
+        spaceId: 's1',
+        parentId: resolvedAncestorId,
+        name: '游客测试 · 受限',
+        order: 0,
+        restricted: true,
+      }),
+    });
+    expect(restrictedRes.status).toBe(201);
+    const restrictedBody = (await restrictedRes.json()) as { id: string };
+    const resolvedRestrictedId = restrictedBody.id;
+
+    // Create a doc inside the restricted folder and enable its public share link.
+    const docRes = await request('/documents', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', ...admin.headers },
+      body: JSON.stringify({
+        spaceId: 's1',
+        folderId: resolvedRestrictedId,
+        title: '游客测试 · 公开文档',
+        desc: '被放在受限文件夹里',
+        access: 'inherit',
+        format: 'html',
+        html: '<p>still reachable via /share/:token</p>',
+        tags: [],
+        dot: 'slate',
+      }),
+    });
+    expect(docRes.status).toBe(201);
+    const createdDoc = (await docRes.json()) as CreatedDoc;
+
+    const shareRes = await request(`/documents/${createdDoc.id}/share`, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json', ...admin.headers },
+      body: JSON.stringify({ publicEnabled: true }),
+    });
+    expect(shareRes.status).toBe(200);
+
+    const res = await request('/spaces');
+    const spaces = (await res.json()) as {
+      id: string;
+      folders?: { id: string; parentId: string | null; restricted?: boolean }[];
+      children?: { id: string; folderId: string | null; shareToken?: string | null }[];
+    }[];
+    const s1 = spaces.find((space) => space.id === 's1');
+    expect(s1).toBeDefined();
+    const folderIds = new Set((s1?.folders ?? []).map((folder) => folder.id));
+    // The restricted folder is hidden, and so is its non-restricted ancestor — surfacing the
+    // ancestor would tell a guest the restricted folder exists.
+    expect(folderIds.has(resolvedRestrictedId)).toBe(false);
+    expect(folderIds.has(resolvedAncestorId)).toBe(false);
+    // The published doc itself is still listed in the directory (under no folder, since its
+    // folder was filtered out), so guests can navigate to it via the /share/:token URL.
+    const guestDoc = (s1?.children ?? []).find((child) => child.id === createdDoc.id);
+    expect(guestDoc).toBeDefined();
+    expect(typeof guestDoc?.shareToken === 'string' && guestDoc.shareToken.length > 0).toBe(true);
   });
 
   test('uploads raw HTML and infers document metadata', async () => {
@@ -876,7 +973,7 @@ describe('Atlas API', () => {
     const share = await request('/documents/d1/share', { headers: { cookie: admin.cookie } });
     const shareBody = (await share.json()) as { public: { token: string; url: string } };
     expect(shareBody.public.token).not.toBe('demo-d1-public-link');
-    expect(shareBody.public.url).toBe(`/share/${shareBody.public.token}`);
+    expect(shareBody.public.url).toBe(`http://atlas.test/share/${shareBody.public.token}`);
     expect((await request(`/documents/public/${shareBody.public.token}`)).status).toBe(200);
   });
 
@@ -1004,7 +1101,7 @@ describe('Atlas API', () => {
     };
     expect(adminBody.canManage).toBe(true);
     expect(adminBody.public.token).toBeTruthy();
-    expect(adminBody.public.url).toBe(`/share/${adminBody.public.token}`);
+    expect(adminBody.public.url).toBe(`http://atlas.test/share/${adminBody.public.token}`);
     expect(adminBody.availableMembers).toBeUndefined();
 
     const author = await loginAs('chen@atlas.team');

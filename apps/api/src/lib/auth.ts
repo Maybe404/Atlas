@@ -57,6 +57,21 @@ export function clientIpForAuth(c: Context<AppEnv>) {
   return 'direct';
 }
 
+// Public-facing origin of the current request. When ATLAS_TRUST_PROXY is on, trust the
+// X-Forwarded-Proto / X-Forwarded-Host set by the upstream proxy (nginx / 1panel / Cloudflare
+// terminate TLS and forward plain HTTP, so the request URL alone would leak an internal scheme).
+// Without the flag, those headers are ignored — a hostile client could otherwise pin the share
+// URL to their own domain.
+export function requestOrigin(c: Context<AppEnv>) {
+  const requestUrl = new URL(c.req.url);
+  if (envFlag('ATLAS_TRUST_PROXY')) {
+    const proto = c.req.header('x-forwarded-proto')?.split(',')[0]?.trim();
+    const host = c.req.header('x-forwarded-host')?.split(',')[0]?.trim();
+    if (proto && host) return `${proto}://${host}`;
+  }
+  return requestUrl.origin;
+}
+
 function loginFailureKey(c: Context<AppEnv>, email: string) {
   return `${clientIpForAuth(c)}:${email.trim().toLowerCase()}`;
 }

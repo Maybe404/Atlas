@@ -12,7 +12,7 @@ import { db } from '../db/client';
 import { auditLogs, documents, folders, members, shareLinks, spaces } from '../db/schema';
 import { writeAudit } from '../lib/audit';
 import type { AppEnv } from '../lib/auth';
-import { requireUser } from '../lib/auth';
+import { requestOrigin, requireUser } from '../lib/auth';
 import { addDaysToIso, displayDate, nowIso } from '../lib/dates';
 import { listDocumentMemberGrants, setMemberDocumentRole } from '../lib/grants';
 import { validateContentForStorage } from '../lib/html-limits';
@@ -119,8 +119,8 @@ async function hydrateDoc(
   return hydrated;
 }
 
-function publicShareUrl(token: string | null | undefined) {
-  return token ? `/share/${token}` : null;
+function publicShareUrl(origin: string, token: string | null | undefined) {
+  return token ? `${origin}/share/${encodeURIComponent(token)}` : null;
 }
 
 // Serve a document's raw HTML for an <iframe src> instead of srcDoc/blob, so in-page TOC anchors
@@ -509,7 +509,7 @@ export const documentsRouter = new Hono<AppEnv>()
         ? {
             enabled: link.enabled,
             token: link.token,
-            url: publicShareUrl(link.token),
+            url: publicShareUrl(requestOrigin(c), link.token),
             showAuthor: link.showAuthor,
             allowIndexing: link.allowIndexing,
             expiresAt: link.expiresAt,
