@@ -27,6 +27,7 @@ const {
   spaces,
 } = await import('./db/schema');
 const { setMemberDocumentRole, setMemberSpaceRole } = await import('./lib/grants');
+const { injectScrollGuard, SCROLL_GUARD_MARKER } = await import('./lib/raw-html');
 
 afterAll(() => {
   rmSync(testDb, { force: true });
@@ -291,7 +292,11 @@ describe('Atlas API', () => {
     expect(csp).toContain('sandbox');
     expect(csp).toContain("frame-ancestors 'self'");
     expect(csp).not.toContain('allow-same-origin');
-    expect(await raw.text()).toBe(detail.html);
+    // The body is the stored html with the scroll guard injected (keeps in-page TOC anchor
+    // smooth-scroll from being aborted by the doc's own scroll-spy in Chromium).
+    const rawBody = await raw.text();
+    expect(rawBody).toBe(injectScrollGuard(detail.html));
+    expect(rawBody).toContain(SCROLL_GUARD_MARKER);
 
     // Read still requires permission — guests get nothing.
     expect((await request('/documents/d1/raw')).status).toBe(404);
@@ -314,11 +319,33 @@ describe('Atlas API', () => {
     const raw = await request(`/documents/public/${token}/raw`);
     expect(raw.status).toBe(200);
     expect(raw.headers.get('content-type')).toBe('text/html; charset=utf-8');
-    expect(await raw.text()).toBe(meta1.html);
+    expect(await raw.text()).toBe(injectScrollGuard(meta1.html));
 
     // The metadata fetch counts the visit; the raw body fetch must not double-count it.
     const meta2 = (await (await request(`/documents/public/${token}`)).json()) as PublicDoc;
     expect(meta2.publicLink.accessCount).toBe(meta1.publicLink.accessCount + 1);
+  });
+
+  test('injectScrollGuard places the guard before the document scripts run', () => {
+    // After <head> when present — earliest point, ahead of any in-doc <script>.
+    const withHead = injectScrollGuard(
+      '<!doctype html><html><head><title>x</title></head><body>b</body></html>',
+    );
+    expect(withHead.indexOf(SCROLL_GUARD_MARKER)).toBeGreaterThan(withHead.indexOf('<head>'));
+    expect(withHead.indexOf(SCROLL_GUARD_MARKER)).toBeLessThan(withHead.indexOf('<title>'));
+
+    // No <head>: fall back to right after <body>.
+    const withBody = injectScrollGuard('<html><body><h1>hi</h1></body></html>');
+    expect(withBody.indexOf(SCROLL_GUARD_MARKER)).toBeGreaterThan(withBody.indexOf('<body>'));
+    expect(withBody.indexOf(SCROLL_GUARD_MARKER)).toBeLessThan(withBody.indexOf('<h1>'));
+
+    // Neither: keep a leading doctype first so we don't trigger quirks mode.
+    const bare = injectScrollGuard('<!doctype html><p>loose</p>');
+    expect(bare.startsWith('<!doctype html>')).toBe(true);
+    expect(bare.indexOf(SCROLL_GUARD_MARKER)).toBeLessThan(bare.indexOf('<p>'));
+
+    // Empty stays empty (the route swaps in its own placeholder).
+    expect(injectScrollGuard('')).toBe('');
   });
 
   test('returns the same login error for unknown, passwordless and incorrect accounts', async () => {

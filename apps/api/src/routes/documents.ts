@@ -31,6 +31,7 @@ import {
   requireDocumentShareManager,
   requireSpaceEditor,
 } from '../lib/permissions';
+import { injectScrollGuard } from '../lib/raw-html';
 import { toPublicMember } from '../lib/serializers';
 
 type User = typeof members.$inferSelect;
@@ -131,7 +132,7 @@ function publicShareUrl(origin: string, token: string | null | undefined) {
 function rawHtmlResponse(c: Context<AppEnv>, html: string) {
   c.set('rawHtml', true);
   const body =
-    html ||
+    injectScrollGuard(html) ||
     '<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"></head>' +
       '<body style="font-family:sans-serif;color:#888;padding:24px">暂无内容</body></html>';
   return new Response(body, {
