@@ -2159,22 +2159,17 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   /* no layout shift; just visual fading via element-level transforms */
 }
 
-/* Reader immersion: an idle stretch in the reader recedes the topbar AND the
-   sidebar, collapsing their grid tracks so the article reclaims that space (the
-   topbar row was ~56px that used to sit empty). The pointer reaching the top /
-   left edge, or Esc, wakes them back (see app.tsx onMouseMove / onEsc). Gated to
-   the reader so admin and index views keep their nav permanently. */
+/* Reader immersion: an idle stretch in the reader recedes the TOPBAR only,
+   collapsing its grid row (~56px that used to sit empty) so the article reclaims
+   that vertical space. The pointer reaching the top edge, or Esc, wakes it back
+   (see app.tsx onMouseMove / onEsc). Gated to the reader so admin / index views
+   keep their nav permanently. The sidebar deliberately does NOT auto-recede — it
+   has its own collapse button and is left to the user's choice. */
 .app.immersive-reader.chrome-hidden {
-  grid-template-columns: 0 1fr;
   grid-template-rows: 0 1fr;
 }
 .app.immersive-reader.chrome-hidden .topbar {
   transform: translateY(calc(-100% - 12px));
-  opacity: 0;
-  pointer-events: none;
-}
-.app.immersive-reader.chrome-hidden .sidebar {
-  transform: translateX(calc(-100% - 24px));
   opacity: 0;
   pointer-events: none;
 }

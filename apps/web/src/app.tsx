@@ -322,16 +322,15 @@ function App() {
       if ((e.target as Element | null)?.closest(INTERACTIVE)) return;
       wakeChrome();
     };
-    // Edge-reveal: any screen edge wakes the chrome — the bottom owns the dock,
-    // the top edge the breadcrumb bar, the left edge the sidebar. The wide
-    // middle (where you read) never does. In the reader the topbar + sidebar
-    // recede with the chrome, so these edges are how you call them back.
+    // Edge-reveal: the bottom edge wakes the dock, the top edge the breadcrumb
+    // bar; the wide middle (where you read) never does. In the reader the topbar
+    // recedes when idle, so the top edge is how you call it back. The sidebar is
+    // user-controlled (its own collapse button), so there's no left-edge reveal.
     const onMouseMove = (e: MouseEvent) => {
       const nearBottom = window.innerHeight - e.clientY < 90;
       const nearTop = e.clientY < 16;
-      const nearLeft = e.clientX < 18;
       const nearTopRight = e.clientY < 120 && window.innerWidth - e.clientX < 240;
-      if (nearBottom || nearTop || nearLeft || nearTopRight) wakeChrome();
+      if (nearBottom || nearTop || nearTopRight) wakeChrome();
     };
     // Esc is the keyboard way out of an immersed reading view — brings the nav
     // back without reaching for the mouse. Closing a dialog with Esc also wakes
