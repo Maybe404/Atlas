@@ -718,12 +718,6 @@ function AnimatedTreeList({
     const docs = (space.children || []).filter((d: Loose) => (d.folderId ?? null) === parentId);
     for (const doc of docs) {
       const locked = !canRead(doc, user);
-      // Guests can only open published docs through /share/:token (the /spaces/:id/docs/:id
-      // route rejects anonymous readers and lands on the "needs login" screen). The directory
-      // attaches a working shareToken to every published row, so the sidebar hands it off to
-      // the router directly instead of going through the membership-aware reader route.
-      const guestShareLink =
-        !user && doc.published && typeof doc.shareToken === 'string' ? doc.shareToken : null;
       nodes.push(
         <AnimatedItem key={doc.id} index={counter.n++}>
           <div
@@ -732,10 +726,6 @@ function AnimatedTreeList({
             {...clickableProps(
               (e: Loose) => {
                 e.stopPropagation();
-                if (guestShareLink) {
-                  routerNavigate(`/share/${guestShareLink}`);
-                  return;
-                }
                 onNavigate({ view: 'reader', spaceId: space.id, docId: doc.id });
               },
               { label: doc.title },

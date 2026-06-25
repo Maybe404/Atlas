@@ -1,8 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
-import { useNavigate as useRouterNavigate } from 'react-router';
 import { canRead, firstPublicDoc } from '../auth';
 import { I } from '../chrome';
-import { useDocument } from '../data-hooks';
+import { useDocument, usePublicDocument } from '../data-hooks';
 import type { Loose } from '../loose-types';
 import { copyMarkdownRich, copyMarkdownSource } from '../markdown/copy';
 import { getScroll, setScroll } from '../reader-progress';
@@ -26,32 +25,28 @@ export function ReaderView({
   onChromeScroll,
   mutations,
 }: Loose) {
-  const routerNavigate = useRouterNavigate();
   const requestedSpace = spaces.find((s: Loose) => s.id === ctx.spaceId);
   const space = requestedSpace || spaces[0];
   const requestedDoc = requestedSpace?.children?.find((c: Loose) => c.id === ctx.docId);
   const doc =
     requestedDoc || (requestedSpace ? requestedSpace.children?.[0] : space?.children?.[0]);
   const denied = Boolean(user && ctx.spaceId && ctx.docId && (!requestedSpace || !requestedDoc));
-  const allowed = !denied && canRead(doc, user);
-  const detailQuery = useDocument(doc?.id, Boolean(allowed && doc?.id));
-  const detailDoc = detailQuery.data || doc;
-  const detailDenied = allowed && detailQuery.isError;
+  const publicToken = !user && doc?.published ? doc.shareToken : null;
+  const allowed = !denied && (canRead(doc, user) || Boolean(publicToken));
+  const detailQuery = useDocument(doc?.id, Boolean(allowed && doc?.id && !publicToken));
+  const publicDetailQuery = usePublicDocument(publicToken, Boolean(allowed && publicToken));
+  const activeDetailQuery = publicToken ? publicDetailQuery : detailQuery;
+  const detailDoc = activeDetailQuery.data || doc;
+  const detailDenied = allowed && activeDetailQuery.isError;
   const author =
     allowed && detailDoc?.author ? members.find((m: Loose) => m.id === detailDoc.author) : null;
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [copiedMode, setCopiedMode] = useState('');
-  // Guests can only enter published docs through /share/:token (the /spaces/:id/docs/:id route
-  // rejects anonymous readers). Members fall through to the regular /spaces/:id/docs/:id URL.
   const browsePublic = useCallback(() => {
     const target = firstPublicDoc(spaces as never);
-    if (!user && target.shareToken) {
-      routerNavigate(`/share/${target.shareToken}`);
-      return;
-    }
     onNavigate({ view: 'reader', spaceId: target.spaceId, docId: target.docId });
-  }, [onNavigate, routerNavigate, spaces, user]);
+  }, [onNavigate, spaces]);
   const isMarkdown = detailDoc?.format === 'markdown';
   const doCopy = async (mode: 'source' | 'rich') => {
     try {
@@ -230,7 +225,7 @@ export function ReaderView({
 
       <div className={`reader-iframe-wrap ${framedDoc ? 'framed' : ''}`} onScroll={onChromeScroll}>
         {allowed ? (
-          detailQuery.isLoading ? (
+          activeDetailQuery.isLoading ? (
             <div className="reader-skeleton" role="status" aria-label="正在加载正文">
               <Skeleton w="60%" h={28} r={6} />
               <Skeleton w="40%" h={14} r={4} />
@@ -255,7 +250,11 @@ export function ReaderView({
               className="reader-iframe"
               // Same-origin raw endpoint (not srcDoc/blob) so in-page TOC anchors scroll instead of
               // blanking the frame. Stays sandboxed; the endpoint sends its own sandbox CSP.
-              src={`/api/documents/${detailDoc.id}/raw`}
+              src={
+                publicToken
+                  ? `/api/documents/public/${publicToken}/raw`
+                  : `/api/documents/${detailDoc.id}/raw`
+              }
               title={detailDoc.title}
               sandbox="allow-scripts allow-forms allow-popups"
               onLoad={bindIframeScroll}

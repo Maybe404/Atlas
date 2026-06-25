@@ -118,6 +118,14 @@ export function useDocument(documentId?: string | null, enabled = true) {
   });
 }
 
+export function usePublicDocument(token?: string | null, enabled = true) {
+  return useQuery({
+    queryKey: ['public-document', token || ''],
+    queryFn: () => apiGet(`/documents/public/${token}`),
+    enabled: enabled && Boolean(token),
+  });
+}
+
 export function useAtlasMutations(pushToast?: PushToast) {
   const queryClient = useQueryClient();
   const invalidateCore = async () => {

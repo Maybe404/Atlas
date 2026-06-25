@@ -1,7 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
 import { useCallback, useRef, useState } from 'react';
-import { apiGet } from '../api-client';
 import { I } from '../chrome';
+import { usePublicDocument } from '../data-hooks';
 import type { Loose } from '../loose-types';
 import { EmptyState, Skeleton } from '../ui-kit';
 import { MarkdownReader } from './markdown-reader';
@@ -22,11 +21,7 @@ export function PublicDocumentView({ token, onChromeScroll }: Loose) {
       });
     } catch (_e) {}
   }, [onChromeScroll]);
-  const publicQuery = useQuery({
-    queryKey: ['public-document', token],
-    queryFn: () => apiGet(`/documents/public/${token}`),
-    enabled: Boolean(token),
-  });
+  const publicQuery = usePublicDocument(token, Boolean(token));
   const doc = publicQuery.data;
 
   if (publicQuery.isLoading) {

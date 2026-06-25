@@ -247,14 +247,8 @@ function App() {
       (returnTo.view === 'public' || returnDoc?.published === true);
     const target = canReturnAsGuest ? returnTo : firstPublicDoc(spaces as never);
     setReturnTo(null);
-    // Guests can only enter published docs through the share-link route (the direct
-    // /spaces/:id/docs/:id endpoint rejects anonymous readers).
-    if (target.shareToken) {
-      routerNavigate(`/share/${target.shareToken}`);
-      return;
-    }
     navigate(target);
-  }, [navigate, returnTo, routerNavigate, spaces]);
+  }, [navigate, returnTo, spaces]);
 
   const handleLogin = useCallback(
     async (email: string, password: string) => {
@@ -274,11 +268,7 @@ function App() {
     await logout();
     if (!['reader', 'public'].includes(view)) {
       const fallback = firstPublicDoc(spaces as never);
-      if (fallback.shareToken) {
-        routerNavigate(`/share/${fallback.shareToken}`);
-      } else {
-        routerNavigate(urlForState(fallback));
-      }
+      routerNavigate(urlForState(fallback));
     }
   }, [logout, routerNavigate, spaces, view]);
 
@@ -713,13 +703,7 @@ function Dock({ view, onNavigate, onLogin, visible, magnify, isGuest, readerHome
     { id: 'admin-upload', label: '上传', icon: 'upload', go: { view: 'admin-upload' } },
     { id: 'admin-settings', label: '设置', icon: 'settings', go: { view: 'admin-settings' } },
   ];
-  // Guests only see the reader; give them a login entry on the dock too so it
-  // isn't a single lonely icon with no way into the workspace.
-  const guestItems = [
-    allItems[0],
-    { id: 'login', label: '登录', icon: 'login', guest: true, action: 'login' },
-  ];
-  const items = isGuest ? guestItems : allItems;
+  const items = isGuest ? [allItems[0]] : allItems;
 
   const BASE = 34;
   const MAG = 48;
