@@ -341,8 +341,7 @@ function App() {
       lastPointer.current = { x: e.clientX, y: e.clientY };
       const nearBottom = window.innerHeight - e.clientY < 90;
       const nearTop = e.clientY < 16;
-      const nearTopRight = e.clientY < 120 && window.innerWidth - e.clientX < 240;
-      if (nearBottom || nearTop || nearTopRight) wakeChrome();
+      if (nearBottom || nearTop) wakeChrome();
     };
     // Esc is the keyboard way out of an immersed reading view — brings the nav
     // back without reaching for the mouse. Closing a dialog with Esc also wakes
