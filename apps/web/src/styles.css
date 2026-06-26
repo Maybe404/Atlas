@@ -182,7 +182,8 @@ html { transition: background 0.3s var(--ease-soft); }
   overflow: hidden;
   transition:
     grid-template-columns var(--dur) var(--ease-soft),
-    grid-template-rows var(--dur) var(--ease-soft);
+    grid-template-rows 0.42s var(--ease-soft),
+    row-gap 0.42s var(--ease-soft);
 }
 .app.no-sidebar { grid-template-columns: 0 1fr; gap: 12px 0; }
 .app.public-shell {
@@ -216,8 +217,8 @@ html { transition: background 0.3s var(--ease-soft); }
   position: relative;
   z-index: 30;
   transition:
-    transform 0.5s cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 0.32s var(--ease-soft);
+    transform 0.42s var(--ease-soft),
+    opacity 0.42s var(--ease-soft);
   will-change: transform;
 }
 .brand {
@@ -2376,11 +2377,16 @@ select.input { appearance: none; background-image: url("data:image/svg+xml;utf8,
   letter-spacing: -0.012em;
   border: 1px solid var(--hairline);
   animation: fab-in 0.4s var(--ease-spring) 0.15s both;
-  transition: transform var(--dur-fast), box-shadow var(--dur-fast);
+  transition: transform var(--dur-fast), box-shadow var(--dur-fast), top 0.42s var(--ease-soft);
 }
 .sidebar-fab:hover { transform: translateY(-1px); box-shadow: var(--shadow-overlay); }
 .sidebar-fab:active { transform: translateY(0) scale(0.97); }
 .sidebar-fab .sidebar-fab-label { white-space: nowrap; }
+/* When the topbar recedes (reader immersion), the article reclaims the ~68px
+   the topbar + its gap occupied. The FAB is viewport-fixed, so it would otherwise
+   be left floating 68px below the article's new top edge — drift it up in lockstep
+   with the grid-row collapse so it tracks the article. */
+.app.immersive-reader.chrome-hidden .sidebar-fab { top: 24px; }
 
 @keyframes fab-in {
   from { opacity: 0; transform: translateX(-12px); }
