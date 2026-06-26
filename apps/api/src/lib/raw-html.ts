@@ -35,8 +35,8 @@ export const SCROLL_GUARD_MARKER = 'Element.prototype.scrollIntoView=function';
 // runs from inside via this injected script:
 //
 //   iframe → parent
-//     • 'scroll' {top}  — recedes the topbar (app.tsx) AND carries the scroll offset so
-//                         the parent can remember the reading position (reader-progress).
+//     • 'scroll' {top, userScroll} — recedes the topbar only for direct user scrolling AND
+//                         carries the scroll offset for reader-progress.
 //     • 'reveal'        — a genuine edge-hover / Esc inside the frame brings the nav back.
 //                         The same-coordinate check skips the synthetic mousemoves a
 //                         browser fires while the page scrolls under a still pointer,
@@ -64,6 +64,14 @@ const CHROME_BRIDGE = `<script>(function(){try{function se(){return document.scr
 function restore(top){if(!(top>0))return;var tries=0,holds=0;function tick(){tries++;var sc=findScroller();var max=isRoot(sc)?(document.documentElement.scrollHeight-window.innerHeight):(sc.scrollHeight-sc.clientHeight);var want=max>0?Math.min(top,max):top;setTop(sc,want);if(curTop(sc)>=want-3)holds++;else holds=0;if(holds<2&&tries<25)setTimeout(tick,80);}tick();}
 window.addEventListener("message",function(e){if(e.source!==parent)return;var d=e.data;if(!d||d.source!=="atlas-host")return;if(d.type==="init"){mast(d.masthead);restore(d.restoreTop);}});function ready(){post("ready");}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",ready);else ready();}catch(_e){}})();</script>`;
 
+const CHROME_BRIDGE_WITH_USER_SCROLL = CHROME_BRIDGE.replace(
+  'var st=false,scroller=null;function fs(){st=false;post("scroll",{top:curTop(scroller||findScroller())});}document.addEventListener("scroll"',
+  'var st=false,scroller=null,lastUserScroll=0;function markUserScroll(){lastUserScroll=Date.now();}function fs(){st=false;post("scroll",{top:curTop(scroller||findScroller()),userScroll:Date.now()-lastUserScroll<500});}document.addEventListener("wheel",markUserScroll,{passive:true});document.addEventListener("touchmove",markUserScroll,{passive:true});document.addEventListener("keydown",function(e){if(e.key===" "||e.key==="PageDown"||e.key==="PageUp"||e.key==="ArrowDown"||e.key==="ArrowUp"||e.key==="Home"||e.key==="End")markUserScroll();},{passive:true});document.addEventListener("scroll"',
+).replace(
+  'var nb=innerHeight-e.clientY<90,nt=e.clientY<16,ntr=e.clientY<120&&(innerWidth-e.clientX)<240;if(nb||nt||ntr)post("reveal");',
+  'var nb=innerHeight-e.clientY<90,nt=e.clientY<16;if(nb||nt)post("reveal");',
+);
+
 // Insert the guard as early as possible so the prototype patch is in place before the
 // document's own scripts run. Prefer right after <head>, then <body>; fall back to after
 // a leading doctype (prepending a <script> before <!doctype> would force quirks mode).
@@ -71,7 +79,7 @@ export function injectScrollGuard(html: string): string {
   if (!html) return html;
   // SCROLL_GUARD first so the scrollIntoView marker keeps its position; CHROME_BRIDGE
   // rides along in the same insertion point.
-  const inject = SCROLL_GUARD + CHROME_BRIDGE;
+  const inject = SCROLL_GUARD + CHROME_BRIDGE_WITH_USER_SCROLL;
   const head = html.match(/<head[^>]*>/i);
   if (head?.index != null) {
     const at = head.index + head[0].length;

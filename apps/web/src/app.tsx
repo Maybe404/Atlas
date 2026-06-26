@@ -368,7 +368,7 @@ function App() {
     const onMessage = (e: MessageEvent) => {
       const d = e.data as Loose;
       if (!d || d.source !== 'atlas-reader') return;
-      if (d.type === 'scroll') forceHideChrome();
+      if (d.type === 'scroll' && d.userScroll) forceHideChrome();
       else if (d.type === 'reveal') wakeChrome();
     };
 
