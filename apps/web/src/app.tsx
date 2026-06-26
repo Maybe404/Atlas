@@ -303,18 +303,30 @@ function App() {
   // synthetic, same-coordinate mousemoves a browser fires while the page scrolls.
   const lastPointer = useRef({ x: -1, y: -1 });
   const HIDE_DELAY = 4000;
+  const TOP_CHROME_HOLD_ZONE = 96;
   const wakeChrome = useCallback(() => {
     setChromeVisible(true);
     if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
     chromeHideTimer.current = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
   }, []);
+  const isPointerInTopChromeZone = useCallback(() => {
+    const pointer = lastPointer.current;
+    return pointer.x >= 0 && pointer.y >= 0 && pointer.y < TOP_CHROME_HOLD_ZONE;
+  }, []);
+  const forceHideChrome = useCallback(() => {
+    if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
+    setChromeVisible(false);
+  }, []);
   // Reading is the default — scrolling means "I'm reading", so it HIDES the
   // chrome rather than waking it. The dock / corner toolbar come back only when
   // the pointer reaches the edge that owns them (see onMouseMove below).
   const hideChrome = useCallback(() => {
-    if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
-    setChromeVisible(false);
-  }, []);
+    if (isPointerInTopChromeZone()) {
+      wakeChrome();
+      return;
+    }
+    forceHideChrome();
+  }, [forceHideChrome, isPointerInTopChromeZone, wakeChrome]);
   useEffect(() => {
     chromeHideTimer.current = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
 
@@ -356,7 +368,7 @@ function App() {
     const onMessage = (e: MessageEvent) => {
       const d = e.data as Loose;
       if (!d || d.source !== 'atlas-reader') return;
-      if (d.type === 'scroll') hideChrome();
+      if (d.type === 'scroll') forceHideChrome();
       else if (d.type === 'reveal') wakeChrome();
     };
 
@@ -373,7 +385,7 @@ function App() {
       document.removeEventListener('keydown', onEsc);
       window.removeEventListener('message', onMessage);
     };
-  }, [wakeChrome, hideChrome]);
+  }, [wakeChrome, hideChrome, forceHideChrome]);
 
   const ctx = { view, spaceId, docId, pane: routeState.pane };
   const isLogin = view === 'login';
