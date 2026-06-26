@@ -302,6 +302,11 @@ function App() {
   // Last genuine pointer position — lets onMouseMove tell a real move from the
   // synthetic, same-coordinate mousemoves a browser fires while the page scrolls.
   const lastPointer = useRef({ x: -1, y: -1 });
+  // Suppresses edge-reveal for a short window after a user scroll arrives from
+  // the HTML iframe. Safari's momentum scrolling keeps firing scroll + synthetic
+  // edge-hovers together; without this the topbar flips show/hide mid-animation
+  // (flashes / sticks halfway). Scroll means "I'm reading" — nav stays down.
+  const scrollHidingUntil = useRef(0);
   const HIDE_DELAY = 4000;
   const TOP_CHROME_HOLD_ZONE = 96;
   const wakeChrome = useCallback(() => {
@@ -351,6 +356,10 @@ function App() {
       // Only a genuine change in pointer position counts as intent to summon nav.
       if (e.clientX === lastPointer.current.x && e.clientY === lastPointer.current.y) return;
       lastPointer.current = { x: e.clientX, y: e.clientY };
+      // Edge-reveal is suppressed while an iframe scroll is still settling —
+      // matches the iframe 'reveal' suppression so the HTML reader's momentum
+      // scrolling can't resurrect the topbar via the parent's own mousemove.
+      if (Date.now() < scrollHidingUntil.current) return;
       const nearBottom = window.innerHeight - e.clientY < 90;
       const nearTop = e.clientY < 16;
       if (nearBottom || nearTop) wakeChrome();
@@ -368,8 +377,20 @@ function App() {
     const onMessage = (e: MessageEvent) => {
       const d = e.data as Loose;
       if (!d || d.source !== 'atlas-reader') return;
-      if (d.type === 'scroll' && d.userScroll) forceHideChrome();
-      else if (d.type === 'reveal') wakeChrome();
+      if (d.type === 'scroll' && d.userScroll) {
+        // Each scroll sample extends the suppression window so a long momentum
+        // scroll (Safari) keeps the topbar down for the whole gesture — otherwise
+        // an edge-reveal firing once the initial 800ms expires resurrects it
+        // mid-recede and the bar flashes / sticks halfway.
+        scrollHidingUntil.current = Date.now() + 1200;
+        forceHideChrome();
+      } else if (d.type === 'reveal') {
+        // Drop reveals that arrive while a scroll is still settling — Safari
+        // momentum scrolling spams edge-hovers that would otherwise resurrect
+        // the topbar mid-recede.
+        if (Date.now() < scrollHidingUntil.current) return;
+        wakeChrome();
+      }
     };
 
     document.addEventListener('click', onClick);

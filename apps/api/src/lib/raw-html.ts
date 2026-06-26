@@ -61,16 +61,21 @@ const CHROME_BRIDGE = `<script>(function(){try{function se(){return document.scr
 // we poll: every 80ms re-apply the target (clamped to the current max) until it actually
 // lands and holds for two consecutive checks, then stop (which also avoids fighting a user
 // who scrolls once the page is finally live). Bounded to ~2s so we never loop forever.
-function restore(top){if(!(top>0))return;restoring=true;var tries=0,holds=0;function tick(){tries++;var sc=findScroller();var max=isRoot(sc)?(document.documentElement.scrollHeight-window.innerHeight):(sc.scrollHeight-sc.clientHeight);var want=max>0?Math.min(top,max):top;setTop(sc,want);if(curTop(sc)>=want-3)holds++;else holds=0;if(holds<2&&tries<25)setTimeout(tick,80);else restoring=false;}tick();}
+function restore(top){if(!(top>0))return;restoring=true;var tries=0,holds=0;function tick(){tries++;var sc=findScroller();var max=isRoot(sc)?(document.documentElement.scrollHeight-window.innerHeight):(sc.scrollHeight-sc.clientHeight);var want=max>0?Math.min(top,max):top;setTop(sc,want);lastTop=curTop(sc);if(lastTop>=want-3)holds++;else holds=0;if(holds<2&&tries<25)setTimeout(tick,80);else restoring=false;}tick();}
 window.addEventListener("message",function(e){if(e.source!==parent)return;var d=e.data;if(!d||d.source!=="atlas-host")return;if(d.type==="init"){mast(d.masthead);restore(d.restoreTop);}});function ready(){post("ready");}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",ready);else ready();}catch(_e){}})();</script>`;
 
 const CHROME_BRIDGE_WITH_USER_SCROLL = CHROME_BRIDGE.replace(
   'var st=false,scroller=null;function fs(){st=false;post("scroll",{top:curTop(scroller||findScroller())});}document.addEventListener("scroll"',
-  'var st=false,scroller=null,lastUserScroll=0,restoring=false;function markUserScroll(){lastUserScroll=Date.now();}function fs(){st=false;post("scroll",{top:curTop(scroller||findScroller()),userScroll:(Date.now()-lastUserScroll<500)||!restoring});}document.addEventListener("wheel",markUserScroll,{passive:true});document.addEventListener("touchmove",markUserScroll,{passive:true});document.addEventListener("keydown",function(e){if(e.key===" "||e.key==="PageDown"||e.key==="PageUp"||e.key==="ArrowDown"||e.key==="ArrowUp"||e.key==="Home"||e.key==="End")markUserScroll();},{passive:true});document.addEventListener("scroll"',
-).replace(
-  'var nb=innerHeight-e.clientY<90,nt=e.clientY<16,ntr=e.clientY<120&&(innerWidth-e.clientX)<240;if(nb||nt||ntr)post("reveal");',
-  'var nb=innerHeight-e.clientY<90,nt=e.clientY<16;if(nb||nt)post("reveal");',
-);
+  'var st=false,scroller=null,lastUserScroll=0,restoring=false,lastTop=null,lastScrollAt=0;function markUserScroll(){lastUserScroll=Date.now();lastScrollAt=Date.now();}function fs(){st=false;var sc=scroller||findScroller();lastTop=curTop(sc);lastScrollAt=Date.now();post("scroll",{top:lastTop,userScroll:(Date.now()-lastUserScroll<450)||!restoring});}document.addEventListener("wheel",markUserScroll,{passive:true});document.addEventListener("touchmove",markUserScroll,{passive:true});document.addEventListener("keydown",function(e){if(e.key===" "||e.key==="PageDown"||e.key==="PageUp"||e.key==="ArrowDown"||e.key==="ArrowUp"||e.key==="Home"||e.key==="End")markUserScroll();},{passive:true});document.addEventListener("scroll"',
+)
+  .replace(
+    'var nb=innerHeight-e.clientY<90,nt=e.clientY<16,ntr=e.clientY<120&&(innerWidth-e.clientX)<240;if(nb||nt||ntr)post("reveal");',
+    'var nb=innerHeight-e.clientY<90,nt=e.clientY<16;if((nb||nt)&&Date.now()-lastScrollAt>1000)post("reveal");',
+  )
+  .replace(
+    'var lx=-1,ly=-1;',
+    'setInterval(function(){if(restoring)return;var sc=findScroller();var t=curTop(sc);if(lastTop===null){lastTop=t;return;}if(t!==lastTop&&!st){lastScrollAt=Date.now();st=true;fs();}},80);var lx=-1,ly=-1;',
+  );
 
 // Insert the guard as early as possible so the prototype patch is in place before the
 // document's own scripts run. Prefer right after <head>, then <body>; fall back to after
