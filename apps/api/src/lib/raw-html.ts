@@ -29,16 +29,40 @@ const SCROLL_GUARD = `<script>(function(){try{var S=Element.prototype.scrollInto
 // Marker the API tests assert on without pinning the whole minified body.
 export const SCROLL_GUARD_MARKER = 'Element.prototype.scrollIntoView=function';
 
-// Bridge for the reader's auto-immersion. The iframe is a sandboxed opaque origin
-// (no allow-same-origin), so the parent frame can't observe its scrolling directly
-// — reading contentWindow.scrollY / addEventListener throws cross-origin. Instead we
-// notify the parent by postMessage: on every scroll (it recedes the topbar), and when
-// the pointer genuinely reaches a screen edge or Esc is pressed (it brings the nav
-// back). The same-coordinate check skips the synthetic mousemoves browsers fire while
-// the page scrolls under a still pointer — otherwise a scroll would hide the chrome
-// and the synthetic move would immediately reveal it again. Parent side: app.tsx's
-// 'message' handler maps type 'scroll' → hideChrome and 'reveal' → wakeChrome.
-const CHROME_BRIDGE = `<script>(function(){try{function post(t){try{parent.postMessage({source:"atlas-reader",type:t},"*");}catch(_e){}}var st=false;function fs(){st=false;post("scroll");}document.addEventListener("scroll",function(){if(st)return;st=true;(window.requestAnimationFrame||window.setTimeout)(fs);},{capture:true,passive:true});var lx=-1,ly=-1;document.addEventListener("mousemove",function(e){if(e.clientX===lx&&e.clientY===ly)return;lx=e.clientX;ly=e.clientY;var nb=innerHeight-e.clientY<90,nt=e.clientY<16,ntr=e.clientY<120&&(innerWidth-e.clientX)<240;if(nb||nt||ntr)post("reveal");},{passive:true});document.addEventListener("keydown",function(e){if(e.key==="Escape")post("reveal");});}catch(_e){}})();</script>`;
+// Two-way bridge between the reader's HTML <iframe> and the Atlas shell. The iframe is
+// a sandboxed opaque origin (no allow-same-origin), so the parent can't reach into its
+// DOM — but postMessage works BOTH ways, so everything that needs the frame's innards
+// runs from inside via this injected script:
+//
+//   iframe → parent
+//     • 'scroll' {top}  — recedes the topbar (app.tsx) AND carries the scroll offset so
+//                         the parent can remember the reading position (reader-progress).
+//     • 'reveal'        — a genuine edge-hover / Esc inside the frame brings the nav back.
+//                         The same-coordinate check skips the synthetic mousemoves a
+//                         browser fires while the page scrolls under a still pointer,
+//                         which would otherwise reveal the chrome a scroll just hid.
+//     • 'ready'         — the document is parsed; ask the parent for its init payload.
+//   parent → iframe
+//     • 'init' {masthead, restoreTop} — the parent owns the doc metadata (space / author /
+//                         date, honoring the share link's showAuthor), so it hands back a
+//                         slim provenance strip to prepend and the saved scroll offset to
+//                         restore. The strip is a single muted line (space · author · date
+//                         · HTML), NOT a big title: uploaded reports usually carry their own
+//                         hero title, and a second large title just collides with it. We
+//                         build it with createElement + textContent (no innerHTML) so doc
+//                         data is never parsed as markup.
+//
+// Parent side: app.tsx's 'message' handler maps 'scroll' → hideChrome / 'reveal' →
+// wakeChrome; the reader/public views map 'ready' → post init and 'scroll' → setScroll.
+const CHROME_BRIDGE = `<script>(function(){try{function se(){return document.scrollingElement||document.documentElement||document.body;}function post(t,x){try{var m={source:"atlas-reader",type:t};if(x)for(var k in x)m[k]=x[k];parent.postMessage(m,"*");}catch(_e){}}var _sc=null;function findScroller(){if(_sc)return _sc;var best=se();var bo=best?(best.scrollHeight-best.clientHeight):0;try{var all=document.body?document.body.getElementsByTagName("*"):[];for(var i=0;i<all.length;i++){var el=all[i];var oy=getComputedStyle(el).overflowY;if(oy==="auto"||oy==="scroll"){var ov=el.scrollHeight-el.clientHeight;if(ov>bo+4){bo=ov;best=el;}}}}catch(_e){}_sc=best;return best;}var st=false,scroller=null;function fs(){st=false;post("scroll",{top:curTop(scroller||findScroller())});}document.addEventListener("scroll",function(e){var t=e.target;scroller=(!t||t===document||t===document.documentElement||t===document.body)?se():t;if(st)return;st=true;(window.requestAnimationFrame||window.setTimeout)(fs);},{capture:true,passive:true});var lx=-1,ly=-1;document.addEventListener("mousemove",function(e){if(e.clientX===lx&&e.clientY===ly)return;lx=e.clientX;ly=e.clientY;var nb=innerHeight-e.clientY<90,nt=e.clientY<16,ntr=e.clientY<120&&(innerWidth-e.clientX)<240;if(nb||nt||ntr)post("reveal");},{passive:true});document.addEventListener("keydown",function(e){if(e.key==="Escape")post("reveal");});function mast(m){try{if(!m)return;var items=[];if(m.eyebrow)items.push(m.eyebrow);if(m.byline)for(var i=0;i<m.byline.length;i++){if(m.byline[i])items.push(m.byline[i]);}if(!items.length)return;var sc=findScroller();var host=(sc&&sc.nodeType===1&&sc!==se()&&sc.insertBefore)?sc:(document.body||document.documentElement);if(!host||(host.querySelector&&host.querySelector("[data-atlas-masthead]")))return;var h=document.createElement("div");h.setAttribute("data-atlas-masthead","");h.style.cssText="display:block;box-sizing:border-box;background:none;margin:0;padding:13px 40px;border:0;border-bottom:1px solid rgba(120,120,128,.2);font:500 12.5px/1.45 system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;letter-spacing:.01em;color:#6b7280;";h.textContent=items.join("  \\u00b7  ");host.insertBefore(h,host.firstChild);}catch(_e){}}function isRoot(sc){return !sc||sc===se()||sc===document.documentElement||sc===document.body;}function curTop(sc){return isRoot(sc)?(window.pageYOffset||(se()?se().scrollTop:0)||0):sc.scrollTop;}function setTop(sc,top){try{if(isRoot(sc))window.scrollTo(0,top);else sc.scrollTop=top;}catch(_e){}}
+// A freshly (re)navigated iframe isn't scrollable at DOMContentLoaded: the parent is
+// still settling the frame's box, so the document's content doesn't overflow the viewport
+// for a few hundred ms — window.scrollTo is a no-op until then. So we don't restore once,
+// we poll: every 80ms re-apply the target (clamped to the current max) until it actually
+// lands and holds for two consecutive checks, then stop (which also avoids fighting a user
+// who scrolls once the page is finally live). Bounded to ~2s so we never loop forever.
+function restore(top){if(!(top>0))return;var tries=0,holds=0;function tick(){tries++;var sc=findScroller();var max=isRoot(sc)?(document.documentElement.scrollHeight-window.innerHeight):(sc.scrollHeight-sc.clientHeight);var want=max>0?Math.min(top,max):top;setTop(sc,want);if(curTop(sc)>=want-3)holds++;else holds=0;if(holds<2&&tries<25)setTimeout(tick,80);}tick();}
+window.addEventListener("message",function(e){if(e.source!==parent)return;var d=e.data;if(!d||d.source!=="atlas-host")return;if(d.type==="init"){mast(d.masthead);restore(d.restoreTop);}});function ready(){post("ready");}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",ready);else ready();}catch(_e){}})();</script>`;
 
 // Insert the guard as early as possible so the prototype patch is in place before the
 // document's own scripts run. Prefer right after <head>, then <body>; fall back to after

@@ -1,9 +1,10 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { canRead, firstPublicDoc } from '../auth';
 import { I } from '../chrome';
 import { useDocument, usePublicDocument } from '../data-hooks';
 import type { Loose } from '../loose-types';
 import { copyMarkdownRich, copyMarkdownSource } from '../markdown/copy';
+import { getScroll, setScroll } from '../reader-progress';
 import { Skeleton } from '../ui-kit';
 import { MarkdownEditorDialog } from './markdown-editor-dialog';
 import { MarkdownReader } from './markdown-reader';
@@ -65,10 +66,43 @@ export function ReaderView({
 
   const iframeRef = useRef<Loose>(null);
   const scrollKey = detailDoc?.id || doc?.id;
-  // No parent-side scroll binding for the HTML iframe: it's a sandboxed opaque origin,
-  // so reaching into contentWindow throws cross-origin. Auto-immersion for HTML docs is
-  // driven from inside the frame by lib/raw-html's CHROME_BRIDGE, which postMessages
-  // scroll / edge-reveal events that app.tsx turns into hide / wake.
+  // The HTML iframe is a sandboxed opaque origin — the parent can't read its DOM, only
+  // postMessage. lib/raw-html's CHROME_BRIDGE drives auto-immersion from inside (scroll /
+  // edge-reveal, handled globally in app.tsx). The two things that need this view's data
+  // we answer here: on the frame's 'ready', hand back a slim provenance strip (space ·
+  // author · date · HTML — context the uploaded HTML doesn't carry) plus the saved scroll
+  // offset to restore; on each 'scroll', remember the reading position. Markdown does both itself.
+  const eyebrow = space?.name || detailDoc?.spaceName;
+  const mTitle = detailDoc?.title || doc?.title;
+  const mAuthor = author?.name || detailDoc?.authorName;
+  const mDate = detailDoc?.updated || doc?.updated;
+  useEffect(() => {
+    if (isMarkdown) return;
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data as Loose;
+      if (!d || d.source !== 'atlas-reader') return;
+      if (e.source !== iframeRef.current?.contentWindow) return;
+      if (d.type === 'ready') {
+        iframeRef.current?.contentWindow?.postMessage(
+          {
+            source: 'atlas-host',
+            type: 'init',
+            masthead: {
+              eyebrow,
+              title: mTitle,
+              byline: [mAuthor, mDate, 'HTML'].filter(Boolean),
+            },
+            restoreTop: getScroll(scrollKey),
+          },
+          '*',
+        );
+      } else if (d.type === 'scroll') {
+        setScroll(scrollKey, d.top || 0);
+      }
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [isMarkdown, scrollKey, eyebrow, mTitle, mAuthor, mDate]);
 
   // A space that exists but has no documents is not an access problem — show a
   // dedicated empty state rather than the "need to login / no access" screen.

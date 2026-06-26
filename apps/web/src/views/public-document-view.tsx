@@ -1,20 +1,53 @@
-import { useCallback, useRef } from 'react';
+import { useEffect, useRef } from 'react';
 import { usePublicDocument } from '../data-hooks';
 import type { Loose } from '../loose-types';
+import { getScroll, setScroll } from '../reader-progress';
 import { EmptyState, Skeleton } from '../ui-kit';
 import { MarkdownReader } from './markdown-reader';
 
 export function PublicDocumentView({ token, onChromeScroll }: Loose) {
   const iframeRef = useRef<Loose>(null);
-  const bindIframeScroll = useCallback(() => {
-    try {
-      iframeRef.current?.contentWindow?.addEventListener('scroll', onChromeScroll, {
-        passive: true,
-      });
-    } catch (_e) {}
-  }, [onChromeScroll]);
   const publicQuery = usePublicDocument(token, Boolean(token));
   const doc = publicQuery.data;
+
+  // The HTML iframe is a sandboxed opaque origin, so it talks to us only via postMessage
+  // (lib/raw-html's CHROME_BRIDGE). On 'ready' we hand back an article masthead built from
+  // the public metadata — authorName is already null when the share link hides the author,
+  // so the byline simply drops it — plus the saved scroll offset; on 'scroll' we remember
+  // the reading position. Markdown renders its own masthead and tracks its own scroll.
+  const scrollKey = doc?.id;
+  const isHtml = doc && doc.format !== 'markdown';
+  const eyebrow = doc?.spaceName;
+  const mTitle = doc?.title;
+  const mAuthor = doc?.authorName;
+  const mDate = doc?.updated;
+  useEffect(() => {
+    if (!isHtml) return;
+    const onMsg = (e: MessageEvent) => {
+      const d = e.data as Loose;
+      if (!d || d.source !== 'atlas-reader') return;
+      if (e.source !== iframeRef.current?.contentWindow) return;
+      if (d.type === 'ready') {
+        iframeRef.current?.contentWindow?.postMessage(
+          {
+            source: 'atlas-host',
+            type: 'init',
+            masthead: {
+              eyebrow,
+              title: mTitle,
+              byline: [mAuthor, mDate, 'HTML'].filter(Boolean),
+            },
+            restoreTop: getScroll(scrollKey),
+          },
+          '*',
+        );
+      } else if (d.type === 'scroll') {
+        setScroll(scrollKey, d.top || 0);
+      }
+    };
+    window.addEventListener('message', onMsg);
+    return () => window.removeEventListener('message', onMsg);
+  }, [isHtml, scrollKey, eyebrow, mTitle, mAuthor, mDate]);
 
   if (publicQuery.isLoading) {
     return (
@@ -70,7 +103,6 @@ export function PublicDocumentView({ token, onChromeScroll }: Loose) {
             src={`/api/documents/public/${token}/raw`}
             title={doc.title}
             sandbox="allow-scripts allow-forms allow-popups"
-            onLoad={bindIframeScroll}
           />
         )}
       </div>
