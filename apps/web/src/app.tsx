@@ -308,30 +308,36 @@ function App() {
   // (flashes / sticks halfway). Scroll means "I'm reading" — nav stays down.
   const scrollHidingUntil = useRef(0);
   const HIDE_DELAY = 4000;
-  const TOP_CHROME_HOLD_ZONE = 96;
+  // How long after the last scroll sample edge-reveal stays suppressed. Long enough
+  // to outlast Safari's momentum settle (scroll samples keep extending it through the
+  // gesture), short enough that reaching for the nav right after stopping feels instant.
+  const SCROLL_REVEAL_GUARD = 450;
+  // Top reveal band — a deliberate move toward the top summons the nav. Kept generous
+  // (not a 16px hairline) so the title comes back promptly without pixel-perfect aim,
+  // mirroring the bottom dock's 90px zone.
+  const TOP_REVEAL_ZONE = 64;
   const wakeChrome = useCallback(() => {
     setChromeVisible(true);
     if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
     chromeHideTimer.current = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
   }, []);
-  const isPointerInTopChromeZone = useCallback(() => {
-    const pointer = lastPointer.current;
-    return pointer.x >= 0 && pointer.y >= 0 && pointer.y < TOP_CHROME_HOLD_ZONE;
-  }, []);
   const forceHideChrome = useCallback(() => {
     if (chromeHideTimer.current) clearTimeout(chromeHideTimer.current);
     setChromeVisible(false);
   }, []);
-  // Reading is the default — scrolling means "I'm reading", so it HIDES the
-  // chrome rather than waking it. The dock / corner toolbar come back only when
-  // the pointer reaches the edge that owns them (see onMouseMove below).
+  // Reading is the default — scrolling means "I'm reading", so it ALWAYS hides the
+  // chrome, even when the pointer is parked over the topbar. (Previously a scroll
+  // with the cursor in the top zone re-woke the bar; combined with the iframe's
+  // own 'scroll' hide message that produced a show/hide fight — the title flashed
+  // and never receded. Scroll is unambiguous reading intent, so it wins outright.)
+  // The matching scrollHidingUntil window suppresses edge-reveal for the gesture so
+  // Safari's momentum scroll + synthetic edge-hovers can't resurrect the bar
+  // mid-recede. The dock / corner toolbar come back only when the pointer genuinely
+  // reaches the edge that owns them once the gesture settles (see onMouseMove below).
   const hideChrome = useCallback(() => {
-    if (isPointerInTopChromeZone()) {
-      wakeChrome();
-      return;
-    }
+    scrollHidingUntil.current = Date.now() + SCROLL_REVEAL_GUARD;
     forceHideChrome();
-  }, [forceHideChrome, isPointerInTopChromeZone, wakeChrome]);
+  }, [forceHideChrome]);
   useEffect(() => {
     chromeHideTimer.current = setTimeout(() => setChromeVisible(false), HIDE_DELAY);
 
@@ -361,7 +367,7 @@ function App() {
       // scrolling can't resurrect the topbar via the parent's own mousemove.
       if (Date.now() < scrollHidingUntil.current) return;
       const nearBottom = window.innerHeight - e.clientY < 90;
-      const nearTop = e.clientY < 16;
+      const nearTop = e.clientY < TOP_REVEAL_ZONE;
       if (nearBottom || nearTop) wakeChrome();
     };
     // Esc is the keyboard way out of an immersed reading view — brings the nav
@@ -378,11 +384,12 @@ function App() {
       const d = e.data as Loose;
       if (!d || d.source !== 'atlas-reader') return;
       if (d.type === 'scroll' && d.userScroll) {
-        // Each scroll sample extends the suppression window so a long momentum
-        // scroll (Safari) keeps the topbar down for the whole gesture — otherwise
-        // an edge-reveal firing once the initial 800ms expires resurrects it
-        // mid-recede and the bar flashes / sticks halfway.
-        scrollHidingUntil.current = Date.now() + 1200;
+        // Each scroll sample extends the suppression window (SCROLL_REVEAL_GUARD) so a
+        // long momentum scroll (Safari) keeps the topbar down for the whole gesture —
+        // samples arrive faster than the window, so it never lapses mid-gesture. Once
+        // the gesture truly stops the window lapses quickly, so reaching for the nav
+        // feels instant. Without it an edge-reveal mid-recede flashes / sticks the bar.
+        scrollHidingUntil.current = Date.now() + SCROLL_REVEAL_GUARD;
         forceHideChrome();
       } else if (d.type === 'reveal') {
         // Drop reveals that arrive while a scroll is still settling — Safari

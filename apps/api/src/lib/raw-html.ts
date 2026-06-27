@@ -70,7 +70,7 @@ const CHROME_BRIDGE_WITH_USER_SCROLL = CHROME_BRIDGE.replace(
 )
   .replace(
     'var nb=innerHeight-e.clientY<90,nt=e.clientY<16,ntr=e.clientY<120&&(innerWidth-e.clientX)<240;if(nb||nt||ntr)post("reveal");',
-    'var nb=innerHeight-e.clientY<90,nt=e.clientY<16;if((nb||nt)&&Date.now()-lastScrollAt>1000)post("reveal");',
+    'var nb=innerHeight-e.clientY<90,nt=e.clientY<64;if((nb||nt)&&Date.now()-lastScrollAt>450)post("reveal");',
   )
   .replace(
     'var lx=-1,ly=-1;',
