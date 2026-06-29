@@ -9,7 +9,13 @@ import type { Loose, RouteState, Toast } from './loose-types';
 import { readerTarget, setLastReader } from './reader-progress';
 import { TweakRadio, TweakSection, TweaksPanel, TweakToggle, useTweaks } from './tweaks-panel';
 import { ConfirmRoot, clickableProps } from './ui-kit';
-import { AdminDocsView, PublicDocumentView, ReaderView, SpaceIndexView } from './views';
+import {
+  AdminDocsView,
+  LandingView,
+  PublicDocumentView,
+  ReaderView,
+  SpaceIndexView,
+} from './views';
 import { AdminSettingsView, AdminUploadView } from './views-admin';
 
 const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/ {
@@ -110,6 +116,10 @@ function stateFromLocation(location: Loose): RouteState {
   if (docMatch) return { view: 'reader', spaceId: docMatch[1], docId: docMatch[2] };
   const spaceMatch = path.match(/^\/spaces\/([^/]+)\/?$/);
   if (spaceMatch) return { view: 'space', spaceId: spaceMatch[1] };
+  // The bare root `/` is the cover/landing page — the site's front door. It must NOT
+  // auto-open a hardcoded seed doc (that surfaced the "no permission" screen for guests).
+  // An explicit ?view= still overrides, so deep links like /?view=reader keep working.
+  if (path === '/' && !params.get('view')) return { view: 'landing' };
   return {
     view: params.get('view') || 'reader',
     spaceId: params.get('space') || 's1',
@@ -118,6 +128,7 @@ function stateFromLocation(location: Loose): RouteState {
 }
 
 function urlForState(next: RouteState) {
+  if (next.view === 'landing') return '/';
   if (next.view === 'admin-docs')
     return next.spaceId && next.spaceId !== 'all'
       ? `/admin/docs?space=${next.spaceId}`
@@ -506,6 +517,20 @@ function App() {
     return (
       <div className="app no-sidebar login-shell">
         <LoginView onLogin={handleLogin} onContinueAsGuest={continueAsGuest} returnTo={returnTo} />
+      </div>
+    );
+  }
+
+  if (view === 'landing') {
+    return (
+      <div className="app no-sidebar landing-shell">
+        <LandingView
+          spaces={spaces}
+          user={user}
+          readerHome={readerHome}
+          onNavigate={navigate}
+          onLogin={openLogin}
+        />
       </div>
     );
   }

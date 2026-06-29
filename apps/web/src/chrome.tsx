@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate as useRouterNavigate } from 'react-router';
 import { canRead, UserMenu } from './auth';
+import { BrandMark } from './brand';
 import type { Loose } from './loose-types';
 import { spaceTreeDotClass } from './theme-tokens';
 import { clickableProps } from './ui-kit';
@@ -299,18 +300,7 @@ export { I };
 export type IconName = keyof typeof I;
 
 function BrandGlyph() {
-  return (
-    <svg aria-hidden="true" width="16" height="16" viewBox="0 0 16 16" fill="none">
-      <path
-        d="M3 13L8 3l5 10"
-        stroke="currentColor"
-        strokeWidth="1.6"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path d="M5 9.5h6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-    </svg>
-  );
+  return <BrandMark size={17} strokeWidth={2.2} />;
 }
 
 function Topbar({

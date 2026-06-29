@@ -2,6 +2,7 @@ import type { DirectoryDocument, Member, Space } from '@atlas/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { apiJson } from './api-client';
+import { BrandMark } from './brand';
 import type { Loose } from './loose-types';
 
 const IS_DEV_DEMO_LOGIN = import.meta.env.DEV;
@@ -593,29 +594,7 @@ export function LoginView({
       <div className="login-stage">
         <div className="login-brand">
           <div className="login-brand-mark">
-            <svg aria-hidden="true" width="44" height="44" viewBox="0 0 44 44" fill="none">
-              <rect
-                x="6"
-                y="6"
-                width="32"
-                height="32"
-                rx="3"
-                stroke="currentColor"
-                strokeWidth="1.6"
-              />
-              <path
-                d="M14 28 L22 12 L30 28"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinejoin="round"
-              />
-              <path
-                d="M17.5 22 L26.5 22"
-                stroke="currentColor"
-                strokeWidth="1.6"
-                strokeLinecap="round"
-              />
-            </svg>
+            <BrandMark size={44} strokeWidth={1.6} />
           </div>
           <div className="login-brand-name">Atlas</div>
           <div className="login-brand-tag">空间 · 文档 · 阅读</div>
