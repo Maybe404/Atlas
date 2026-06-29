@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;0,6..72,600;1,6..72,300;1,6..72,400;1,6..72,500&family=Noto+Serif+SC:wght@400;500;600;700;900&family=Noto+Sans+SC:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  html{interpolate-size:allow-keywords}
+  html,body{margin:0;padding:0;background:#FDFBF7}
+  ::selection{background:#C0552E;color:#FBF7EF}
+  ::-webkit-scrollbar{width:0;height:0;display:none}
+  details summary::-webkit-details-marker{display:none}
+  details::details-content{opacity:0;height:0;overflow:hidden;transition:height .42s cubic-bezier(.22,.7,.2,1),opacity .42s ease,content-visibility .42s allow-discrete}
+  details[open]::details-content{opacity:1;height:auto}
+  @keyframes riseBlur{from{opacity:0;transform:translateY(46px);filter:blur(10px)}to{opacity:1;transform:none;filter:blur(0)}}
+  @keyframes riseSoft{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:none}}
+  @keyframes scaleIn{from{opacity:0;transform:scale(.93) translateY(38px)}to{opacity:1;transform:none}}
+  @keyframes wipeIn{from{opacity:0;clip-path:inset(0 100% 0 0)}to{opacity:1;clip-path:inset(0 0 0 0)}}
+  @keyframes growX{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+  @keyframes numPar{from{transform:translateY(-46px)}to{transform:translateY(60px)}}
+  @keyframes floatA{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-16px) rotate(-3deg)}}
+  @keyframes floatB{0%,100%{transform:translateY(0) rotate(4deg)}50%{transform:translateY(-12px) rotate(4deg)}}
+  @keyframes floatC{0%,100%{transform:translateY(0) rotate(2deg)}50%{transform:translateY(-9px) rotate(2deg)}}
+  @keyframes grow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+  @keyframes spinSlow{to{transform:rotate(360deg)}}
+  @keyframes bob2{0%,100%{transform:translateY(0)}50%{transform:translateY(-7px)}}
+  @keyframes hint{0%{transform:translateY(0);opacity:.35}50%{transform:translateY(8px);opacity:1}100%{transform:translateY(0);opacity:.35}}
+  @keyframes glowPulse{0%,100%{opacity:.45}50%{opacity:.75}}
+  @keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+  @keyframes secBreath{0%{opacity:0}14%{opacity:1}86%{opacity:1}100%{opacity:0}}
+  @keyframes heroFade{from{opacity:1}to{opacity:0}}
+  @keyframes floatGlow{0%,100%{transform:translate(0,0)}50%{transform:translate(-3%,4%)}}
+</style>
+</helmet>
+
+<div style="position:relative;timeline-scope:--page;font-family:'Hanken Grotesk','Noto Sans SC',sans-serif;-webkit-font-smoothing:antialiased;color:#2B2620">
+
+  <!-- layered warm gradient halos -->
+  <div style="position:fixed;inset:0;z-index:0;pointer-events:none;background:radial-gradient(120% 85% at 82% -12%,rgba(224,145,94,.13),transparent 52%),radial-gradient(110% 80% at 0% 108%,rgba(192,85,46,.07),transparent 55%),radial-gradient(95% 95% at 50% 130%,rgba(214,188,148,.18),transparent 60%)"></div>
+  <!-- faint dot texture -->
+  <div style="position:fixed;inset:0;z-index:0;pointer-events:none;background-image:radial-gradient(rgba(43,38,32,.045) 1px,transparent 1px);background-size:26px 26px;opacity:.4"></div>
+  <!-- breathing glow orbs -->
+  <div style="position:fixed;right:-12vw;top:-10vw;width:46vw;height:46vw;z-index:0;pointer-events:none;border-radius:50%;background:radial-gradient(circle,rgba(224,145,94,.20),transparent 64%);filter:blur(34px);animation:glowPulse 11s ease-in-out infinite,floatGlow 19s ease-in-out infinite"></div>
+  <div style="position:fixed;left:-14vw;bottom:-14vw;width:40vw;height:40vw;z-index:0;pointer-events:none;border-radius:50%;background:radial-gradient(circle,rgba(192,85,46,.11),transparent 62%);filter:blur(40px);animation:glowPulse 14s ease-in-out 1s infinite,floatGlow 23s ease-in-out infinite"></div>
+
+  <!-- progress bar -->
+  <div style="position:fixed;top:0;left:0;height:3px;width:100%;background:linear-gradient(90deg,#C0552E,#E0915E);transform-origin:left;transform:scaleX(0);z-index:60;animation:growX linear both;animation-timeline:--page"></div>
+
+  <!-- custom cursor -->
+  <div data-cursor style="position:fixed;top:0;left:0;width:30px;height:30px;border:1.5px solid rgba(192,85,46,.7);border-radius:50%;pointer-events:none;z-index:70;opacity:0;transform:translate(-100px,-100px);transition:width .22s ease,height .22s ease,background .22s ease,opacity .3s ease;mix-blend-mode:multiply"></div>
+
+  <div ref="{{ scrollRef }}" style="height:100vh;overflow-y:scroll;scroll-snap-type:y mandatory;scroll-behavior:smooth;position:relative;z-index:1;scroll-timeline-name:--page;scroll-timeline-axis:block">
+
+    <!-- ===================== HERO ===================== -->
+    <section data-index="0" data-screen-label="封面" style="height:100vh;scroll-snap-align:start;position:relative;overflow:hidden;display:flex;align-items:center;animation:heroFade linear both;animation-timeline:view();animation-range:exit 0% exit 100%">
+      <div style="position:absolute;right:6%;top:14%;width:150px;height:150px;border:1px solid rgba(43,38,32,.12);border-radius:50%;animation:spinSlow 60s linear infinite;z-index:0"></div>
+      <div style="position:absolute;right:6%;top:14%;width:150px;height:150px;z-index:0"><div style="position:absolute;top:-4px;left:50%;width:7px;height:7px;border-radius:50%;background:#C0552E"></div></div>
+      <div style="max-width:1240px;width:100%;margin:0 auto;padding:0 60px;display:grid;grid-template-columns:1.04fr .96fr;gap:40px;align-items:center;position:relative;z-index:2">
+        <div>
+          <div data-reveal style="display:flex;align-items:center;gap:11px;margin-bottom:30px;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.2em;color:#C0552E;text-transform:uppercase"><span style="width:26px;height:1px;background:#C0552E"></span>HTML 渲染系统 · RENDER ENGINE</div>
+          <h1 data-reveal style="margin:0;font-family:'Newsreader','Noto Serif SC',serif;font-weight:500;font-size:clamp(46px,6.6vw,104px);line-height:1.0;letter-spacing:-.015em;color:#2B2620">内容，值得<br><span style="font-style:italic;color:#C0552E">更好的载体</span></h1>
+          <p data-reveal style="max-width:430px;margin:30px 0 0;font-size:17.5px;line-height:1.75;color:#6B6457;font-weight:300">上传大模型生成、或你亲手写好的 HTML 文章，Atlas 用 iframe 原样渲染——视觉、读感、交互，分毫不差地交到读者眼前。</p>
+          <div data-reveal style="display:flex;gap:14px;flex-wrap:wrap;margin-top:34px">
+            <button data-magnetic style="padding:15px 28px;border-radius:14px;border:none;background:#2B2620;color:#FBF7EF;font-family:'Hanken Grotesk','Noto Sans SC',sans-serif;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 16px 34px -16px rgba(43,38,32,.6)">上传你的 HTML 文章</button>
+            <button onClick="{{ next }}" data-magnetic style="padding:15px 26px;border-radius:14px;border:1px solid rgba(43,38,32,.22);background:transparent;color:#2B2620;font-family:'Hanken Grotesk','Noto Sans SC',sans-serif;font-size:15px;font-weight:500;cursor:pointer">看看它能做什么 ↓</button>
+          </div>
+        </div>
+
+        <!-- floating collage -->
+        <div data-reveal style="position:relative;height:440px">
+          <div data-tilt style="position:absolute;left:6%;top:4%;width:280px;perspective:900px;z-index:3;animation:floatA 7s ease-in-out infinite">
+            <div data-tilt-inner style="background:#FFFFFF;border:1px solid #EAE1CE;border-radius:20px;padding:22px;box-shadow:0 30px 60px -34px rgba(74,55,35,.5);transition:transform .25s cubic-bezier(.2,.7,.2,1)">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px"><span style="font-size:12px;color:#9A917F">完读率</span><span style="font-size:10px;font-family:'JetBrains Mono',monospace;color:#C0552E;border:1px solid rgba(192,85,46,.3);padding:2px 7px;border-radius:6px">LIVE</span></div>
+              <div style="display:flex;align-items:flex-end;gap:7px;height:74px">
+                <div style="flex:1;height:38%;background:linear-gradient(180deg,#E0915E,#C0552E);border-radius:4px 4px 1px 1px"></div>
+                <div style="flex:1;height:56%;background:linear-gradient(180deg,#E0915E,#C0552E);border-radius:4px 4px 1px 1px"></div>
+                <div style="flex:1;height:46%;background:linear-gradient(180deg,#E0915E,#C0552E);border-radius:4px 4px 1px 1px"></div>
+                <div style="flex:1;height:78%;background:linear-gradient(180deg,#E0915E,#C0552E);border-radius:4px 4px 1px 1px"></div>
+                <div style="flex:1;height:100%;background:linear-gradient(180deg,#EA9A63,#B14A28);border-radius:4px 4px 1px 1px"></div>
+              </div>
+              <div style="margin-top:14px;font-family:'Newsreader',serif;font-size:26px;color:#2B2620">+38<span style="font-size:16px;color:#C0552E">%</span></div>
+            </div>
+          </div>
+          <div style="position:absolute;right:2%;top:30%;width:230px;z-index:4;animation:floatB 8s ease-in-out infinite">
+            <div style="background:#2B2620;border-radius:20px;padding:22px;box-shadow:0 34px 64px -32px rgba(43,38,32,.7);color:#F4ECDE">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.85;color:#C9C0AE"><span style="color:#E0915E">&lt;article&gt;</span><br>&nbsp;&nbsp;<span style="color:#9FB39A">交互</span> · <span style="color:#9FB39A">动效</span><br>&nbsp;&nbsp;<span style="color:#9FB39A">版面</span> · <span style="color:#9FB39A">图表</span><br><span style="color:#E0915E">&lt;/article&gt;</span></div>
+            </div>
+          </div>
+          <div style="position:absolute;left:16%;bottom:4%;width:200px;z-index:5;animation:floatC 6.5s ease-in-out infinite">
+            <div style="background:#FFFFFF;border:1px solid #EAE1CE;border-radius:16px;padding:16px 18px;box-shadow:0 26px 50px -30px rgba(74,55,35,.5);display:flex;align-items:center;gap:12px">
+              <div style="width:38px;height:38px;border-radius:11px;background:rgba(192,85,46,.1);display:flex;align-items:center;justify-content:center;font-family:'Newsreader',serif;font-style:italic;color:#C0552E;font-size:18px">3D</div>
+              <div><div style="font-size:13px;font-weight:600;color:#2B2620">随光标倾斜</div><div style="font-size:11px;color:#9A917F">移动鼠标试试 →</div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div onClick="{{ next }}" style="position:absolute;bottom:34px;left:50%;transform:translateX(-50%);z-index:2;display:flex;flex-direction:column;align-items:center;gap:8px;cursor:pointer;color:#9A917F">
+        <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.18em">SCROLL · 六种表达</span>
+        <span style="font-size:16px;animation:hint 1.6s ease-in-out infinite">↓</span>
+      </div>
+    </section>
+
+    <!-- ===================== 01 数据图表 ===================== -->
+    <section data-index="1" data-screen-label="01 数据图表" style="height:100vh;scroll-snap-align:start;position:relative;overflow:hidden;display:flex;align-items:center;animation:secBreath linear both;animation-timeline:view();animation-range:cover 2% cover 98%">
+      <div style="position:absolute;right:1%;top:2%;z-index:0;font-family:'Newsreader',serif;font-weight:500;font-size:clamp(220px,30vw,400px);line-height:.7;color:rgba(43,38,32,.045);user-select:none;animation:numPar linear both;animation-timeline:view();animation-range:cover 0% cover 100%">01</div>
+      <div style="max-width:1180px;width:100%;margin:0 auto;padding:0 60px;display:grid;grid-template-columns:0.86fr 1.14fr;gap:60px;align-items:center;position:relative;z-index:2">
+        <div style="animation:riseBlur both;animation-timeline:view();animation-range:entry 2% cover 32%">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.2em;color:#C0552E;text-transform:uppercase"><span style="width:22px;height:1px;background:#C0552E"></span>01 — 会动的数据</div>
+          <h2 style="margin:0;font-family:'Newsreader','Noto Serif SC',serif;font-weight:500;font-size:clamp(34px,4.2vw,58px);line-height:1.07;color:#2B2620;letter-spacing:-.01em">数字，不该<br>只是躺在那里</h2>
+          <p style="margin:24px 0 0;font-size:16.5px;line-height:1.78;color:#6B6457;max-width:400px;font-weight:300">Markdown 里，图表只能是一张截图——你看到的，是别人画好的结论。在 Atlas 里，它会生长、会回应你的光标，每个数据点都触手可及。</p>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:28px;font-size:13px">
+            <span style="padding:6px 12px;border-radius:8px;background:#E8DFCB;color:#8C8472;text-decoration:line-through;text-decoration-color:#C99">MD：一张静态图片</span>
+            <span style="color:#C0552E">→</span>
+            <span style="padding:6px 12px;border-radius:8px;background:#2B2620;color:#FBF7EF;font-weight:500">HTML：会动、可悬停</span>
+          </div>
+        </div>
+        <div style="animation:scaleIn both;animation-timeline:view();animation-range:entry 0% cover 36%">
+          <div style="background:#FFFFFF;border:1px solid #EAE1CE;border-radius:24px;padding:32px 34px 26px;box-shadow:0 34px 70px -40px rgba(74,55,35,.4)">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:22px">
+              <div><div style="font-size:13.5px;color:#9A917F;margin-bottom:4px">读者读完率</div><div style="font-family:'Newsreader',serif;font-size:40px;line-height:1;color:#2B2620"><span data-count="96">96</span><span style="color:#C0552E;font-size:24px">%</span></div></div>
+              <div style="text-align:right"><div style="display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#C0552E;border:1px solid rgba(192,85,46,.3);padding:4px 9px;border-radius:7px"><span style="width:6px;height:6px;border-radius:50%;background:#C0552E;animation:glowPulse 2s ease-in-out infinite"></span>LIVE</div><div style="font-size:12px;color:#9A917F;margin-top:8px">较上线提升 <span style="color:#2B2620;font-weight:600"><span data-count="38">38</span>%</span></div></div>
+            </div>
+            <div style="position:relative;height:200px;border-bottom:1px solid #EAE1CE">
+              <div style="position:absolute;left:0;right:0;top:0;height:1px;background:rgba(43,38,32,.06)"></div>
+              <div style="position:absolute;left:0;right:0;top:50%;height:1px;background:rgba(43,38,32,.06)"></div>
+              <div style="position:absolute;left:0;right:0;top:75%;height:1px;background:rgba(43,38,32,.06)"></div>
+              <div style="position:absolute;inset:0;display:flex;align-items:flex-end;gap:16px;padding-top:14px">
+                <sc-for list="{{ bars }}" as="b" hint-placeholder-count="6">
+                  <div style="{{ b.colStyle }}" onMouseEnter="{{ b.onEnter }}" onMouseLeave="{{ b.onLeave }}">
+                    <div style="{{ b.tipStyle }}">{{ b.v }}%</div>
+                    <div style="flex:1;width:100%;display:flex;align-items:flex-end;justify-content:center">
+                      <div style="{{ b.barStyle }}"></div>
+                    </div>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:flex;gap:16px;margin-top:12px">
+              <sc-for list="{{ bars }}" as="b" hint-placeholder-count="6">
+                <div style="flex:1;text-align:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A89F8C">{{ b.l }}</div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== 02 3D 卡片 ===================== -->
+    <section data-index="2" data-screen-label="02 空间层次" style="height:100vh;scroll-snap-align:start;position:relative;overflow:hidden;display:flex;align-items:center;animation:secBreath linear both;animation-timeline:view();animation-range:cover 2% cover 98%">
+      <div style="position:absolute;left:0%;bottom:-4%;z-index:0;font-family:'Newsreader',serif;font-weight:500;font-size:clamp(220px,30vw,400px);line-height:.7;color:rgba(43,38,32,.045);user-select:none;animation:numPar linear both;animation-timeline:view();animation-range:cover 0% cover 100%">02</div>
+      <div style="max-width:1180px;width:100%;margin:0 auto;padding:0 60px;display:grid;grid-template-columns:1.06fr 0.94fr;gap:64px;align-items:center;position:relative;z-index:2">
+        <div data-tilt style="perspective:1200px;animation:scaleIn both;animation-timeline:view();animation-range:entry 0% cover 36%;--gx:50%;--gy:50%">
+          <div data-tilt-inner style="position:relative;border-radius:26px;padding:40px;background:linear-gradient(155deg,#322B22,#241F19);border:1px solid rgba(224,145,94,.18);box-shadow:0 50px 90px -44px rgba(43,38,32,.8);transition:transform .25s cubic-bezier(.2,.7,.2,1);transform-style:preserve-3d;overflow:hidden">
+            <div style="position:absolute;inset:0;background:radial-gradient(440px circle at var(--gx) var(--gy),rgba(224,145,94,.2),transparent 58%);pointer-events:none"></div>
+            <div style="transform:translateZ(46px);font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.18em;color:#E0915E;margin-bottom:16px">INTERACTIVE CARD</div>
+            <div style="transform:translateZ(40px);font-family:'Newsreader','Noto Serif SC',serif;font-size:34px;color:#F4ECDE;line-height:1.18;margin-bottom:16px">随你的视线<br>倾斜的内容</div>
+            <div style="transform:translateZ(26px);font-size:14.5px;color:rgba(244,236,222,.62);line-height:1.7;max-width:300px">移动鼠标，看它如何回应你——光影、远近、层次，都在指尖之下活了起来。</div>
+            <div style="transform:translateZ(64px);display:inline-flex;align-items:center;gap:8px;margin-top:26px;padding:10px 18px;border-radius:12px;background:#E0915E;color:#2B2620;font-size:13.5px;font-weight:600">把鼠标放上来 →</div>
+          </div>
+        </div>
+        <div style="animation:riseBlur both;animation-timeline:view();animation-range:entry 2% cover 34%">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.2em;color:#C0552E;text-transform:uppercase"><span style="width:22px;height:1px;background:#C0552E"></span>02 — 有空间的内容</div>
+          <h2 style="margin:0;font-family:'Newsreader','Noto Serif SC',serif;font-weight:500;font-size:clamp(34px,4.2vw,58px);line-height:1.07;color:#2B2620;letter-spacing:-.01em">平面之上，<br>还有层次</h2>
+          <p style="margin:24px 0 0;font-size:16.5px;line-height:1.78;color:#6B6457;max-width:400px;font-weight:300">Markdown 是一张平铺的纸——所有内容都压在同一个平面上。HTML 让内容拥有空间：随视线倾斜、有光影、有远近，阅读因此有了质感。</p>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:28px;font-size:13px">
+            <span style="padding:6px 12px;border-radius:8px;background:#E8DFCB;color:#8C8472;text-decoration:line-through;text-decoration-color:#C99">MD：一张平的纸</span>
+            <span style="color:#C0552E">→</span>
+            <span style="padding:6px 12px;border-radius:8px;background:#2B2620;color:#FBF7EF;font-weight:500">HTML：有空间、会响应</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== 03 折叠展开 ===================== -->
+    <section data-index="3" data-screen-label="03 收放自如" style="height:100vh;scroll-snap-align:start;position:relative;overflow:hidden;display:flex;align-items:center;animation:secBreath linear both;animation-timeline:view();animation-range:cover 2% cover 98%">
+      <div style="position:absolute;right:1%;bottom:-4%;z-index:0;font-family:'Newsreader',serif;font-weight:500;font-size:clamp(220px,30vw,400px);line-height:.7;color:rgba(43,38,32,.045);user-select:none;animation:numPar linear both;animation-timeline:view();animation-range:cover 0% cover 100%">03</div>
+      <div style="max-width:1180px;width:100%;margin:0 auto;padding:0 60px;display:grid;grid-template-columns:0.86fr 1.14fr;gap:60px;align-items:center;position:relative;z-index:2">
+        <div style="animation:riseBlur both;animation-timeline:view();animation-range:entry 2% cover 32%">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.2em;color:#C0552E;text-transform:uppercase"><span style="width:22px;height:1px;background:#C0552E"></span>03 — 收放自如</div>
+          <h2 style="margin:0;font-family:'Newsreader','Noto Serif SC',serif;font-weight:500;font-size:clamp(34px,4.2vw,58px);line-height:1.07;color:#2B2620;letter-spacing:-.01em">长，不等于<br>难读</h2>
+          <p style="margin:24px 0 0;font-size:16.5px;line-height:1.78;color:#6B6457;max-width:380px;font-weight:300">Markdown 把一切摊开，再长也得从头划到尾。HTML 让读者按需展开——主线清爽，细节随时取用。试着点开右边。</p>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:28px;font-size:13px">
+            <span style="padding:6px 12px;border-radius:8px;background:#E8DFCB;color:#8C8472;text-decoration:line-through;text-decoration-color:#C99">MD：全部摊开</span>
+            <span style="color:#C0552E">→</span>
+            <span style="padding:6px 12px;border-radius:8px;background:#2B2620;color:#FBF7EF;font-weight:500">HTML：平滑收放</span>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;animation:scaleIn both;animation-timeline:view();animation-range:entry 0% cover 36%">
+          <details open style="background:#FFFFFF;border:1px solid #EAE1CE;border-radius:16px;padding:2px 24px;box-shadow:0 20px 44px -34px rgba(74,55,35,.5)">
+            <summary style="list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:20px 0;font-size:16.5px;font-weight:600;color:#2B2620"><span style="display:flex;gap:14px;align-items:center"><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#C0552E">01</span>为什么 HTML 比 Markdown 更适合阅读？</span><span style="color:#C0552E;font-family:'Newsreader',serif;font-size:24px;line-height:1">＋</span></summary>
+            <div style="padding:0 0 20px 36px;font-size:14.5px;line-height:1.78;color:#6B6457">因为阅读不只是文字。HTML 能控制字号、栏宽、配色与节奏，还能加入图表、动画与交互——读者获取信息更快，也更愿意把内容读完。</div>
+          </details>
+          <details style="background:#FFFFFF;border:1px solid #EAE1CE;border-radius:16px;padding:2px 24px;box-shadow:0 20px 44px -34px rgba(74,55,35,.5)">
+            <summary style="list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:20px 0;font-size:16.5px;font-weight:600;color:#2B2620"><span style="display:flex;gap:14px;align-items:center"><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#C0552E">02</span>大模型生成的 HTML，能直接用吗？</span><span style="color:#C0552E;font-family:'Newsreader',serif;font-size:24px;line-height:1">＋</span></summary>
+            <div style="padding:0 0 20px 36px;font-size:14.5px;line-height:1.78;color:#6B6457">可以。把它交给 Atlas，我们用 iframe 原模原样地渲染——你写的、模型生成的，呈现出来就是它本来的样子。</div>
+          </details>
+          <details style="background:#FFFFFF;border:1px solid #EAE1CE;border-radius:16px;padding:2px 24px;box-shadow:0 20px 44px -34px rgba(74,55,35,.5)">
+            <summary style="list-style:none;cursor:pointer;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:20px 0;font-size:16.5px;font-weight:600;color:#2B2620"><span style="display:flex;gap:14px;align-items:center"><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#C0552E">03</span>这个平滑的展开，Markdown 能做吗？</span><span style="color:#C0552E;font-family:'Newsreader',serif;font-size:24px;line-height:1">＋</span></summary>
+            <div style="padding:0 0 20px 36px;font-size:14.5px;line-height:1.78;color:#6B6457">不能。Markdown 没有原生的折叠与交互，它只是一段静态文本。而你眼前这个平滑展开的动效，就是纯 HTML 写就的。</div>
+          </details>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== 04 可操作组件 ===================== -->
+    <section data-index="4" data-screen-label="04 可以上手" style="height:100vh;scroll-snap-align:start;position:relative;overflow:hidden;display:flex;align-items:center;animation:secBreath linear both;animation-timeline:view();animation-range:cover 2% cover 98%">
+      <div style="position:absolute;left:0%;top:2%;z-index:0;font-family:'Newsreader',serif;font-weight:500;font-size:clamp(220px,30vw,400px);line-height:.7;color:rgba(43,38,32,.045);user-select:none;animation:numPar linear both;animation-timeline:view();animation-range:cover 0% cover 100%">04</div>
+      <div style="max-width:1180px;width:100%;margin:0 auto;padding:0 60px;display:grid;grid-template-columns:1.06fr 0.94fr;gap:64px;align-items:center;position:relative;z-index:2">
+        <div style="background:#FFFFFF;border:1px solid #EAE1CE;border-radius:24px;padding:40px 42px;box-shadow:0 34px 70px -40px rgba(74,55,35,.4);animation:scaleIn both;animation-timeline:view();animation-range:entry 0% cover 36%">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><span style="font-size:13.5px;color:#9A917F">本金 ¥10,000 · 年化 8%</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#C0552E;border:1px solid rgba(192,85,46,.3);padding:3px 9px;border-radius:7px">可拖动</span></div>
+          <div style="font-family:'Newsreader',serif;font-size:clamp(46px,5.4vw,70px);color:#C0552E;font-weight:500;letter-spacing:-.01em;line-height:1.1">¥{{ fv }}</div>
+          <div style="font-size:14px;color:#6B6457;margin-bottom:26px"><span style="font-weight:600;color:#2B2620">{{ years }} 年</span>后的价值</div>
+          <div style="height:14px;border-radius:999px;background:#ECE3D0;overflow:hidden;margin-bottom:8px"><div style="height:100%;border-radius:999px;background:linear-gradient(90deg,#E0915E,#C0552E);transition:width .28s cubic-bezier(.2,.7,.2,1);width:{{ fvW }}%"></div></div>
+          <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A89F8C;margin-bottom:24px"><span>1 年</span><span>30 年</span></div>
+          <input type="range" min="1" max="30" step="1" value="{{ years }}" onInput="{{ onYears }}" style="width:100%;accent-color:#C0552E;cursor:pointer"/>
+          <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:12px;color:#A89F8C;margin-top:16px">← 拖动滑块，结果实时变化 →</div>
+        </div>
+        <div style="animation:riseBlur both;animation-timeline:view();animation-range:entry 2% cover 34%">
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:20px;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.2em;color:#C0552E;text-transform:uppercase"><span style="width:22px;height:1px;background:#C0552E"></span>04 — 可以上手</div>
+          <h2 style="margin:0;font-family:'Newsreader','Noto Serif SC',serif;font-weight:500;font-size:clamp(34px,4.2vw,58px);line-height:1.07;color:#2B2620;letter-spacing:-.01em">让读者动手，<br>而不只是读</h2>
+          <p style="margin:24px 0 0;font-size:16.5px;line-height:1.78;color:#6B6457;max-width:400px;font-weight:300">Markdown 只能写死一个数字。HTML 把控制权交给读者——拖一下，结果立刻变；理解，发生在指尖。</p>
+          <div style="display:flex;align-items:center;gap:12px;margin-top:28px;font-size:13px">
+            <span style="padding:6px 12px;border-radius:8px;background:#E8DFCB;color:#8C8472;text-decoration:line-through;text-decoration-color:#C99">MD：写死一个数</span>
+            <span style="color:#C0552E">→</span>
+            <span style="padding:6px 12px;border-radius:8px;background:#2B2620;color:#FBF7EF;font-weight:500">HTML：即时计算</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== 05 版面 ===================== -->
+    <section data-index="5" data-screen-label="05 版面" style="height:100vh;scroll-snap-align:start;position:relative;overflow:hidden;display:flex;align-items:center;animation:secBreath linear both;animation-timeline:view();animation-range:cover 2% cover 98%">
+      <div style="position:absolute;right:2%;top:-2%;z-index:0;font-family:'Newsreader',serif;font-weight:500;font-size:clamp(220px,30vw,400px);line-height:.7;color:rgba(43,38,32,.045);user-select:none;animation:numPar linear both;animation-timeline:view();animation-range:cover 0% cover 100%">05</div>
+      <div style="max-width:1120px;width:100%;margin:0 auto;padding:0 60px;position:relative;z-index:2">
+        <div style="display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:18px;margin-bottom:30px;animation:riseBlur both;animation-timeline:view();animation-range:entry 0% cover 26%">
+          <div>
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.2em;color:#C0552E;text-transform:uppercase"><span style="width:22px;height:1px;background:#C0552E"></span>05 — 真正的版面</div>
+            <h2 style="margin:0;font-family:'Newsreader','Noto Serif SC',serif;font-weight:500;font-size:clamp(34px,4.6vw,60px);line-height:1.04;color:#2B2620;letter-spacing:-.01em">排版，是内容的语气</h2>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;font-size:13px">
+            <span style="padding:6px 12px;border-radius:8px;background:#E8DFCB;color:#8C8472;text-decoration:line-through;text-decoration-color:#C99">MD：线性堆叠</span>
+            <span style="color:#C0552E">→</span>
+            <span style="padding:6px 12px;border-radius:8px;background:#2B2620;color:#FBF7EF;font-weight:500">HTML：杂志级版面</span>
+          </div>
+        </div>
+        <div style="background:#FFFFFF;border:1px solid #EAE1CE;border-radius:24px;padding:40px 44px;box-shadow:0 34px 70px -42px rgba(74,55,35,.4);display:grid;grid-template-columns:1.45fr 1fr;gap:46px;align-items:start;animation:scaleIn both;animation-timeline:view();animation-range:entry 0% cover 34%">
+          <p style="margin:0;font-size:15.5px;line-height:1.82;color:#3F3A31;column-count:2;column-gap:38px;text-align:justify;font-weight:300"><span style="float:left;font-family:'Newsreader','Noto Serif SC',serif;font-size:78px;line-height:.74;padding:6px 12px 0 0;color:#C0552E;font-weight:500">在</span>纸面上，编辑用字号、栏宽与留白引导你的视线；好的版面，会替你决定先看什么、再看什么。Markdown 把这一切抹平成一串等宽的段落，每一行都长得一样，读起来像在爬一段没有尽头的楼梯。<br><br>而 HTML 把版面的全部权力还给了内容——首字下沉、双栏阅读、图文环绕，节奏由你掌控。文字因此有了轻重缓急，也有了语气。</p>
+          <div>
+            <div style="position:relative;height:172px;border-radius:16px;overflow:hidden;background:linear-gradient(135deg,#C0552E,#E0915E)">
+              <div style="position:absolute;inset:0;background:radial-gradient(circle at 28% 26%,rgba(255,255,255,.28),transparent 55%)"></div>
+              <div style="position:absolute;left:16px;bottom:13px;color:#FBF7EF;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.1em">FIG.1 — 图文环绕 · 留白 · 节奏</div>
+            </div>
+            <blockquote style="margin:22px 0 0;padding-left:18px;border-left:3px solid #C0552E;font-family:'Newsreader','Noto Serif SC',serif;font-size:23px;line-height:1.34;color:#2B2620;font-style:italic">“排版不是装饰，<br>是内容的语气。”</blockquote>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== 06 动效对比 ===================== -->
+    <section data-index="6" data-screen-label="06 流动" style="height:100vh;scroll-snap-align:start;position:relative;overflow:hidden;display:flex;align-items:center;animation:secBreath linear both;animation-timeline:view();animation-range:cover 2% cover 98%">
+      <div style="position:absolute;left:0%;bottom:-4%;z-index:0;font-family:'Newsreader',serif;font-weight:500;font-size:clamp(220px,30vw,400px);line-height:.7;color:rgba(43,38,32,.045);user-select:none;animation:numPar linear both;animation-timeline:view();animation-range:cover 0% cover 100%">06</div>
+      <div style="max-width:920px;width:100%;margin:0 auto;padding:0 60px;text-align:center;position:relative;z-index:2">
+        <div style="animation:riseBlur both;animation-timeline:view();animation-range:entry 0% cover 26%">
+          <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:16px;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.2em;color:#C0552E;text-transform:uppercase"><span style="width:22px;height:1px;background:#C0552E"></span>06 — 会呼吸的页面<span style="width:22px;height:1px;background:#C0552E"></span></div>
+          <h2 style="margin:0 0 10px;font-family:'Newsreader','Noto Serif SC',serif;font-weight:500;font-size:clamp(34px,4.6vw,60px);line-height:1.05;color:#2B2620;letter-spacing:-.01em">静止的纸，还是流动的光</h2>
+          <p style="max-width:520px;margin:0 auto 28px;font-size:16px;line-height:1.7;color:#6B6457;font-weight:300">同一篇内容，两种呈现。点一下切换，看看差别。</p>
+        </div>
+
+        <div style="display:inline-flex;position:relative;padding:5px;border-radius:14px;background:#E8DFCB;margin-bottom:26px;animation:riseSoft both;animation-timeline:view();animation-range:entry 4% cover 30%">
+          <div style="position:absolute;top:5px;bottom:5px;width:calc(50% - 5px);border-radius:10px;background:#2B2620;transition:transform .4s cubic-bezier(.22,.7,.2,1);transform:translateX({{ pillX }})"></div>
+          <button onClick="{{ showMd }}" style="position:relative;z-index:2;border:none;background:transparent;cursor:pointer;padding:9px 26px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;color:{{ mdLabelColor }};transition:color .3s">Markdown</button>
+          <button onClick="{{ showHtmlFn }}" style="position:relative;z-index:2;border:none;background:transparent;cursor:pointer;padding:9px 26px;font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:500;color:{{ htmlLabelColor }};transition:color .3s">HTML · Atlas</button>
+        </div>
+
+        <div style="position:relative;max-width:680px;height:288px;margin:0 auto;border-radius:20px;overflow:hidden;border:1px solid #EAE1CE;box-shadow:0 36px 76px -42px rgba(74,55,35,.45);animation:scaleIn both;animation-timeline:view();animation-range:entry 4% cover 34%">
+          <div style="position:absolute;inset:0;background:#F0EBDF;padding:32px 38px;text-align:left;font-family:'JetBrains Mono',monospace;color:#8C8472;transition:opacity .5s ease;opacity:{{ mdOpacity }};pointer-events:none">
+            <div style="font-size:18px;color:#6B6456;margin-bottom:16px;font-weight:500"># 季度增长报告</div>
+            <div style="font-size:13.5px;line-height:2;color:#9A917E">- 营收同比 +96%<br>- 读完率持续上升<br>- ![增长图表](chart.png)<br>&gt; 一切都在变好。</div>
+            <div style="margin-top:20px;font-size:11px;color:#B3A98F;letter-spacing:.1em">纯文本 · 静止 · 无交互</div>
+          </div>
+          <div style="position:absolute;inset:0;background:linear-gradient(140deg,#FFFFFF,#F4ECDC);padding:28px 38px;text-align:left;transition:opacity .5s ease;opacity:{{ htmlOpacity }};pointer-events:none">
+            <div style="font-family:'Newsreader','Noto Serif SC',serif;font-size:24px;color:#2B2620;margin-bottom:6px">季度增长报告</div>
+            <div style="display:inline-flex;padding:4px 11px;border-radius:999px;background:#C0552E;color:#FBF7EF;font-size:11px;margin-bottom:18px">营收同比 +96%</div>
+            <div style="display:flex;align-items:flex-end;gap:10px;height:92px">
+              <div style="flex:1;height:42%;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,#E0915E,#C0552E);animation:bob2 2.4s ease-in-out infinite"></div>
+              <div style="flex:1;height:62%;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,#E0915E,#C0552E);animation:bob2 2.4s ease-in-out .2s infinite"></div>
+              <div style="flex:1;height:80%;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,#E0915E,#C0552E);animation:bob2 2.4s ease-in-out .4s infinite"></div>
+              <div style="flex:1;height:100%;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,#EA9A63,#B14A28);animation:bob2 2.4s ease-in-out .6s infinite"></div>
+            </div>
+            <div style="margin-top:14px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#A89F8C;letter-spacing:.1em">彩色 · 会动 · 可交互</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================== CTA ===================== -->
+    <section data-index="7" data-screen-label="开始" style="height:100vh;scroll-snap-align:start;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;text-align:center;animation:secBreath linear both;animation-timeline:view();animation-range:cover 2% cover 98%">
+      <div style="position:absolute;left:50%;top:42%;transform:translate(-50%,-50%);z-index:0;font-family:'Newsreader',serif;font-weight:500;font-size:clamp(260px,34vw,460px);line-height:.7;color:rgba(43,38,32,.04);user-select:none">A</div>
+      <div style="position:relative;z-index:2;max-width:720px;padding:0 50px">
+        <div style="display:inline-flex;align-items:center;gap:10px;margin-bottom:22px;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.2em;color:#C0552E;text-transform:uppercase;animation:riseSoft both;animation-timeline:view();animation-range:entry 0% cover 24%"><span style="width:22px;height:1px;background:#C0552E"></span>开始使用 ATLAS<span style="width:22px;height:1px;background:#C0552E"></span></div>
+        <h2 style="margin:0;font-family:'Newsreader','Noto Serif SC',serif;font-weight:500;font-size:clamp(40px,6vw,82px);line-height:1.04;letter-spacing:-.015em;color:#2B2620;animation:riseBlur both;animation-timeline:view();animation-range:entry 2% cover 30%">把你的 HTML，<br><span style="font-style:italic;color:#C0552E">交给 Atlas</span></h2>
+        <p style="max-width:500px;margin:26px auto 0;font-size:17px;line-height:1.75;color:#6B6457;font-weight:300;animation:riseBlur both;animation-timeline:view();animation-range:entry 6% cover 34%">上传大模型生成、或你亲手写好的 HTML 文章，Atlas 用 iframe 原模原样地渲染——你看到的，就是读者看到的。</p>
+        <div style="display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:36px;animation:riseBlur both;animation-timeline:view();animation-range:entry 10% cover 38%">
+          <button data-magnetic style="padding:16px 32px;border-radius:14px;border:none;background:#2B2620;color:#FBF7EF;font-family:'Hanken Grotesk','Noto Sans SC',sans-serif;font-size:15.5px;font-weight:600;cursor:pointer;box-shadow:0 18px 40px -18px rgba(43,38,32,.6)">上传你的 HTML 文章</button>
+          <button onClick="{{ top }}" data-magnetic style="padding:16px 30px;border-radius:14px;border:1px solid rgba(43,38,32,.22);background:transparent;color:#2B2620;font-family:'Hanken Grotesk','Noto Sans SC',sans-serif;font-size:15.5px;font-weight:500;cursor:pointer">回到顶部 ↑</button>
+        </div>
+        <div style="margin-top:60px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#A89F8C;letter-spacing:.08em">ATLAS · HTML 渲染系统 — 让每一篇文章都值得被读完</div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- brand -->
+  <div style="position:fixed;top:28px;left:38px;z-index:55;display:flex;align-items:center;gap:11px;pointer-events:none">
+    <span style="width:34px;height:34px;border-radius:10px;background:#FFFFFF;border:1px solid #EAE1CE;box-shadow:0 6px 16px -8px rgba(74,55,35,.4);display:inline-flex;align-items:center;justify-content:center;font-family:'Newsreader',serif;font-size:18px;font-weight:600;color:#2B2620">A</span>
+    <span style="font-family:'Newsreader',serif;font-size:22px;color:#2B2620;letter-spacing:.01em">Atlas</span>
+  </div>
+
+  <!-- side nav -->
+  <div style="position:fixed;right:26px;top:50%;transform:translateY(-50%);z-index:55;display:flex;flex-direction:column;gap:10px;padding:13px 9px;border-radius:22px;background:rgba(252,250,245,.7);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid #EAE1CE;box-shadow:0 18px 40px -28px rgba(74,55,35,.4)">
+    <sc-for list="{{ dots }}" as="d" hint-placeholder-count="8">
+      <div onClick="{{ d.onClick }}" title="{{ d.l }}" style="{{ d.dotStyle }}"></div>
+    </sc-for>
+  </div>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { active: 0, years: 8, showHtml: true, hoverBar: null };
+  scrollRef = React.createRef();
+
+  componentDidMount() {
+    const root = this.scrollRef.current;
+    if (!root) return;
+
+    const secs = [...root.querySelectorAll('[data-index]')];
+    this._io = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) this.setState({ active: Number(e.target.getAttribute('data-index')) });
+      });
+    }, { root, threshold: 0.55 });
+    secs.forEach((s) => this._io.observe(s));
+
+    // count-up
+    this._cObs = new IntersectionObserver((entries) => {
+      entries.forEach((e) => {
+        if (e.isIntersecting) { this.countUp(e.target); this._cObs.unobserve(e.target); }
+      });
+    }, { root, threshold: 0.5 });
+    root.querySelectorAll('[data-count]').forEach((el) => this._cObs.observe(el));
+
+    // tilt
+    this._tilt = [];
+    root.querySelectorAll('[data-tilt]').forEach((card) => {
+      const inner = card.querySelector('[data-tilt-inner]');
+      const move = (ev) => {
+        const r = card.getBoundingClientRect();
+        const px = (ev.clientX - r.left) / r.width - 0.5;
+        const py = (ev.clientY - r.top) / r.height - 0.5;
+        if (inner) inner.style.transform = 'rotateY(' + (px * 14) + 'deg) rotateX(' + (-py * 14) + 'deg)';
+        card.style.setProperty('--gx', (px * 100 + 50) + '%');
+        card.style.setProperty('--gy', (py * 100 + 50) + '%');
+      };
+      const leave = () => { if (inner) inner.style.transform = 'rotateY(0deg) rotateX(0deg)'; };
+      card.addEventListener('mousemove', move);
+      card.addEventListener('mouseleave', leave);
+      this._tilt.push(() => { card.removeEventListener('mousemove', move); card.removeEventListener('mouseleave', leave); });
+    });
+
+    // safety: force-reveal hero even if the animation clock never ticks (throttled first paint)
+    this._fb = setTimeout(() => {
+      document.querySelectorAll('[data-reveal]').forEach((el) => {
+        el.style.animation = 'none'; el.style.opacity = '1'; el.style.transform = 'none'; el.style.filter = 'none'; el.style.clipPath = 'none';
+      });
+    }, 1300);
+
+    // cursor + magnetic (skip on touch)
+    this._cleanup = [];
+    if (!matchMedia('(pointer:coarse)').matches) this.initCursor();
+    this.initMagnetic();
+  }
+
+  countUp(el) {
+    const to = parseFloat(el.dataset.count); const dur = 1200; const t0 = performance.now();
+    const step = (t) => {
+      const k = Math.min(1, (t - t0) / dur);
+      const e = 0.5 - Math.cos(k * Math.PI) / 2;
+      el.textContent = Math.round(to * e);
+      if (k < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+
+  initCursor() {
+    const cur = document.querySelector('[data-cursor]'); if (!cur) return;
+    const p = { x: innerWidth / 2, y: innerHeight / 2, tx: innerWidth / 2, ty: innerHeight / 2 };
+    let raf;
+    const onMove = (e) => { p.tx = e.clientX; p.ty = e.clientY; cur.style.opacity = '1'; };
+    const tick = () => {
+      p.x += (p.tx - p.x) * 0.18; p.y += (p.ty - p.y) * 0.18;
+      cur.style.transform = 'translate(' + (p.x - 15) + 'px,' + (p.y - 15) + 'px)';
+      raf = requestAnimationFrame(tick);
+    };
+    const over = (e) => { if (e.target.closest('button,a,[data-tilt],summary,input,[role=button]')) { cur.style.width = '52px'; cur.style.height = '52px'; cur.style.background = 'rgba(192,85,46,.12)'; } };
+    const out = (e) => { if (e.target.closest('button,a,[data-tilt],summary,input,[role=button]')) { cur.style.width = '30px'; cur.style.height = '30px'; cur.style.background = 'transparent'; } };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseover', over);
+    window.addEventListener('mouseout', out);
+    tick();
+    this._cleanup.push(() => { cancelAnimationFrame(raf); window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseover', over); window.removeEventListener('mouseout', out); });
+  }
+
+  initMagnetic() {
+    document.querySelectorAll('[data-magnetic]').forEach((b) => {
+      const move = (e) => {
+        const r = b.getBoundingClientRect();
+        b.style.transition = 'transform .1s ease';
+        b.style.transform = 'translate(' + ((e.clientX - r.left - r.width / 2) * 0.25) + 'px,' + ((e.clientY - r.top - r.height / 2) * 0.3) + 'px)';
+      };
+      const leave = () => { b.style.transition = 'transform .35s cubic-bezier(.2,.7,.2,1)'; b.style.transform = 'translate(0,0)'; };
+      b.addEventListener('mousemove', move); b.addEventListener('mouseleave', leave);
+      this._cleanup.push(() => { b.removeEventListener('mousemove', move); b.removeEventListener('mouseleave', leave); });
+    });
+  }
+
+  componentWillUnmount() {
+    if (this._fb) clearTimeout(this._fb);
+    if (this._io) this._io.disconnect();
+    if (this._cObs) this._cObs.disconnect();
+    (this._tilt || []).forEach((f) => f());
+    (this._cleanup || []).forEach((f) => f());
+  }
+
+  goTo(i) {
+    const root = this.scrollRef.current;
+    const el = root && root.querySelector('[data-index="' + i + '"]');
+    if (el) root.scrollTo({ top: el.offsetTop, behavior: 'smooth' });
+  }
+
+  renderVals() {
+    const raw = [{ l: 'JAN', v: 42 }, { l: 'FEB', v: 51 }, { l: 'MAR', v: 49 }, { l: 'APR', v: 67 }, { l: 'MAY', v: 80 }, { l: 'JUN', v: 96 }];
+    const bars = raw.map((d, i) => {
+      const hov = this.state.hoverBar === i;
+      return {
+        l: d.l, v: d.v,
+        colStyle: { flex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', height: '100%', cursor: 'pointer', position: 'relative' },
+        barStyle: {
+          width: '100%', maxWidth: '46px', height: d.v + '%', borderRadius: '7px 7px 2px 2px',
+          background: hov ? 'linear-gradient(180deg,#EA9A63,#B14A28)' : (i === 5 ? 'linear-gradient(180deg,#EA9A63,#B14A28)' : 'linear-gradient(180deg,#E0915E,#C0552E)'),
+          transformOrigin: 'bottom', transition: 'background .25s ease, box-shadow .25s ease',
+          boxShadow: hov ? '0 14px 30px -8px rgba(192,85,46,.6)' : '0 6px 16px -10px rgba(192,85,46,.5)',
+          animationName: 'grow', animationFillMode: 'both', animationTimeline: 'view()', animationRange: 'entry 0% cover 30%'
+        },
+        tipStyle: {
+          position: 'absolute', top: '-10px', left: '50%', transform: hov ? 'translate(-50%,0)' : 'translate(-50%,6px)',
+          padding: '4px 9px', borderRadius: '7px', background: '#2B2620', color: '#FBF7EF', fontSize: '12px', fontWeight: '600',
+          whiteSpace: 'nowrap', opacity: hov ? 1 : 0, transition: 'opacity .2s ease, transform .2s ease', pointerEvents: 'none', zIndex: 6
+        },
+        onEnter: () => this.setState({ hoverBar: i }),
+        onLeave: () => this.setState({ hoverBar: null })
+      };
+    });
+
+    const P = 10000, r = 0.08, yrs = this.state.years;
+    const fv = Math.round(P * Math.pow(1 + r, yrs));
+    const fvMax = Math.round(P * Math.pow(1 + r, 30));
+
+    const labels = ['封面', '数据', '空间', '收放', '上手', '版面', '流动', '开始'];
+    const dots = labels.map((l, i) => {
+      const on = this.state.active === i;
+      return {
+        l, onClick: () => this.goTo(i),
+        dotStyle: {
+          width: '8px', height: on ? '24px' : '8px', borderRadius: '5px',
+          background: on ? '#C0552E' : 'rgba(43,38,32,.22)', cursor: 'pointer',
+          transition: 'height .3s cubic-bezier(.2,.7,.2,1), background .3s ease'
+        }
+      };
+    });
+
+    return {
+      scrollRef: this.scrollRef, bars, dots,
+      years: yrs, fv: fv.toLocaleString('en-US'), fvW: Math.max(4, (fv / fvMax) * 100),
+      onYears: (e) => this.setState({ years: Number(e.target.value) }),
+      mdOpacity: this.state.showHtml ? 0 : 1,
+      htmlOpacity: this.state.showHtml ? 1 : 0,
+      pillX: this.state.showHtml ? '100%' : '0%',
+      mdLabelColor: this.state.showHtml ? '#8C8472' : '#FBF7EF',
+      htmlLabelColor: this.state.showHtml ? '#FBF7EF' : '#8C8472',
+      showMd: () => this.setState({ showHtml: false }),
+      showHtmlFn: () => this.setState({ showHtml: true }),
+      next: () => this.goTo(1),
+      top: () => this.goTo(0)
+    };
+  }
+}
+</script>
+</body>
+</html>

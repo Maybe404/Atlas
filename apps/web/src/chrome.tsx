@@ -322,12 +322,18 @@ function Topbar({
   const doc = spaces.flatMap((s: Loose) => s.children || []).find((d: Loose) => d.id === ctx.docId);
   return (
     <header className="topbar">
-      <div className="brand">
-        <div className="brand-glyph">
+      <button
+        type="button"
+        className="brand brand-link"
+        onClick={() => onNavigate({ view: 'landing' })}
+        aria-label="返回封面"
+        title="返回封面"
+      >
+        <span className="brand-glyph">
           <BrandGlyph />
-        </div>
-        <div className="brand-name">Atlas</div>
-      </div>
+        </span>
+        <span className="brand-name">Atlas</span>
+      </button>
 
       <div className="breadcrumb">
         {isReader && (
