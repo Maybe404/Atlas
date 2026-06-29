@@ -720,7 +720,7 @@ function useCursor(cursorRef: React.RefObject<Loose>) {
 // ───────────────────────────────────────────────────────────────────────
 // Main cover view
 // ───────────────────────────────────────────────────────────────────────
-export function LandingView({ spaces = [], onNavigate }: Loose) {
+export function LandingView({ spaces = [], user, onNavigate, onLogin, readerHome }: Loose) {
   const [active, setActive] = useState(0);
   const [years, setYears] = useState(8);
   const [showHtml, setShowHtml] = useState(true);
@@ -736,11 +736,38 @@ export function LandingView({ spaces = [], onNavigate }: Loose) {
     return list.find((s) => Boolean(s?.id)) ?? null;
   }, [spaces]);
 
+  // Cover CTA — the two "进入阅读" buttons. Always make forward progress:
+  //   1. Returning reader → their last opened doc.
+  //   2. Otherwise the first readable space in the directory.
+  //   3. Guest with nothing to read → open the login dialog (returnTo is set
+  //      by openLogin so they land back on the cover after authenticating).
+  //   4. Logged-in user with no readable space (essentially impossible — every
+  //      member is provisioned a personal space, and admins see all) → no-op.
+  // Without the login fallback, a guest who reaches the cover (logout,
+  // session expired, opened the bare `/` URL) clicks the button and nothing
+  // happens, leaving them stranded with no way back into the system.
   const enterReading = useCallback(() => {
+    if (
+      user &&
+      readerHome?.view === 'reader' &&
+      readerHome.spaceId &&
+      readerHome.docId
+    ) {
+      onNavigate({
+        view: 'reader',
+        spaceId: readerHome.spaceId,
+        docId: readerHome.docId,
+      });
+      return;
+    }
     if (firstSpace?.id) {
       onNavigate({ view: 'space', spaceId: firstSpace.id });
+      return;
     }
-  }, [firstSpace, onNavigate]);
+    if (!user && typeof onLogin === 'function') {
+      onLogin();
+    }
+  }, [firstSpace, onNavigate, onLogin, readerHome, user]);
 
   const goTo = useCallback((i: number) => {
     const root = scrollRef.current;
