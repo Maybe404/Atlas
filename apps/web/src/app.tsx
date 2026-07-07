@@ -623,6 +623,7 @@ function App() {
             onShare={(id: string) => openShare(id)}
             onLogin={openLogin}
             onChromeScroll={hideChrome}
+            pushToast={pushToast}
             mutations={mutations}
           />
         )}

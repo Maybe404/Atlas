@@ -48,6 +48,7 @@ export function ReaderView({
   onShare,
   onLogin,
   onChromeScroll,
+  pushToast,
   mutations,
 }: Loose) {
   const requestedSpace = spaces.find((s: Loose) => s.id === ctx.spaceId);
@@ -90,6 +91,10 @@ export function ReaderView({
     setTimeout(() => setCopied(false), 1400);
   };
   const downloadDocument = () => {
+    if (user?.role !== 'admin') {
+      pushToast?.({ msg: '没有权限下载', meta: '只有管理员可以下载文档文件。' });
+      return;
+    }
     const format = detailDoc?.format === 'markdown' ? 'markdown' : 'html';
     const extension = format === 'markdown' ? 'md' : 'html';
     const mime = format === 'markdown' ? 'text/markdown;charset=utf-8' : 'text/html;charset=utf-8';
