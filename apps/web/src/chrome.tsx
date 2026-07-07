@@ -114,6 +114,17 @@ const I = {
       />
     </svg>
   ),
+  download: (p: IconProps = {}) => (
+    <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
+      <path
+        d="M7 2.5v7M7 9.5 4.5 7M7 9.5 9.5 7M2.5 9.5V11a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V9.5"
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  ),
   doc: (p: IconProps = {}) => (
     <svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14" fill="none" {...p}>
       <path d="M3 2h5l3 3v7H3z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" />

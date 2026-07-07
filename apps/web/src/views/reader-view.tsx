@@ -12,6 +12,31 @@ import { dotClass } from './shared';
 
 const _I = I;
 
+function filenameSafeTitle(title: string | undefined, fallback: string) {
+  return (
+    Array.from(title || fallback)
+      .map((char) => (char < ' ' ? '-' : char))
+      .join('')
+      .trim()
+      .replace(/[\\/:*?"<>|]/g, '-')
+      .replace(/\s+/g, ' ')
+      .slice(0, 120)
+      .replace(/[. ]+$/g, '') || fallback
+  );
+}
+
+function downloadTextFile(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 export function ReaderView({
   ctx,
   spaces = [],
@@ -43,6 +68,7 @@ export function ReaderView({
   const [copied, setCopied] = useState(false);
   const [editing, setEditing] = useState(false);
   const [copiedMode, setCopiedMode] = useState('');
+  const [downloaded, setDownloaded] = useState(false);
   const browsePublic = useCallback(() => {
     const target = firstPublicDoc(spaces as never);
     onNavigate({ view: 'reader', spaceId: target.spaceId, docId: target.docId });
@@ -63,6 +89,16 @@ export function ReaderView({
     setCopied(true);
     setTimeout(() => setCopied(false), 1400);
   };
+  const downloadDocument = () => {
+    const format = detailDoc?.format === 'markdown' ? 'markdown' : 'html';
+    const extension = format === 'markdown' ? 'md' : 'html';
+    const mime = format === 'markdown' ? 'text/markdown;charset=utf-8' : 'text/html;charset=utf-8';
+    const basename = filenameSafeTitle(detailDoc?.title || doc?.title, 'atlas-document');
+    downloadTextFile(`${basename}.${extension}`, detailDoc?.html || '', mime);
+    setDownloaded(true);
+    setTimeout(() => setDownloaded(false), 1400);
+  };
+  const canDownload = allowed && detailDoc?.html !== undefined;
 
   const iframeRef = useRef<Loose>(null);
   const scrollKey = detailDoc?.id || doc?.id;
@@ -199,6 +235,12 @@ export function ReaderView({
         <div style={{ flex: 1 }} />
         {doc ? (
           <>
+            {canDownload && (
+              <button type="button" className="pill-btn ghost" onClick={downloadDocument}>
+                {downloaded ? <_I.check /> : <_I.download />}
+                <span>{downloaded ? '已下载' : '下载'}</span>
+              </button>
+            )}
             {allowed && (
               <button type="button" className="pill-btn ghost" onClick={copyReaderLink}>
                 {copied ? <_I.check /> : <_I.link />}
